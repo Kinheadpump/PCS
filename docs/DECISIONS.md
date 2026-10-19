@@ -81,6 +81,9 @@ Work continues with the recommended choice until the owner answers.
 | D-044 | S8 skips tectonic plates. Ridged noise makes the mountain ranges (the allowed fallback in `TECHNICAL_DESIGN.md` §8). Plates stay a stretch task. |
 | D-045 | River flow direction comes from the parent pointers of the Priority-Flood lake fill, so rivers always reach the sea or a lake outlet. World tunables are in the `WorldParams` struct in code, not in `.ron` files, until the numbers settle. |
 | D-046 | Biome balance after S8 is off: temperate forest is 1 to 3% and taiga is 22% of land. Tune `WorldParams` and the biome table before S10 (embark picks). |
+| D-047 | World steps 10 to 12 have their own seed and hash arrays (`LayerStage`, `RegionStage`). The hashes of steps 1 to 9 do not change when a step is added. The region repair writes a separate overlay and does not change the step 11 output. Game and UI code reads deposits from `Regions.deposits` to get at least 1 deposit type in each region. |
+| D-048 | A world cell holds at most one deposit. The mineral with the largest margin of probability over the roll wins. Ties go to the lowest mineral index. |
+| D-049 | The rock and mineral tables are in `assets/content/rocks.ron` and `deposits.ron`. `worldgen` embeds them with `include_str!` and parses them at the start of world generation. It does no file I/O at run time (owner decision). |
 
 ## 3. Assumptions
 
