@@ -1,6 +1,7 @@
 //! Shared, deterministic building blocks: RNG, hash, fixed-point, grid, arena.
 
 pub mod arena;
+pub mod content;
 pub mod fixed;
 pub mod grid;
 pub mod hash;

@@ -13,6 +13,7 @@ worldgen = { path = "crates/worldgen" }
 sim = { path = "crates/sim" }
 macroquad = { version = "0.4.16", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
+ron = "0.12.2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
