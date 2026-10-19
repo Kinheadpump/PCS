@@ -2,7 +2,7 @@
 
 use super::ppm;
 use worldgen::{
-    LayerStage, Mineral, Rock, Stage, WORLD_SIZE, WorldBiome, WorldData, WorldParams,
+    LayerStage, Mineral, RegionStage, Rock, Stage, WORLD_SIZE, WorldBiome, WorldData, WorldParams,
     generate_world,
 };
 
@@ -140,6 +140,25 @@ fn deposit_image_color(w: &WorldData, x: i32, y: i32) -> [u8; 3] {
     }
 }
 
+/// Region image: a color from the region ID on land, dark lines on region borders.
+fn region_image_color(w: &WorldData, x: i32, y: i32) -> [u8; 3] {
+    let id = w.regions.at(x, y);
+    if id == 0 {
+        return [20, 40, 90];
+    }
+    if w.regions.at(x + 1, y) != id && w.regions.at(x + 1, y) != 0
+        || w.regions.at(x, y + 1) != id && w.regions.at(x, y + 1) != 0
+    {
+        return [25, 25, 25];
+    }
+    let h = base::rng::mix(u64::from(id));
+    [
+        90 + (h & 127) as u8,
+        90 + ((h >> 8) & 127) as u8,
+        90 + ((h >> 16) & 127) as u8,
+    ]
+}
+
 fn soil_color(w: &WorldData, x: i32, y: i32) -> [u8; 3] {
     let d = w.geology.soil.get(x, y).copied().unwrap_or(0);
     [200 - d * 2, 170 - d, 90]
@@ -181,6 +200,10 @@ pub fn layer_files(w: &WorldData) -> Vec<(&'static str, Vec<u8>)> {
             image(|x, y| deposit_image_color(w, x, y)),
         ),
         ("world_soil.ppm", image(|x, y| soil_color(w, x, y))),
+        (
+            "world_region.ppm",
+            image(|x, y| region_image_color(w, x, y)),
+        ),
     ]
 }
 
@@ -252,6 +275,10 @@ pub fn gen_world(args: &[String]) -> Result<String, String> {
         let hash = w.layer_hashes[stage as usize];
         lines.push(format!("stage {} {:016x}", stage.name(), hash));
     }
+    for stage in RegionStage::ALL {
+        let hash = w.region_hashes[stage as usize];
+        lines.push(format!("stage {} {:016x}", stage.name(), hash));
+    }
     lines.push(format!("sea level {}", w.sea_level));
     lines.push(format!("land per mille {}", w.land_per_mille()));
     let mut counts = [0u32; WorldBiome::COUNT];
@@ -276,6 +303,15 @@ pub fn gen_world(args: &[String]) -> Result<String, String> {
     for m in Mineral::ALL {
         lines.push(format!("deposit {} {}", m.name(), per[m as usize]));
     }
+    let r = &w.regions;
+    let sizes: Vec<u32> = r.info.iter().map(|i| i.size).collect();
+    let lo = sizes.iter().min().copied().unwrap_or(0);
+    let hi = sizes.iter().max().copied().unwrap_or(0);
+    let mean = sizes.iter().sum::<u32>() / sizes.len().max(1) as u32;
+    lines.push(format!("regions {}", r.count()));
+    lines.push(format!("region size min {lo} mean {mean} max {hi}"));
+    lines.push(format!("region edges {}", r.edges.len()));
+    lines.push(format!("region repaired deposits {}", r.repaired.len()));
     lines.push(format!("generation microseconds {micros}"));
     if let Some(dir) = out {
         write_layers(&w, &dir)?;
@@ -300,10 +336,10 @@ mod tests {
     }
 
     #[test]
-    fn gen_world_prints_eleven_stage_hashes() {
+    fn gen_world_prints_twelve_stage_hashes() {
         let args: Vec<String> = vec!["--seed".into(), "2".into()];
         let text = gen_world(&args).unwrap_or_default();
-        assert_eq!(text.lines().filter(|l| l.starts_with("stage ")).count(), 11);
+        assert_eq!(text.lines().filter(|l| l.starts_with("stage ")).count(), 12);
         assert!(gen_world(&[]).is_err());
     }
 }
