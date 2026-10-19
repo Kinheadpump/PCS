@@ -78,6 +78,9 @@ Work continues with the recommended choice until the owner answers.
 | D-041 | A flagged item gets a haul job only if a stockpile accepts its material. One stack per stockpile tile. A colonist carries a whole stack. |
 | D-042 | Sprint 3 added colonist, item, and job state to `state_hash`. The golden hashes `sim_ascii_600_ticks` and `sim_forest_seed1_1000_ticks` changed (commit 62ebe66). The save `FORMAT_VERSION` is 2. |
 | D-043 | The player moves a colonist with the right click only when the Select tool is active. This is a debug order. Pan is middle drag. |
+| D-044 | S8 skips tectonic plates. Ridged noise makes the mountain ranges (the allowed fallback in `TECHNICAL_DESIGN.md` §8). Plates stay a stretch task. |
+| D-045 | River flow direction comes from the parent pointers of the Priority-Flood lake fill, so rivers always reach the sea or a lake outlet. World tunables are in the `WorldParams` struct in code, not in `.ron` files, until the numbers settle. |
+| D-046 | Biome balance after S8 is off: temperate forest is 1 to 3% and taiga is 22% of land. Tune `WorldParams` and the biome table before S10 (embark picks). |
 
 ## 3. Assumptions
 
