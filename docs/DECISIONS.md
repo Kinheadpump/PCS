@@ -72,6 +72,12 @@ Work continues with the recommended choice until the owner answers.
 | D-035 | The game is about the present colony. History is implied. It shapes the map, the resources, and the threats, but the game does not tell a story. Short text (legends, chronicle) is optional information, not the reward. | Confirmed (owner, 2026-10-19) | The owner wants colony management to be the center of the game. | History as the central experience. |
 | D-036 | Project subagents are Markdown files in `.claude/agents/`. The `owner-interviewer` subagent prepares questions when the plan is unclear. The lead agent asks the owner. | Confirmed (owner, 2026-10-19) | The owner wants to correct the course early and often. | No interviews. |
 | D-037 | All crises marked MVP in `GAME_DESIGN.md` §10.1 are in the MVP: drought and wildfire, food poisoning, wound infection, winter fever with medicine, and melee raids by rival colonies with a tribute choice. The plan has 20 sprints (S0 to S19). This replaces D-029 and the drought cut in D-030. | Confirmed (owner, Q-011, Q-013) | The owner wants many crises to manage in the present. | A smaller MVP. |
+| D-038 | `docs/ART_DIRECTION.md` is the source of truth for art. The colonist shirt is gray in `actors.png` and the game tints it. Item sprites are drawn in `crates/game/src/overlay.rs` until they move to `assetgen`. |
+| D-039 | Sprint 3 has no tool rule (R-008). Colonists work without tools. The work step in `job.rs` marks the place for the check. R-008 comes with crafting. |
+| D-040 | Job numbers are in `assets/content/jobs.ron`: 100 experience per job, 1,000 per level, stack size 50, priorities 1 to 4 (0 is off, default 3). Job selection: lowest priority number, then octile distance, then job index. |
+| D-041 | A flagged item gets a haul job only if a stockpile accepts its material. One stack per stockpile tile. A colonist carries a whole stack. |
+| D-042 | Sprint 3 added colonist, item, and job state to `state_hash`. The golden hashes `sim_ascii_600_ticks` and `sim_forest_seed1_1000_ticks` changed (commit 62ebe66). The save `FORMAT_VERSION` is 2. |
+| D-043 | The player moves a colonist with the right click only when the Select tool is active. This is a debug order. Pan is middle drag. |
 
 ## 3. Assumptions
 
