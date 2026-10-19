@@ -1,2 +1,3 @@
 date,commit,check,value_ms,limit_ms,machine
 2026-10-19,sprint-1-local-map,P-07 local map generation (cold_hills 256x256 release),34.5,200,dev PC (CPU not recorded)
+2026-10-19,976b35d,S2 300-colonist random walk mean tick,0.028,3,dev PC (CPU not recorded)

@@ -1,12 +1,12 @@
 //! Grid A* with 8 directions (TECHNICAL_DESIGN §6.3).
 //!
 //! Costs are 10 (straight) and 14 (diagonal). The heuristic is octile. The open list
-//! orders nodes by f, then h, then tile index, so paths are deterministic. The buffers
-//! carry a generation stamp, so a search does not clear them.
+//! orders nodes by f, then h, then tile index, so paths are deterministic. The open
+//! list is one small heap for each f value (a bucket queue): f is an integer and grows
+//! slowly, so the pop order equals the order of one global heap. The buffers carry a
+//! generation stamp, so a search does not clear them.
 
 use crate::map::LocalMap;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 
 /// Cost of a straight step.
 pub const COST_STRAIGHT: u32 = 10;
@@ -61,24 +61,26 @@ pub struct SearchResult {
     pub cost: u32,
 }
 
-/// Search data of one tile. `seen` and `closed` hold the generation stamp.
+/// Search data of one tile (8 bytes). `tag` holds the generation stamp in the upper
+/// bits (`2 * generation` if open, `2 * generation + 1` if closed) and the direction
+/// of the step that reached the tile in the lowest 3 bits.
 #[derive(Clone, Copy, Debug, Default)]
 struct Node {
-    seen: u32,
-    closed: u32,
+    tag: u32,
     g: u32,
-    parent: u32,
 }
 
-const INDEX_BITS: u32 = 24;
-const INDEX_MASK: u64 = (1 << INDEX_BITS) - 1;
+/// Highest generation: the stamp `2 * generation + 1` must fit in 29 bits.
+const MAX_GENERATION: u32 = (1 << 28) - 1;
 
-/// Pack an open-list entry into one integer that sorts by f, then h, then tile index.
-/// f has 24 bits (it saturates; a map side is at most 4096), h 16 bits, index 24 bits.
-fn pack(f: u32, h: u32, index: u32) -> u64 {
-    (u64::from(f.min(0xFF_FFFF)) << 40)
-        | (u64::from(h.min(0xFFFF)) << INDEX_BITS)
-        | u64::from(index)
+const COORD_BITS: u32 = 13;
+const COORD_MASK: u64 = (1 << COORD_BITS) - 1;
+
+/// Pack an open-list entry into one integer that sorts by h, then tile index. The
+/// tile is given by its padded coordinates (13 bits each: a map side is at most 4096).
+/// Sorting by (y, x) equals sorting by tile index. h has 16 bits (it saturates).
+fn pack(h: u32, x: i32, y: i32) -> u64 {
+    (u64::from(h.min(0xFFFF)) << (2 * COORD_BITS)) | ((y as u64) << COORD_BITS) | x as u64
 }
 
 /// Reusable A* search buffers. This is a derived cache: it is not saved.
@@ -86,7 +88,12 @@ fn pack(f: u32, h: u32, index: u32) -> u64 {
 pub struct PathFinder {
     generation: u32,
     nodes: Vec<Node>,
-    open: BinaryHeap<Reverse<u64>>,
+    /// One list for each f value, from `f_base`. Entries sort by (h, index).
+    buckets: Vec<Vec<u64>>,
+    /// The bucket that is sorted now (descending, so the minimum is last).
+    sorted: usize,
+    /// Padded copy of the passability grid.
+    pass: Vec<bool>,
 }
 
 impl PathFinder {
@@ -116,7 +123,6 @@ impl PathFinder {
         let (Some(s), Some(t)) = (map.index(sx, sy), map.index(gx, gy)) else {
             return fail;
         };
-        let (s, t) = (s as u32, t as u32);
         if s == t {
             return SearchResult {
                 found: true,
@@ -124,36 +130,71 @@ impl PathFinder {
                 cost: 0,
             };
         }
-        self.begin(map.width() as usize * map.height() as usize);
-        let gen_id = self.generation;
+        let (s, t) = (s as u32, t as u32);
         let w = map.width() as i32;
         let hgt = map.height() as i32;
-        let pass = map.passable_slice();
+        // Work on a padded grid (one blocked tile around the map), so the neighbor
+        // loop needs no bounds checks. Padded indices sort like map indices.
+        let pw = w + 2;
+        self.begin(pw as usize * (hgt + 2) as usize);
+        let open_id = self.generation * 2;
+        let closed_id = open_id + 1;
+        self.pass.clear();
+        self.pass.resize(self.nodes.len(), false);
+        let src = map.passable_slice();
+        for y in 0..hgt as usize {
+            let d = (y + 1) * pw as usize + 1;
+            let r = y * w as usize;
+            self.pass[d..d + w as usize].copy_from_slice(&src[r..r + w as usize]);
+        }
+        let pad = |i: u32| -> u32 { (i as i32 / w * pw + i as i32 % w + pw + 1) as u32 };
+        let (s, t) = (pad(s), pad(t));
+        let offsets: [(i32, i32); 8] =
+            DIRS.map(|(dx, dy)| (dx + dy * pw, step_cost(dx, dy) as i32));
 
         self.nodes[s as usize] = Node {
-            seen: gen_id,
-            closed: 0,
+            tag: open_id << 3,
             g: 0,
-            parent: s,
         };
         let h0 = octile(sx, sy, gx, gy);
-        self.open.push(Reverse(pack(h0, h0, s)));
+        let f_base = h0;
+        self.push(f_base, h0, h0, sx + 1, sy + 1);
+        let mut cur = 0usize;
+        self.sorted = usize::MAX;
 
         let mut expanded = 0u32;
-        while let Some(Reverse(key)) = self.open.pop() {
-            let i = (key & INDEX_MASK) as u32;
-            let iu = i as usize;
-            if self.nodes[iu].closed == gen_id {
+        loop {
+            while cur < self.buckets.len() && self.buckets[cur].is_empty() {
+                cur += 1;
+            }
+            if cur >= self.buckets.len() {
+                break;
+            }
+            if self.sorted != cur {
+                self.buckets[cur].sort_unstable_by(|a, b| b.cmp(a));
+                self.sorted = cur;
+            }
+            let Some(key) = self.buckets[cur].pop() else {
+                continue;
+            };
+            let x = (key & COORD_MASK) as i32;
+            let y = ((key >> COORD_BITS) & COORD_MASK) as i32;
+            let iu = (y * pw + x) as usize;
+            let i = iu as u32;
+            let tag = self.nodes[iu].tag;
+            if tag >> 3 == closed_id {
                 continue;
             }
-            self.nodes[iu].closed = gen_id;
+            self.nodes[iu].tag = (closed_id << 3) | (tag & 7);
             expanded += 1;
             let gi = self.nodes[iu].g;
             if i == t {
                 let mut cur = i;
                 while cur != s {
-                    out.push(((cur as i32 % w) as u16, (cur as i32 / w) as u16));
-                    cur = self.nodes[cur as usize].parent;
+                    let (px, py) = (cur as i32 % pw - 1, cur as i32 / pw - 1);
+                    out.push((px as u16, py as u16));
+                    let dir = (self.nodes[cur as usize].tag & 7) as usize;
+                    cur = (cur as i32 - offsets[dir].0) as u32;
                 }
                 return SearchResult {
                     found: true,
@@ -161,34 +202,45 @@ impl PathFinder {
                     cost: gi,
                 };
             }
-            let (x, y) = (i as i32 % w, i as i32 / w);
-            for (dx, dy) in DIRS {
-                let (nx, ny) = (x + dx, y + dy);
-                if nx < 0 || ny < 0 || nx >= w || ny >= hgt {
-                    continue;
-                }
-                let nu = (ny * w + nx) as usize;
-                if !pass[nu] {
-                    continue;
-                }
-                // Same rule as `can_step`: no corner cutting.
-                if dx != 0
-                    && dy != 0
-                    && !(pass[(y * w + nx) as usize] && pass[(ny * w + x) as usize])
-                {
-                    continue;
-                }
+            // Bit k is set if a step in direction k is allowed (same rule as
+            // `can_step`: no corner cutting). Directions 0..4 are straight.
+            let pass = &self.pass[..];
+            let p = |off: i32| u32::from(pass[(iu as i32 + off) as usize]);
+            let (n, e, so, we) = (
+                p(offsets[0].0),
+                p(offsets[1].0),
+                p(offsets[2].0),
+                p(offsets[3].0),
+            );
+            let mask = n
+                | (e << 1)
+                | (so << 2)
+                | (we << 3)
+                | ((n & e & p(offsets[4].0)) << 4)
+                | ((e & so & p(offsets[5].0)) << 5)
+                | ((so & we & p(offsets[6].0)) << 6)
+                | ((we & n & p(offsets[7].0)) << 7);
+            let mut mask = mask;
+            while mask != 0 {
+                let k = mask.trailing_zeros() as usize;
+                mask &= mask - 1;
+                let (off, cost) = offsets[k];
+                let nu = (iu as i32 + off) as usize;
                 let node = &mut self.nodes[nu];
-                if node.closed == gen_id {
+                let nstamp = node.tag >> 3;
+                if nstamp == closed_id {
                     continue;
                 }
-                let ng = gi + step_cost(dx, dy);
-                if node.seen != gen_id || ng < node.g {
-                    node.seen = gen_id;
+                let ng = gi + cost as u32;
+                if nstamp != open_id || ng < node.g {
+                    node.tag = (open_id << 3) | k as u32;
                     node.g = ng;
-                    node.parent = i;
-                    let h = octile(nx, ny, gx, gy);
-                    self.open.push(Reverse(pack(ng + h, h, nu as u32)));
+                    let (dx, dy) = DIRS[k];
+                    let h = octile(x + dx, y + dy, gx + 1, gy + 1);
+                    let f = ng + h;
+                    self.push(f_base, f, h, x + dx, y + dy);
+                    // The heuristic is consistent, so f never falls. Stay exact anyway.
+                    cur = cur.min((f - f_base) as usize);
                 }
             }
         }
@@ -199,18 +251,41 @@ impl PathFinder {
         }
     }
 
+    /// Add an entry to the bucket of `f`.
+    fn push(&mut self, f_base: u32, f: u32, h: u32, x: i32, y: i32) {
+        let b = (f.max(f_base) - f_base) as usize;
+        if b >= self.buckets.len() {
+            self.buckets.resize_with(b + 1, Vec::new);
+        }
+        let key = pack(h, x, y);
+        let list = &mut self.buckets[b];
+        if b == self.sorted {
+            // The new key is usually the smallest, so it goes near the end.
+            if list.last().is_none_or(|&k| k > key) {
+                list.push(key);
+            } else {
+                let at = list.partition_point(|&k| k > key);
+                list.insert(at, key);
+            }
+        } else {
+            list.push(key);
+        }
+    }
+
     /// Prepare the buffers for a new search over `len` tiles.
     fn begin(&mut self, len: usize) {
         if self.nodes.len() != len {
             self.nodes = vec![Node::default(); len];
             self.generation = 0;
         }
-        if self.generation == u32::MAX {
+        if self.generation >= MAX_GENERATION {
             self.nodes.fill(Node::default());
             self.generation = 0;
         }
         self.generation += 1;
-        self.open.clear();
+        for bucket in &mut self.buckets {
+            bucket.clear();
+        }
     }
 }
 
