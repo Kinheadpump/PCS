@@ -1,0 +1,9 @@
+// Room rules. Integers only (D-014).
+// max_tiles: largest room (R-020). roof_support_radius: a roof tile needs a wall or
+// natural rock within this many tiles, counted as the larger of column and row distance (A-008).
+// bare_wall_material: the material of a wall tile that has no building (scenario maps).
+(
+    max_tiles: 400,
+    roof_support_radius: 6,
+    bare_wall_material: "granite",
+)

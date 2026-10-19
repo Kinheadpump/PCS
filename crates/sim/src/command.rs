@@ -1,5 +1,6 @@
 //! Commands: the only way for the interface to change the `Sim` (TECHNICAL_DESIGN §3.3).
 
+use crate::build::BuildLayer;
 use crate::colonist::ColonistId;
 use crate::job::JobKind;
 use crate::stockpile::{ItemFilter, StockpileId};
@@ -72,5 +73,65 @@ pub enum Command {
         job: JobKind,
         /// The priority.
         priority: u8,
+    },
+    /// Place a blueprint for a building. Colonists bring units of `material` to the tile
+    /// and build. A refused command gives `JobEvent::Rejected`.
+    PlaceBlueprint {
+        /// Building type index (`buildings.ron` order).
+        building: u16,
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+        /// Material index. It must be in a category that the building accepts.
+        material: u16,
+    },
+    /// Remove a blueprint. The units that colonists delivered fall on the tile.
+    CancelBlueprint {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+        /// The layer of the blueprint.
+        layer: BuildLayer,
+    },
+    /// Order the deconstruction of a finished building. A colonist takes it down and part of
+    /// the material units fall on the ground.
+    Deconstruct {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+        /// The layer of the building.
+        layer: BuildLayer,
+    },
+    /// Cancel a deconstruction order that no colonist has finished.
+    CancelDeconstruct {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+        /// The layer of the building.
+        layer: BuildLayer,
+    },
+    /// Order a workshop to make a recipe `count` more times.
+    OrderCraft {
+        /// Workshop tile column.
+        x: u16,
+        /// Workshop tile row.
+        y: u16,
+        /// Recipe index (`recipes.ron` order).
+        recipe: u16,
+        /// Number of runs. Must be 1 or more.
+        count: u32,
+    },
+    /// Remove the order for a recipe from a workshop.
+    CancelCraft {
+        /// Workshop tile column.
+        x: u16,
+        /// Workshop tile row.
+        y: u16,
+        /// Recipe index.
+        recipe: u16,
     },
 }

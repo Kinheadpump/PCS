@@ -463,6 +463,355 @@ pub fn load_job_rules(file_name: &str, text: &str) -> Result<JobRules, ContentEr
     }
 }
 
+/// Parse RON text into a raw value. Refuse float literals. Return a clear error with the
+/// file name.
+fn parse_ron<T: serde::de::DeserializeOwned>(
+    file_name: &str,
+    text: &str,
+) -> Result<T, ContentError> {
+    let fail = |message: String| ContentError {
+        file: file_name.to_string(),
+        issues: vec![ContentIssue {
+            entry: None,
+            message,
+        }],
+    };
+    let floats = find_float_literals(text);
+    if !floats.is_empty() {
+        return Err(ContentError {
+            file: file_name.to_string(),
+            issues: floats
+                .into_iter()
+                .map(|(line, token)| ContentIssue {
+                    entry: None,
+                    message: format!(
+                        "line {line}: float literal '{token}' is not allowed; use integers"
+                    ),
+                })
+                .collect(),
+        });
+    }
+    ron::from_str(text).map_err(|e| fail(format!("parse error: {e}")))
+}
+
+/// Collect the issues of a file and turn them into a result.
+fn finish<T>(file_name: &str, value: T, issues: Vec<ContentIssue>) -> Result<T, ContentError> {
+    if issues.is_empty() {
+        Ok(value)
+    } else {
+        Err(ContentError {
+            file: file_name.to_string(),
+            issues,
+        })
+    }
+}
+
+fn issue(entry: &str, message: impl Into<String>) -> ContentIssue {
+    ContentIssue {
+        entry: Some(entry.to_string()),
+        message: message.into(),
+    }
+}
+
+/// What a building does (`buildings.ron`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+pub enum BuildingKind {
+    /// Closes a room. Blocks walking.
+    Wall,
+    /// Closes a room. Colonists walk through it.
+    Door,
+    /// A floor covering.
+    Floor,
+    /// A roof.
+    Roof,
+    /// A bed.
+    Bed,
+    /// A hearth.
+    Hearth,
+    /// A workshop where colonists make items with recipes.
+    Workshop,
+}
+
+impl BuildingKind {
+    /// All kinds, in declaration order.
+    pub const ALL: [BuildingKind; 7] = [
+        BuildingKind::Wall,
+        BuildingKind::Door,
+        BuildingKind::Floor,
+        BuildingKind::Roof,
+        BuildingKind::Bed,
+        BuildingKind::Hearth,
+        BuildingKind::Workshop,
+    ];
+}
+
+/// A building type after validation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuildingDef {
+    /// String ID from the file.
+    pub key: String,
+    /// Display name.
+    pub name: String,
+    /// What the building does.
+    pub kind: BuildingKind,
+    /// Material categories that the building can be made from.
+    pub categories: Vec<MaterialCategory>,
+    /// Units of material that one building needs.
+    pub cost: u32,
+    /// Work time to build, in ticks at 100% work speed, before the material hardness.
+    pub work_ticks: u32,
+    /// Work time that each 10 hardness units of the material add, in ticks.
+    pub work_ticks_per_10_hardness: u32,
+    /// Work time to take the building apart, in percent of the build time.
+    pub deconstruct_pct: u32,
+    /// Percent of the material units that deconstruction gives back (rounded down).
+    pub return_pct: u32,
+    /// True if colonists cannot walk through the building.
+    pub blocks_walking: bool,
+    /// Beauty of the building itself, added to the beauty of its material.
+    pub beauty: i16,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawBuilding {
+    id: String,
+    name: String,
+    kind: BuildingKind,
+    categories: Vec<MaterialCategory>,
+    cost: u32,
+    work_ticks: u32,
+    work_ticks_per_10_hardness: u32,
+    deconstruct_pct: u32,
+    return_pct: u32,
+    blocks_walking: bool,
+    beauty: i16,
+}
+
+/// Load and validate a buildings file. Buildings are in file order; the position is the
+/// building index.
+pub fn load_buildings(file_name: &str, text: &str) -> Result<Vec<BuildingDef>, ContentError> {
+    let raw: Vec<RawBuilding> = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out = Vec::with_capacity(raw.len());
+    if raw.len() >= usize::from(u16::MAX) {
+        issues.push(issue("(file)", "too many buildings"));
+    }
+    for (i, b) in raw.iter().enumerate() {
+        let name = if b.id.is_empty() {
+            issues.push(issue(&format!("#{i}"), "empty ID"));
+            format!("#{i}")
+        } else {
+            b.id.clone()
+        };
+        if seen.contains(&b.id.as_str()) {
+            issues.push(issue(&name, "duplicate ID"));
+        }
+        seen.push(b.id.as_str());
+        if b.categories.is_empty() {
+            issues.push(issue(&name, "categories must name at least one category"));
+        }
+        for (k, c) in b.categories.iter().enumerate() {
+            if b.categories[..k].contains(c) {
+                issues.push(issue(&name, format!("category {c:?} is listed twice")));
+            }
+        }
+        if !(1..=1000).contains(&b.cost) {
+            issues.push(issue(&name, "cost must be from 1 to 1000"));
+        }
+        if b.work_ticks == 0 || b.work_ticks > 1_000_000 {
+            issues.push(issue(&name, "work_ticks must be from 1 to 1000000"));
+        }
+        if b.work_ticks_per_10_hardness > 100_000 {
+            issues.push(issue(&name, "work_ticks_per_10_hardness is too large"));
+        }
+        if b.deconstruct_pct == 0 || b.deconstruct_pct > 1000 {
+            issues.push(issue(&name, "deconstruct_pct must be from 1 to 1000"));
+        }
+        if b.return_pct > 100 {
+            issues.push(issue(&name, "return_pct must be from 0 to 100"));
+        }
+        match b.kind {
+            BuildingKind::Wall if !b.blocks_walking => {
+                issues.push(issue(&name, "a wall must have blocks_walking: true"));
+            }
+            BuildingKind::Door | BuildingKind::Floor | BuildingKind::Roof if b.blocks_walking => {
+                issues.push(issue(
+                    &name,
+                    "a door, floor, or roof must have blocks_walking: false",
+                ));
+            }
+            _ => {}
+        }
+        out.push(BuildingDef {
+            key: b.id.clone(),
+            name: b.name.clone(),
+            kind: b.kind,
+            categories: b.categories.clone(),
+            cost: b.cost,
+            work_ticks: b.work_ticks,
+            work_ticks_per_10_hardness: b.work_ticks_per_10_hardness,
+            deconstruct_pct: b.deconstruct_pct,
+            return_pct: b.return_pct,
+            blocks_walking: b.blocks_walking,
+            beauty: b.beauty,
+        });
+    }
+    for kind in BuildingKind::ALL {
+        if !out.iter().any(|b| b.kind == kind) {
+            issues.push(issue("(file)", format!("no building of kind {kind:?}")));
+        }
+    }
+    finish(file_name, out, issues)
+}
+
+/// A recipe after validation and linking.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecipeDef {
+    /// String ID from the file.
+    pub key: String,
+    /// Display name.
+    pub name: String,
+    /// Building index (`buildings.ron` order) of the workshop that makes it.
+    pub workshop: u16,
+    /// Input material indices (`materials.ron` order) and unit counts.
+    pub inputs: Vec<(u16, u32)>,
+    /// Output material indices and unit counts.
+    pub outputs: Vec<(u16, u32)>,
+    /// Work time of one run, in ticks at 100% work speed.
+    pub work_ticks: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRecipe {
+    id: String,
+    name: String,
+    workshop: String,
+    inputs: Vec<(String, u32)>,
+    outputs: Vec<(String, u32)>,
+    work_ticks: u32,
+}
+
+/// Load and validate a recipes file. The materials and buildings must be loaded first.
+pub fn load_recipes(
+    file_name: &str,
+    text: &str,
+    materials: &[MaterialDef],
+    buildings: &[BuildingDef],
+) -> Result<Vec<RecipeDef>, ContentError> {
+    let raw: Vec<RawRecipe> = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    let mut out = Vec::with_capacity(raw.len());
+    let mut seen: Vec<&str> = Vec::new();
+    if raw.len() >= usize::from(u16::MAX) {
+        issues.push(issue("(file)", "too many recipes"));
+    }
+    for (i, r) in raw.iter().enumerate() {
+        let name = if r.id.is_empty() {
+            issues.push(issue(&format!("#{i}"), "empty ID"));
+            format!("#{i}")
+        } else {
+            r.id.clone()
+        };
+        if seen.contains(&r.id.as_str()) {
+            issues.push(issue(&name, "duplicate ID"));
+        }
+        seen.push(r.id.as_str());
+        let workshop = match buildings.iter().position(|b| b.key == r.workshop) {
+            Some(w) if buildings[w].kind == BuildingKind::Workshop => w as u16,
+            Some(_) => {
+                issues.push(issue(
+                    &name,
+                    format!(
+                        "workshop '{}' is not a building of kind Workshop",
+                        r.workshop
+                    ),
+                ));
+                u16::MAX
+            }
+            None => {
+                issues.push(issue(
+                    &name,
+                    format!("workshop refers to unknown building '{}'", r.workshop),
+                ));
+                u16::MAX
+            }
+        };
+        let mut link = |field: &str, list: &[(String, u32)]| -> Vec<(u16, u32)> {
+            if list.is_empty() {
+                issues.push(issue(&name, format!("{field} must not be empty")));
+            }
+            list.iter()
+                .map(|(key, count)| {
+                    if !(1..=1000).contains(count) {
+                        issues.push(issue(
+                            &name,
+                            format!("{field} count for '{key}' must be from 1 to 1000"),
+                        ));
+                    }
+                    match materials.iter().position(|m| &m.key == key) {
+                        Some(m) => m as u16,
+                        None => {
+                            issues.push(issue(
+                                &name,
+                                format!("{field} refers to unknown material '{key}'"),
+                            ));
+                            u16::MAX
+                        }
+                    }
+                })
+                .zip(list.iter().map(|(_, c)| *c))
+                .collect()
+        };
+        let inputs = link("inputs", &r.inputs);
+        let outputs = link("outputs", &r.outputs);
+        if r.work_ticks == 0 || r.work_ticks > 1_000_000 {
+            issues.push(issue(&name, "work_ticks must be from 1 to 1000000"));
+        }
+        out.push(RecipeDef {
+            key: r.id.clone(),
+            name: r.name.clone(),
+            workshop,
+            inputs,
+            outputs,
+            work_ticks: r.work_ticks,
+        });
+    }
+    finish(file_name, out, issues)
+}
+
+/// Numbers for rooms (`rooms.ron`). All integers.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoomRules {
+    /// Largest number of tiles in a room (R-020).
+    pub max_tiles: u32,
+    /// A roof tile needs a wall or natural rock within this many tiles (A-008). The
+    /// distance is the larger of the column and row distance.
+    pub roof_support_radius: u32,
+    /// Material (key) of a wall tile that has no building, for example a wall of a
+    /// scenario map. It gives the insulation and the beauty of that tile.
+    pub bare_wall_material: String,
+}
+
+/// Load and validate a rooms file.
+pub fn load_room_rules(file_name: &str, text: &str) -> Result<RoomRules, ContentError> {
+    let rules: RoomRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    if !(1..=65_536).contains(&rules.max_tiles) {
+        issues.push(issue("max_tiles", "must be from 1 to 65536"));
+    }
+    if !(1..=64).contains(&rules.roof_support_radius) {
+        issues.push(issue("roof_support_radius", "must be from 1 to 64"));
+    }
+    if rules.bare_wall_material.is_empty() {
+        issues.push(issue("bare_wall_material", "must name a material"));
+    }
+    finish(file_name, rules, issues)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -543,5 +892,144 @@ mod tests {
     fn out_of_range_per_mille_is_refused() {
         let msg = error_text(&VALID.replace("insulation: 100", "insulation: 1001"));
         assert!(msg.contains("'ice'") && msg.contains("insulation"), "{msg}");
+    }
+
+    // ---- buildings, recipes, rooms ----
+
+    const BUILDINGS: &str = include_str!("../../../assets/content/buildings.ron");
+    const RECIPES: &str = include_str!("../../../assets/content/recipes.ron");
+    const ROOMS: &str = include_str!("../../../assets/content/rooms.ron");
+    const MATERIALS: &str = include_str!("../../../assets/content/materials.ron");
+
+    fn building_error(text: &str) -> String {
+        load_buildings("buildings.ron", text)
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn real_building_recipe_and_room_files_are_valid() {
+        let materials = load_materials("materials.ron", MATERIALS).unwrap_or_default();
+        let buildings = load_buildings("buildings.ron", BUILDINGS).unwrap_or_default();
+        assert_eq!(buildings.len(), BuildingKind::ALL.len());
+        let recipes =
+            load_recipes("recipes.ron", RECIPES, &materials, &buildings).unwrap_or_default();
+        assert_eq!(recipes.len(), 2);
+        let rooms = load_room_rules("rooms.ron", ROOMS);
+        assert_eq!(rooms.map(|r| r.max_tiles).unwrap_or(0), 400);
+    }
+
+    #[test]
+    fn building_float_literal_and_unknown_field_are_refused() {
+        let msg = building_error(&BUILDINGS.replace("cost: 4", "cost: 4.5"));
+        assert!(
+            msg.contains("buildings.ron") && msg.contains("float literal"),
+            "{msg}"
+        );
+        let msg = building_error(&BUILDINGS.replace("(id: \"wall\"", "(extra: 1, id: \"wall\""));
+        assert!(msg.contains("buildings.ron"), "{msg}");
+    }
+
+    #[test]
+    fn building_numbers_are_checked_and_errors_name_the_entry() {
+        let msg = building_error(&BUILDINGS.replace("cost: 4", "cost: 0"));
+        assert!(msg.contains("'wall'") && msg.contains("cost"), "{msg}");
+        let msg = building_error(&BUILDINGS.replace(
+            "return_pct: 50, blocks_walking: true, beauty: 0),
+    (id: \"door\"",
+            "return_pct: 150, blocks_walking: true, beauty: 0),
+    (id: \"door\"",
+        ));
+        assert!(
+            msg.contains("'wall'") && msg.contains("return_pct"),
+            "{msg}"
+        );
+        let msg = building_error(&BUILDINGS.replace("id: \"door\"", "id: \"wall\""));
+        assert!(
+            msg.contains("duplicate ID") && msg.contains("'wall'"),
+            "{msg}"
+        );
+        let msg = building_error(
+            &BUILDINGS.replace("categories: [Wood], cost: 2", "categories: [], cost: 2"),
+        );
+        assert!(
+            msg.contains("'door'") && msg.contains("categories"),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn a_wall_must_block_and_a_door_must_not() {
+        let wall = BUILDINGS.replace(
+            "cost: 4, work_ticks: 300, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true",
+            "cost: 4, work_ticks: 300, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: false",
+        );
+        assert!(building_error(&wall).contains("wall must"));
+        let door = BUILDINGS.replace(
+            "categories: [Wood], cost: 2, work_ticks: 250, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: false",
+            "categories: [Wood], cost: 2, work_ticks: 250, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true",
+        );
+        assert!(building_error(&door).contains("door"));
+    }
+
+    #[test]
+    fn every_building_kind_must_exist() {
+        let without_bed: String = BUILDINGS
+            .lines()
+            .filter(|l| !l.contains("id: \"bed\""))
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
+            );
+        let msg = building_error(&without_bed);
+        assert!(msg.contains("Bed"), "{msg}");
+    }
+
+    #[test]
+    fn recipes_are_linked_to_materials_and_workshops() {
+        let materials = load_materials("materials.ron", MATERIALS).unwrap_or_default();
+        let buildings = load_buildings("buildings.ron", BUILDINGS).unwrap_or_default();
+        let err = |text: &str| {
+            load_recipes("recipes.ron", text, &materials, &buildings)
+                .err()
+                .map(|e| e.to_string())
+                .unwrap_or_default()
+        };
+        let msg = err(&RECIPES.replace("(\"plank\", 2)", "(\"board\", 2)"));
+        assert!(
+            msg.contains("recipes.ron") && msg.contains("board"),
+            "{msg}"
+        );
+        let msg = err(&RECIPES.replace(
+            "workshop: \"workshop\", inputs: [(\"log\", 1)], outputs: [(\"plank\"",
+            "workshop: \"wall\", inputs: [(\"log\", 1)], outputs: [(\"plank\"",
+        ));
+        assert!(msg.contains("'plank'") && msg.contains("workshop"), "{msg}");
+        let msg = err(&RECIPES.replace(
+            "[(\"log\", 1)], outputs: [(\"plank\", 2)]",
+            "[(\"log\", 0)], outputs: [(\"plank\", 2)]",
+        ));
+        assert!(msg.contains("'plank'"), "{msg}");
+        let msg = err(&RECIPES.replace("work_ticks: 200", "work_ticks: 2.5"));
+        assert!(msg.contains("float literal"), "{msg}");
+    }
+
+    #[test]
+    fn room_rules_are_checked() {
+        let err = |text: &str| {
+            load_room_rules("rooms.ron", text)
+                .err()
+                .map(|e| e.to_string())
+                .unwrap_or_default()
+        };
+        assert!(err(&ROOMS.replace("max_tiles: 400", "max_tiles: 0")).contains("max_tiles"));
+        assert!(
+            err(&ROOMS.replace("roof_support_radius: 6", "roof_support_radius: 99"))
+                .contains("roof_support_radius")
+        );
+        assert!(err(&ROOMS.replace("\"granite\"", "\"\"")).contains("bare_wall_material"));
+        assert!(err(&ROOMS.replace("max_tiles: 400", "max_tiles: 4.5")).contains("float literal"));
     }
 }

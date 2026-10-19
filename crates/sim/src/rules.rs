@@ -1,31 +1,68 @@
-//! Content that the sim reads: materials and job rules.
+//! Content that the sim reads: materials, job rules, buildings, recipes, and room rules.
 //!
 //! The text of the content files is compiled into the crate with `include_str!`. This is
 //! not file I/O at run time, so the sim stays deterministic. Item materials are the
-//! dense indices (`u16`) of `materials.ron`.
+//! dense indices (`u16`) of `materials.ron`. Buildings and recipes are the dense indices
+//! of `buildings.ron` and `recipes.ron`.
 
 use base::content::{
-    ContentError, ContentIssue, JobRules, MaterialDef, load_job_rules, load_materials,
+    BuildingDef, BuildingKind, ContentError, ContentIssue, JobRules, MaterialDef, RecipeDef,
+    RoomRules, load_buildings, load_job_rules, load_materials, load_recipes, load_room_rules,
 };
 use std::sync::Arc;
 use worldgen::{Ore, RockKind};
 
 const MATERIALS_TEXT: &str = include_str!("../../../assets/content/materials.ron");
 const JOBS_TEXT: &str = include_str!("../../../assets/content/jobs.ron");
+const BUILDINGS_TEXT: &str = include_str!("../../../assets/content/buildings.ron");
+const RECIPES_TEXT: &str = include_str!("../../../assets/content/recipes.ron");
+const ROOMS_TEXT: &str = include_str!("../../../assets/content/rooms.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
 pub const NO_MATERIAL: u16 = u16::MAX;
 
-/// Linked content for the job systems.
+/// The text of the content files of the repository, for tests that change a file.
+#[derive(Clone, Copy, Debug)]
+pub struct ContentTexts {
+    /// `materials.ron`.
+    pub materials: &'static str,
+    /// `jobs.ron`.
+    pub jobs: &'static str,
+    /// `buildings.ron`.
+    pub buildings: &'static str,
+    /// `recipes.ron`.
+    pub recipes: &'static str,
+    /// `rooms.ron`.
+    pub rooms: &'static str,
+}
+
+/// The content texts of the repository.
+pub const BUILTIN_TEXTS: ContentTexts = ContentTexts {
+    materials: MATERIALS_TEXT,
+    jobs: JOBS_TEXT,
+    buildings: BUILDINGS_TEXT,
+    recipes: RECIPES_TEXT,
+    rooms: ROOMS_TEXT,
+};
+
+/// Linked content for the sim systems.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SimRules {
     /// Skill, work time, and job board numbers.
     pub jobs: JobRules,
     /// All materials, in file order.
     pub materials: Vec<MaterialDef>,
+    /// All building types, in file order.
+    pub buildings: Vec<BuildingDef>,
+    /// All recipes, in file order.
+    pub recipes: Vec<RecipeDef>,
+    /// Room numbers.
+    pub rooms: RoomRules,
     /// Material of a log.
     pub log: u16,
+    /// Material of a wall tile without a building (`rooms.ron`).
+    pub bare_wall: u16,
     /// Stone item material for each `RockKind` code (index 0 is unused).
     pub rock_item: [u16; 4],
     /// Ore item material for each `Ore` code (index 0 is unused).
@@ -36,10 +73,18 @@ impl Default for SimRules {
     /// The rules from the content files of the repository. If they are invalid (a test
     /// checks that they are not), the rules are empty and no job gives any item.
     fn default() -> Self {
-        Self::load(MATERIALS_TEXT, JOBS_TEXT).unwrap_or_else(|_| Self {
+        Self::load_all(&BUILTIN_TEXTS).unwrap_or_else(|_| Self {
             jobs: JobRules::default(),
             materials: Vec::new(),
+            buildings: Vec::new(),
+            recipes: Vec::new(),
+            rooms: RoomRules {
+                max_tiles: 400,
+                roof_support_radius: 6,
+                bare_wall_material: String::new(),
+            },
             log: NO_MATERIAL,
+            bare_wall: NO_MATERIAL,
             rock_item: [NO_MATERIAL; 4],
             ore_item: [NO_MATERIAL; 4],
         })
@@ -47,10 +92,40 @@ impl Default for SimRules {
 }
 
 impl SimRules {
-    /// Link the rules from file text. All required materials must exist.
+    /// Link the rules from the text of the materials file and the jobs file. The other
+    /// files come from the repository. All required materials must exist.
     pub fn load(materials_text: &str, jobs_text: &str) -> Result<Self, ContentError> {
+        Self::load_texts(
+            materials_text,
+            jobs_text,
+            BUILDINGS_TEXT,
+            RECIPES_TEXT,
+            ROOMS_TEXT,
+        )
+    }
+
+    /// Link the rules from a set of file texts.
+    pub fn load_all(texts: &ContentTexts) -> Result<Self, ContentError> {
+        Self::load_texts(
+            texts.materials,
+            texts.jobs,
+            texts.buildings,
+            texts.recipes,
+            texts.rooms,
+        )
+    }
+
+    /// Link the rules from the text of the five content files.
+    pub fn load_texts(
+        materials_text: &str,
+        jobs_text: &str,
+        buildings_text: &str,
+        recipes_text: &str,
+        rooms_text: &str,
+    ) -> Result<Self, ContentError> {
         let materials = load_materials("materials.ron", materials_text)?;
         let jobs = load_job_rules("jobs.ron", jobs_text)?;
+        let rooms = load_room_rules("rooms.ron", rooms_text)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -58,13 +133,14 @@ impl SimRules {
                 None => {
                     issues.push(ContentIssue {
                         entry: Some(key.to_string()),
-                        message: "the job rules need this material".to_string(),
+                        message: "the sim rules need this material".to_string(),
                     });
                     NO_MATERIAL
                 }
             }
         };
         let log = find("log");
+        let bare_wall = find(&rooms.bare_wall_material);
         let rock_item = [
             NO_MATERIAL,
             find("sandstone"),
@@ -83,10 +159,16 @@ impl SimRules {
                 issues,
             });
         }
+        let buildings = load_buildings("buildings.ron", buildings_text)?;
+        let recipes = load_recipes("recipes.ron", recipes_text, &materials, &buildings)?;
         Ok(Self {
             jobs,
             materials,
+            buildings,
+            recipes,
+            rooms,
             log,
+            bare_wall,
             rock_item,
             ore_item,
         })
@@ -120,11 +202,82 @@ impl SimRules {
             .map_or(0, |m| u32::from(m.hardness))
     }
 
+    /// Insulation of a material in per-mille, 0 if unknown.
+    pub fn insulation(&self, material: u16) -> u32 {
+        self.materials
+            .get(usize::from(material))
+            .map_or(0, |m| u32::from(m.insulation))
+    }
+
+    /// Beauty of a material, 0 if unknown.
+    pub fn beauty(&self, material: u16) -> i32 {
+        self.materials
+            .get(usize::from(material))
+            .map_or(0, |m| i32::from(m.beauty))
+    }
+
     /// Display name of a material, empty if unknown.
     pub fn material_name(&self, material: u16) -> &str {
         self.materials
             .get(usize::from(material))
             .map_or("", |m| m.name.as_str())
+    }
+
+    /// Index of a material by its string ID.
+    pub fn material_index(&self, key: &str) -> Option<u16> {
+        self.materials
+            .iter()
+            .position(|m| m.key == key)
+            .and_then(|i| u16::try_from(i).ok())
+    }
+
+    /// Index of a building type by its string ID.
+    pub fn building_index(&self, key: &str) -> Option<u16> {
+        self.buildings
+            .iter()
+            .position(|b| b.key == key)
+            .and_then(|i| u16::try_from(i).ok())
+    }
+
+    /// Index of a recipe by its string ID.
+    pub fn recipe_index(&self, key: &str) -> Option<u16> {
+        self.recipes
+            .iter()
+            .position(|r| r.key == key)
+            .and_then(|i| u16::try_from(i).ok())
+    }
+
+    /// The building type with this index.
+    pub fn building(&self, index: u16) -> Option<&BuildingDef> {
+        self.buildings.get(usize::from(index))
+    }
+
+    /// The recipe with this index.
+    pub fn recipe(&self, index: u16) -> Option<&RecipeDef> {
+        self.recipes.get(usize::from(index))
+    }
+
+    /// True if the building type can be made from the material.
+    pub fn material_fits(&self, building: u16, material: u16) -> bool {
+        match (
+            self.building(building),
+            self.materials.get(usize::from(material)),
+        ) {
+            (Some(b), Some(m)) => b.categories.contains(&m.category),
+            _ => false,
+        }
+    }
+
+    /// The work time of a building type made from a material, in ticks at 100% speed.
+    pub fn build_ticks(&self, building: u16, material: u16) -> u32 {
+        self.building(building).map_or(0, |b| {
+            b.work_ticks + self.hardness(material) * b.work_ticks_per_10_hardness / 10
+        })
+    }
+
+    /// True if the building type has this kind.
+    pub fn is_kind(&self, building: u16, kind: BuildingKind) -> bool {
+        self.building(building).is_some_and(|b| b.kind == kind)
     }
 }
 
@@ -139,6 +292,13 @@ mod tests {
         assert_ne!(rules.log, NO_MATERIAL);
         assert_eq!(rules.materials[usize::from(rules.log)].key, "log");
         assert_eq!(SimRules::builtin().jobs, rules.jobs);
+        assert_eq!(rules.buildings.len(), 7);
+        assert_eq!(rules.recipes.len(), 2);
+        assert_eq!(rules.rooms.max_tiles, 400);
+        let wall = rules.building_index("wall").unwrap();
+        let granite = rules.material_index("granite").unwrap();
+        assert!(rules.material_fits(wall, granite));
+        assert!(!rules.material_fits(wall, rules.material_index("iron_ore").unwrap()));
     }
 
     #[test]
@@ -147,6 +307,19 @@ mod tests {
         let msg = SimRules::load(&text, JOBS_TEXT).unwrap_err().to_string();
         assert!(
             msg.contains("materials.ron") && msg.contains("'log'"),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn recipe_with_unknown_material_names_file_and_entry() {
+        let text = RECIPES_TEXT.replace("(\"plank\", 2)", "(\"board\", 2)");
+        let msg =
+            SimRules::load_texts(MATERIALS_TEXT, JOBS_TEXT, BUILDINGS_TEXT, &text, ROOMS_TEXT)
+                .unwrap_err()
+                .to_string();
+        assert!(
+            msg.contains("recipes.ron") && msg.contains("'plank'") && msg.contains("board"),
             "{msg}"
         );
     }

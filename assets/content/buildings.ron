@@ -1,0 +1,16 @@
+// Buildings. Integers only (D-014).
+// cost: units of one material. categories: the material categories that the building can
+// be made from. Work times are in ticks at 100% work speed (100 ticks = 1 game hour):
+// work_ticks + work_ticks_per_10_hardness x hardness / 10.
+// deconstruct_pct: work time to take the building apart, in percent of the build time.
+// return_pct: percent of the material units that deconstruction gives back (rounded down).
+// beauty: whole units, added to the beauty of the material.
+[
+    (id: "wall", name: "Wall", kind: Wall, categories: [Stone, Wood], cost: 4, work_ticks: 300, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true, beauty: 0),
+    (id: "door", name: "Door", kind: Door, categories: [Wood], cost: 2, work_ticks: 250, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: false, beauty: 1),
+    (id: "floor", name: "Floor", kind: Floor, categories: [Stone, Wood], cost: 1, work_ticks: 100, work_ticks_per_10_hardness: 20, deconstruct_pct: 50, return_pct: 50, blocks_walking: false, beauty: 1),
+    (id: "roof", name: "Roof", kind: Roof, categories: [Wood, Stone], cost: 1, work_ticks: 120, work_ticks_per_10_hardness: 20, deconstruct_pct: 50, return_pct: 50, blocks_walking: false, beauty: 0),
+    (id: "bed", name: "Bed", kind: Bed, categories: [Wood], cost: 3, work_ticks: 300, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: false, beauty: 2),
+    (id: "hearth", name: "Hearth", kind: Hearth, categories: [Stone], cost: 5, work_ticks: 400, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true, beauty: 1),
+    (id: "workshop", name: "Workshop", kind: Workshop, categories: [Wood, Stone], cost: 6, work_ticks: 500, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true, beauty: 0),
+]
