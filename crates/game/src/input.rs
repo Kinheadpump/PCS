@@ -2,9 +2,10 @@
 //! This module and `render` are the only places that read `macroquad` input.
 
 use macroquad::prelude::{
-    KeyCode, MouseButton, is_key_down, is_key_pressed, is_mouse_button_down, mouse_position,
-    mouse_wheel,
+    KeyCode, MouseButton, is_key_down, is_key_pressed, is_mouse_button_down,
+    is_mouse_button_pressed, mouse_position, mouse_wheel,
 };
+use sim::Speed;
 
 /// A player intent, independent of the key that caused it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,6 +35,16 @@ pub enum Action {
     },
     /// Switch to embark preset number N (0-based).
     Preset(usize),
+    /// Show or hide the tile grid.
+    ToggleGrid,
+    /// Pause, or return to the speed before the pause.
+    TogglePause,
+    /// Set the game speed.
+    SetSpeed(Speed),
+    /// Left click at a screen position (select).
+    LeftClick(f32, f32),
+    /// Right click at a screen position (debug move order).
+    RightClick(f32, f32),
     /// Close the game.
     Close,
 }
@@ -61,14 +72,19 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
     (Trigger::Pressed(KeyCode::KpAdd), Action::ZoomIn),
     (Trigger::Pressed(KeyCode::Minus), Action::ZoomOut),
     (Trigger::Pressed(KeyCode::KpSubtract), Action::ZoomOut),
-    (Trigger::Pressed(KeyCode::Key1), Action::Preset(0)),
-    (Trigger::Pressed(KeyCode::Key2), Action::Preset(1)),
-    (Trigger::Pressed(KeyCode::Key3), Action::Preset(2)),
+    (Trigger::Pressed(KeyCode::F1), Action::Preset(0)),
+    (Trigger::Pressed(KeyCode::F2), Action::Preset(1)),
+    (Trigger::Pressed(KeyCode::F3), Action::Preset(2)),
+    (Trigger::Pressed(KeyCode::G), Action::ToggleGrid),
+    (Trigger::Pressed(KeyCode::Space), Action::TogglePause),
+    (Trigger::Pressed(KeyCode::Q), Action::SetSpeed(Speed::X1)),
+    (Trigger::Pressed(KeyCode::E), Action::SetSpeed(Speed::X3)),
+    (Trigger::Pressed(KeyCode::R), Action::SetSpeed(Speed::X6)),
     (Trigger::Pressed(KeyCode::Escape), Action::Close),
 ];
 
-/// Mouse buttons that drag the map.
-pub const DRAG_BUTTONS: &[MouseButton] = &[MouseButton::Middle, MouseButton::Right];
+/// Mouse buttons that drag the map. The right button is not here: it gives move orders.
+pub const DRAG_BUTTONS: &[MouseButton] = &[MouseButton::Middle];
 
 /// Reads input each frame. Keeps the last mouse position to compute drags.
 #[derive(Default)]
@@ -98,6 +114,12 @@ impl InputState {
             }
         }
         self.last_mouse = Some(mouse);
+        if is_mouse_button_pressed(MouseButton::Left) {
+            actions.push(Action::LeftClick(mouse.0, mouse.1));
+        }
+        if is_mouse_button_pressed(MouseButton::Right) {
+            actions.push(Action::RightClick(mouse.0, mouse.1));
+        }
         let wheel = mouse_wheel().1;
         if wheel != 0.0 {
             actions.push(Action::WheelZoom {
@@ -136,9 +158,44 @@ mod tests {
             Action::Preset(0),
             Action::Preset(1),
             Action::Preset(2),
+            Action::TogglePause,
+            Action::SetSpeed(Speed::X1),
+            Action::SetSpeed(Speed::X3),
+            Action::SetSpeed(Speed::X6),
             Action::Close,
         ] {
             assert!(has(a), "missing binding for {a:?}");
         }
+    }
+
+    #[test]
+    fn preset_keys_are_function_keys_and_speed_keys_are_q_e_r() {
+        let key_of = |want: Action| {
+            KEY_BINDINGS
+                .iter()
+                .find(|(_, a)| *a == want)
+                .map(|(t, _)| *t)
+        };
+        assert_eq!(
+            key_of(Action::Preset(0)),
+            Some(Trigger::Pressed(KeyCode::F1))
+        );
+        assert_eq!(
+            key_of(Action::Preset(2)),
+            Some(Trigger::Pressed(KeyCode::F3))
+        );
+        assert_eq!(
+            key_of(Action::SetSpeed(Speed::X6)),
+            Some(Trigger::Pressed(KeyCode::R))
+        );
+        assert_eq!(
+            key_of(Action::TogglePause),
+            Some(Trigger::Pressed(KeyCode::Space))
+        );
+    }
+
+    #[test]
+    fn right_button_does_not_drag() {
+        assert!(!DRAG_BUTTONS.contains(&MouseButton::Right));
     }
 }

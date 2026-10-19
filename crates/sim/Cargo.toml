@@ -11,3 +11,4 @@ workspace = true
 base.workspace = true
 worldgen.workspace = true
 serde.workspace = true
+postcard.workspace = true

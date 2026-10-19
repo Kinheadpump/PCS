@@ -1,5 +1,9 @@
 //! Headless command-line tools.
 
+mod assetgen;
+mod bench;
+mod dumpsave;
+
 use base::Grid;
 use base::content::load_materials;
 use base::hash::Fnv1a;
@@ -36,7 +40,7 @@ fn parse_seed(args: &[String]) -> Result<u64, String> {
     }
 }
 
-const USAGE: &str = "usage: tools hash --seed <n> | dump-layers <preset> <out_dir> [--seed <n>] | validate-content <file>";
+const USAGE: &str = "usage: tools hash --seed <n> | dump-layers <preset> <out_dir> [--seed <n>] | validate-content <file> | assetgen [--seed <n>] [--out <dir>] | dump-save <file> | bench [--ticks <n>]";
 
 /// Pick a test preset by name.
 fn preset(name: &str) -> Result<EmbarkSummary, String> {
@@ -143,6 +147,9 @@ fn run(args: &[String]) -> Result<String, String> {
     match args.split_first() {
         Some((cmd, rest)) if cmd == "hash" => Ok(format!("{:016x}", grid_hash(parse_seed(rest)?))),
         Some((cmd, rest)) if cmd == "dump-layers" => dump_layers(rest),
+        Some((cmd, rest)) if cmd == "dump-save" => dumpsave::run(rest),
+        Some((cmd, rest)) if cmd == "bench" => bench::run(rest),
+        Some((cmd, rest)) if cmd == "assetgen" => assetgen::run(rest),
         Some((cmd, rest)) if cmd == "validate-content" => validate_content(rest),
         _ => Err(USAGE.to_owned()),
     }

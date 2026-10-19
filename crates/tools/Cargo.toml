@@ -11,3 +11,5 @@ workspace = true
 base.workspace = true
 worldgen.workspace = true
 sim.workspace = true
+serde.workspace = true
+ron.workspace = true
