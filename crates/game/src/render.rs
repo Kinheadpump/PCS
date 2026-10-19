@@ -11,6 +11,7 @@ use macroquad::prelude::{
     draw_rectangle, draw_rectangle_lines, draw_text, draw_texture_ex, get_fps, measure_text,
     screen_height, screen_width, vec2,
 };
+use std::collections::BTreeSet;
 use worldgen::{Ground, LocalMapData, Ore, RockKind};
 
 /// Tiles per chunk side.
@@ -105,6 +106,22 @@ impl Palette {
     pub fn tree_color(&self) -> Rgb {
         self.tree
     }
+}
+
+/// The chunks that a change of the tile `(x, y)` touches: the chunk of the tile and the
+/// chunks of its neighbors (edges, fringes, and shadows depend on the neighbors).
+pub fn chunks_touched_by(x: u32, y: u32, map_size: (u32, u32)) -> BTreeSet<(u32, u32)> {
+    let mut set = BTreeSet::new();
+    for dy in -1_i64..=1 {
+        for dx in -1_i64..=1 {
+            let (nx, ny) = (i64::from(x) + dx, i64::from(y) + dy);
+            if nx < 0 || ny < 0 || nx >= i64::from(map_size.0) || ny >= i64::from(map_size.1) {
+                continue;
+            }
+            set.insert((nx as u32 / CHUNK, ny as u32 / CHUNK));
+        }
+    }
+    set
 }
 
 /// Number of chunks on each axis.
@@ -389,6 +406,31 @@ impl MapView {
         }
     }
 
+    /// Bake the given chunks again, for example after a tile changed. Needs a running window.
+    pub fn rebake_chunks(
+        &self,
+        map: &LocalMapData,
+        palette: &Palette,
+        sheet: &Sheet,
+        chunks: &BTreeSet<(u32, u32)>,
+    ) {
+        let side = (CHUNK * PIXELS_PER_TILE) as u16;
+        for &(cx, cy) in chunks {
+            if cx >= self.chunks_x || cy >= self.chunks_y {
+                continue;
+            }
+            let Some(texture) = self.chunks.get((cy * self.chunks_x + cx) as usize) else {
+                continue;
+            };
+            let image = Image {
+                bytes: bake_chunk(map, palette, sheet, cx, cy),
+                width: side,
+                height: side,
+            };
+            texture.update(&image);
+        }
+    }
+
     /// Draw the chunks that touch the viewport.
     pub fn draw(&self, camera: &Camera, map_size: (u32, u32)) {
         let view = view_size();
@@ -573,6 +615,16 @@ mod tests {
         let was = map.tree.get(x, y).copied().unwrap_or(false);
         map.tree.set(x, y, !was);
         assert_ne!(a, bake_chunk(&map, &p, &sheet, 0, 0));
+    }
+
+    #[test]
+    fn a_tile_inside_a_chunk_touches_one_chunk_and_a_corner_touches_four() {
+        let size = (256, 256);
+        assert_eq!(chunks_touched_by(10, 10, size).len(), 1);
+        assert_eq!(chunks_touched_by(32, 32, size).len(), 4);
+        assert_eq!(chunks_touched_by(31, 5, size).len(), 2);
+        assert_eq!(chunks_touched_by(0, 0, size).len(), 1);
+        assert!(chunks_touched_by(255, 255, size).contains(&(7, 7)));
     }
 
     #[test]
