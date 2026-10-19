@@ -17,16 +17,19 @@ Work continues with the recommended choice until the owner answers.
 
 | ID | Question | Recommended | Alternatives | Why it matters | Blocks |
 |---|---|---|---|---|---|
-| Q-001 | What is the working title? | "Ruinstead", after a trademark and store name search. | "Hearthfall", "Under Old Stars", a new name. | Names in the window title and the store. | Nothing. Code uses neutral names. |
-| Q-002 | Do we add an underground layer? | No z-levels. Mountains are solid mineable tiles. One deep layer is possible in Phase 6. Tile storage supports layers from the start. | Full z-levels. 2 or 3 fixed layers in the MVP. | Z-levels multiply the cost of pathfinding, rendering, temperature, and UI. | Nothing before Phase 6. |
-| Q-003 | Which save mode is the default? | Ironman by default. Free saves are an option. | Free saves only. Ironman only. | Failure is the central experience. Free saves remove the consequences. | S15. |
-| Q-004 | How long is a year? | 40 game days (4 seasons × 10 days), approximately 40 real minutes at 1×. | 60 days (more building time). 24 days (fast runs). | Controls the pace of the game and the balance of food and fuel. | Nothing. The value is content data. |
-| Q-005 | Do we add legacy worlds (a dead colony becomes a site in the next run)? | Yes, in Phase 4. | A new world for each run. | High value for low cost. It uses the site system. It changes the save structure. | Nothing before Phase 4. |
-| Q-006 | Which tone and magic level? | Grounded, low magic. Serious, with some dark humor. | High fantasy with visible magic (more art and systems). | Affects art, content, and the legend text. | Content in S10 and S14. |
-| Q-007 | Who makes the art? | The developer makes 16 × 16 placeholder sprites. Tint by material color. Get final art later. | Buy an asset pack (license risk, style limits). Commission art now. | Art can block playtests. | Nothing. Placeholders are sufficient. |
+| Q-001 | What is the working title? | **Answered 2026-10-19:** keep "Ruinstead" as the working title only. | — | — | — |
+| Q-002 | Do we add an underground layer? | **Answered 2026-10-19:** no underground layer now (D-003 is Confirmed). Phase 6 can look at it again. | — | — | — |
+| Q-003 | Which save mode is the default? | **Answered 2026-10-19:** ironman (D-032). | — | — | — |
+| Q-004 | How long is a year? | **Answered 2026-10-19:** 40 game days as the start value. Playtests tune it (D-017 is Confirmed). | — | — | — |
+| Q-005 | Do we add legacy worlds? | **Answered 2026-10-19:** yes, in Phase 4 (D-033). | — | — | — |
+| Q-006 | Which tone and magic level? | **Answered 2026-10-19:** grounded, low magic. | — | — | — |
+| Q-007 | Who makes the art? | **Answered 2026-10-19:** AI subagents make the art and the sound with Rust code (D-034). | — | — | — |
 | Q-008 | Where is the repository hosted? | **Answered 2026-10-19:** `https://github.com/Kinheadpump/PCS` (D-028). | — | — | — |
-| Q-009 | How detailed is combat in the MVP? | Melee only. Health and the condition "wounded". No body parts. Ranged combat in Phase 4. | Automatic abstract combat. Body regions in the MVP. | Combat cost can grow fast. | S13. |
-| Q-010 | Which platforms do we support? | Windows first. Linux in CI. macOS later and not tested. | Windows only. All three from the start. | Affects CI and test cost. | S0 task 9. |
+| Q-009 | How detailed is combat in the MVP? | **Answered 2026-10-19:** melee only, health and "wounded", no body parts. | — | — | — |
+| Q-010 | Which platforms do we support? | **Answered 2026-10-19:** Windows first. Linux stays in CI only as a determinism check. | — | — | — |
+| Q-011 | Which proposed crises in `GAME_DESIGN.md` §10.1 go into the MVP? | All of them: drought and wildfire, food poisoning, wound infection, winter fever with a doctor job and herbal medicine, and melee raids by rival colonies. This adds approximately 3 sprints. | Only disease and raids (approximately 2 sprints). Keep the MVP as it is and add them in Phase 4. | The owner wants many crises to manage. Each one changes the sprint plan. | The roadmap after S11. |
+| Q-012 | How does the colony learn new knowledge? | Keep lore fragments from ruins. Each one is a short name and an unlock, with no story text. | Research at a workshop with work time. Both. | D-005 links knowledge to history. D-035 limits story. | S12. |
+| Q-013 | Can the player talk to a raiding rival colony? | Yes, with one choice: pay a tribute of goods or fight. No full diplomacy in the MVP. | Fight only. Full diplomacy. | Gives a response that is not combat. | S13 if Q-011 adds raids. |
 
 ## 2. Decisions
 
@@ -34,7 +37,7 @@ Work continues with the recommended choice until the owner answers.
 |---|---|---|---|---|
 | D-001 | Colonists are individual. The player controls them indirectly. Scale targets are in `GAME_DESIGN.md` §7.1. | Confirmed | Emergent stories need named persons. A small scale is possible for a small team. | Abstract population (loses stories, needs heavy optimization). Direct control (micromanagement). |
 | D-002 | The world has two levels: a 256 × 256 world map and a local map. | Confirmed | History runs cheaply on the world. Detail exists only where the colony lives. | One large detailed map (too expensive). |
-| D-003 | No z-levels in the MVP. Mountains are solid mineable tiles. Tile layers are a `Vec<Layer>`. | Proposed (Q-002) | Controls cost. Keeps a later layer possible. | Full z-levels. Fixed layers. |
+| D-003 | No z-levels in the MVP. Mountains are solid mineable tiles. Tile layers are a `Vec<Layer>`. | Confirmed (owner, Q-002) | Controls cost. Keeps a later layer possible. | Full z-levels. Fixed layers. |
 | D-004 | Threats come from Notice, the world, and history. There is no storyteller and no event deck. | Confirmed | Supports emergent stories and fair failure. The player controls the risk. | AI storyteller. Random event deck. |
 | D-005 | Knowledge comes from lore fragments and the start set. There is no research tree. | Confirmed | Connects progression to history (pillar 1). | Research tree. Skill-based unlocks only. |
 | D-006 | Phase 1 builds the colony survival loop on test maps before world generation. | Confirmed | The survival loop is the largest design risk. The `EmbarkSummary` boundary removes the dependency on the world. | World generation first (late feedback on the loop). |
@@ -48,7 +51,7 @@ Work continues with the recommended choice until the owner answers.
 | D-014 | Content data is in RON files with a validation and link pass. | Confirmed | Supports enums and nested data. One format. Easy for agents to edit. | TOML. A hand-written format. Rust constants. |
 | D-015 | Commands go in, events come out. Rendering reads `&Sim`. Single-threaded. | Confirmed | Replay, tests, and a clear boundary. | Shared mutable state. A sim thread with snapshots (not needed yet). |
 | D-016 | 1 game hour is 100 ticks. Speed 1× is 40 ticks per second. | Confirmed | Enough time resolution for movement. Fits the tick budget at 6×. | 1 tick per game minute. |
-| D-017 | A year has 4 seasons of 10 days. | Proposed (Q-004) | A pace of approximately 40 minutes for each year. | 60 or 24 days. |
+| D-017 | A year has 4 seasons of 10 days. Playtests tune the value. | Confirmed (owner, Q-004) | A pace of approximately 40 minutes for each year. | 60 or 24 days. |
 | D-018 | One outdoor temperature for the full local map. Room temperature from insulation. No tile-to-tile heat diffusion. | Confirmed | Low cost. Easy for the player to understand. | Per-tile heat diffusion. |
 | D-019 | History runs on the region graph for 3,000 years by default, with hard limits. Each event type must write a map result. | Confirmed | Bounded time and memory. History must change gameplay. | Per-person simulation. Unlimited history. |
 | D-020 | MVP history features are the five features in `GAME_DESIGN.md` §9.3. Hostile descendant civilizations wait for Phase 4. | Confirmed | Best value for cost. Resolves a conflict between the design review (sealed sites first) and the world review (civilizations first). Raids need more combat and AI. | Hostile civilizations in the MVP. |
@@ -63,6 +66,11 @@ Work continues with the recommended choice until the owner answers.
 | D-029 | The plan has 17 sprints (S0 to S16) in `ROADMAP.md`. It replaces the first plan with 15 sprints. | Confirmed | The quality review found sprints with too much work (needs and climate together, the full Phase 3 readability work in one sprint). Each sprint now delivers its own readability work. | 15 sprints with a readability sprint. |
 | D-030 | Scope cuts from the quality review: no drought, cave-ins, fishing, water need, well, cart, salt, or chronicle export in the MVP. One metal (iron). Legends have two reliability levels. | Confirmed | Each cut item has low value for the core loop or needs a new model. The items are in the backlog (`ROADMAP.md` §9). | Keep the items in Phase 3. |
 | D-031 | `AGENTS.md` is the canonical file for agent rules. `CLAUDE.md` imports it and adds only rules for Claude Code. | Confirmed (owner request, 2026-10-19) | Many AI tools read `AGENTS.md`. One canonical file prevents conflicts. | Two full copies. |
+| D-032 | Ironman is the only save mode in the MVP. One save file. The game writes it automatically. | Confirmed (owner, Q-003) | Failure must have consequences. | Free saves. |
+| D-033 | Legacy worlds (a dead colony becomes a site in the next run) come in Phase 4. | Confirmed (owner, Q-005) | High value. It uses the site system. | A new world for each run only. |
+| D-034 | Art and sound come from Rust code. The `assetgen` tool makes 16 × 16 PNG sprite sheets and WAV sound files from seeds and parameters. The `art-generator` and `sound-designer` subagents write and tune the generators. Generated files are committed. | Confirmed (owner, Q-007) | The owner wants AI agents to make the assets with Rust. Generators make consistent palettes and styles. | Hand-made placeholders. Asset packs. |
+| D-035 | The game is about the present colony. History is implied. It shapes the map, the resources, and the threats, but the game does not tell a story. Short text (legends, chronicle) is optional information, not the reward. | Confirmed (owner, 2026-10-19) | The owner wants colony management to be the center of the game. | History as the central experience. |
+| D-036 | Project subagents are Markdown files in `.claude/agents/`. The `owner-interviewer` subagent prepares questions when the plan is unclear. The lead agent asks the owner. | Confirmed (owner, 2026-10-19) | The owner wants to correct the course early and often. | No interviews. |
 
 ## 3. Assumptions
 

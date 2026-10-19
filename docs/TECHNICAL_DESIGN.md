@@ -49,7 +49,7 @@ docs/
 | `worldgen` | `WorldData`, `History`, `EmbarkSummary`, `LocalMapData`. All generation steps. | `base` | Know about colonists, jobs, or rendering. |
 | `sim` | `Sim` state, tick, systems, `Command`, `Event`, chronicle, save format. | `base`, `worldgen` (types and local map input), `serde`, `postcard` | Do file I/O, use time, use threads, depend on `macroquad`. |
 | `game` | Window, camera, rendering, input mapping, interface, speed control, file I/O for saves. | All crates, `macroquad` | Change `Sim` state directly. |
-| `tools` | Command-line tools: `gen-world`, `dump-layers`, `run`, `bench`, `soak`, `hash`, `replay`, `validate-content`, `dump-save`. | All crates except `game` | Contain game rules. |
+| `tools` | Command-line tools: `gen-world`, `dump-layers`, `run`, `bench`, `soak`, `hash`, `replay`, `validate-content`, `dump-save`, `assetgen`. | All crates except `game` | Contain game rules. |
 
 Inside `sim`, use modules, not more crates: `time`, `map`, `colonist`, `item`, `job`, `path`, `region`, `build`, `room`, `climate`, `need`, `mood`, `health`, `farm`, `production`, `knowledge`, `site`, `notice`, `creature`, `combat`, `weather`, `fire`, `migrant`, `alert`, `ledger`, `chronicle`, `command`, `event`, `save`.
 
@@ -98,6 +98,7 @@ Each value that the player can inspect (mood, Notice, room temperature, work spe
 - Do not use the async or coroutine features of `macroquad` for game logic.
 - Sprites are 16 × 16 pixels. Use nearest-neighbor filtering. Tint sprites with the material color.
 - Draw only visible tiles. Batch static tile layers by chunk (32 × 32 tiles).
+- Art and sound come from `tools assetgen` (D-034). It writes PNG files (our own writer with stored deflate, CRC32, and Adler-32) and 16-bit mono WAV files. Generated files are committed in `assets/`. Sound playback uses the `macroquad` audio feature. Enable it when the first sound exists.
 
 ### 4.3 User interface (D-008)
 

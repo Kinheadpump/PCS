@@ -25,7 +25,7 @@ Never report that a check passed if you did not run it. Report each check that c
 ## Workflow
 
 1. Work only on tasks in the current sprint in `docs/ROADMAP.md`.
-2. If a rule is unclear, make a reasonable assumption, continue, and report it. If the owner must decide, propose a `Q-nnn` item with a recommendation.
+2. If a rule or a request is unclear, use the `owner-interviewer` subagent to prepare questions for the owner. Ask early: a wrong direction costs more later. Continue with the recommended assumption until the owner answers.
 3. Write the test first. Put the rule ID in the test name: `r005_food_rots_twice_as_fast_above_25c`.
 4. Put new ideas in the backlog (`docs/ROADMAP.md` §9), not in the sprint.
 5. Report the document changes that your work needs. The lead agent edits `docs/`, `README.md`, `AGENTS.md`, and `CLAUDE.md`.

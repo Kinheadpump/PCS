@@ -12,24 +12,26 @@ Writing rules:
 
 ## 1. Identity
 
-**Working title:** Ruinstead. [DECISION NEEDED: Q-001]
+**Working title:** Ruinstead (Q-001, answered).
 
 **Genre:** Single-player colony simulation. Top-down 2D. Pixel art. Real time with pause. Mouse and keyboard. PC.
 
-**Central experience:** The player starts a colony on land with a long history. The player reads the ruins, uses what old civilizations left, and tries to survive the problems that destroyed those civilizations.
+**Central experience:** The player manages a colony in the present and keeps it alive. Cold, hunger, disease, fire, beasts, and attackers put pressure on the colony. The player sees the warning signs, makes plans, and responds (D-035).
+
+The land has a long history, but the game does not tell it as a story. The history is implied: it decides where the ore, the ruins, the roads, and the dangers are. The player sees the results, not the text.
 
 The player gives orders but does not control the colonists directly. The colonists do the work. The environment and the history create the problems.
 
-**Tone:** Grounded fantasy with low magic. Magic exists only as old relics and strange places. There are no spells. The chronicle text is serious, with some dark humor. [DECISION NEEDED: Q-006]
+**Tone:** Grounded fantasy with low magic. Magic exists only as old relics and strange places. There are no spells. Text is short and serious, with some dark humor (Q-006, answered).
 
 ## 2. Design pillars
 
 Use these pillars to accept or reject each feature.
 
-1. **History changes the map.** Each past event leaves a physical, usable result on the map: ore, ruins, roads, hazards, enemies, or knowledge. If a generated fact cannot change a player decision, do not generate it.
+1. **The colony in the present is the game.** Each system must give the player a problem to manage now or a choice to make now. History is implied. It leaves physical results on the map (ore, ruins, roads, hazards, enemies) but no story to read. If a generated fact cannot change a player decision, do not generate it.
 2. **Physical rules are consistent.** Temperature, materials, fuel, and soil obey simple rules. The player can learn the rules. Wood burns. Stone walls keep heat. Food rots in warm air. Each year has a winter.
 3. **The player can find the cause.** The player finds the causes of each important result in a maximum of two clicks. The complexity is in the interactions, not in the interface.
-4. **Failure ends the run, and the chronicle records it.** Failure is expected. Each run gives a readable chronicle.
+4. **Crises are expected, and failure ends the run.** Many different crises can hit the colony (§10.1). Each crisis has a warning sign and more than one player response. When the colony fails, the run ends.
 5. **Each system connects to other systems.** A new system must interact with a minimum of two existing systems.
 
 ## 3. Glossary
@@ -166,7 +168,7 @@ The player must do these tasks in the first year:
 
 ## 6. Time and calendar
 
-- A year has 4 seasons: spring, summer, autumn, winter. Each season has 10 game days. A year has 40 game days. [DECISION NEEDED: Q-004]
+- A year has 4 seasons: spring, summer, autumn, winter. Each season has 10 game days. A year has 40 game days. (Q-004, answered: start value, playtests tune it)
 - At speed 1×, one game day is approximately 60 real seconds. One year is approximately 40 real minutes.
 - Speeds: pause, 1×, 3×, 6×.
 - By default, the game pauses on critical alerts. The player can change this.
@@ -334,14 +336,9 @@ Item durability and value come from the material and the item template.
 
 **R-024 Fire spread:** A burning tile has fire intensity from 1 to 10. Each 10 ticks, it has a chance to spread to each adjacent flammable tile. The chance is `flammability × intensity / 10` percent. A burning tile uses its fuel. When the fuel is 0, the fire stops. Stone and soil do not burn. Rain stops all outdoor fire. A colonist with an extinguish job decreases intensity by 2 each game hour.
 
-### 8.9 Disasters in the MVP
+### 8.9 Disasters
 
-The MVP disasters come from the simulation, not from scripts:
-
-- Fire (R-023, R-024).
-- Cold periods (R-003).
-
-Drought, cave-ins, floods, and plague are in the backlog (`ROADMAP.md` §9).
+Disasters come from the simulation, not from scripts. The full list is the crisis catalog (§10.1).
 
 ## 9. World and history
 
@@ -366,7 +363,7 @@ The MVP has these five history features:
 1. **Ruins with salvage and danger.** Each site has a type, a cause of destruction, a culture, and an age. These values control the content: salvage, relics, lore fragments, and occupants. Old ruins are partly buried. Colonists must excavate them.
 2. **Depleted and untouched deposits.** Old mines in the history remove ore. Deposits near old mines are poor. Untouched deposits are rich. Old mine tunnels exist on the local map, so colonists can reach ore faster.
 3. **Ancient roads.** Old roads cross the local map. They show the direction of other sites. Colonists move 30% faster on roads.
-4. **Legends that point to lost artifacts.** A lore fragment can contain a legend. The legend shows a site marker on the local map.
+4. **Legends that point to lost artifacts.** A lore fragment can contain a legend. The legend is one line of text and a site marker on the local map. It is a lead to a reward, not a story.
 5. **Sealed sites.** Some sites contain a dormant threat. The site has a warning legend. If colonists open it, the colony gets a large reward and the threat wakes up.
 
 **R-041 Site presence:** Each local map has a minimum of 1 site. If the history gives no site in the embark area, local map generation adds a small ruin.
@@ -379,11 +376,40 @@ The MVP has these five history features:
 
 Later features are in `ROADMAP.md` §7.
 
-## 10. Threats and Notice (D-004)
+## 10. Crises and threats (D-004)
 
-There is no AI storyteller and no scripted event deck. Threats come from the world, the history, and the actions of the player.
+There is no AI storyteller and no scripted event deck. Crises come from the simulation: the weather, the world, the history, and the actions of the player.
 
-### 10.1 Notice
+### 10.1 Crisis catalog
+
+Each crisis must have a cause in the simulation, a warning sign that the player can see before the crisis is serious, and a minimum of two player responses. Status: **MVP** (in the plan), **Proposed** (the owner decides with Q-011), **Later** (`ROADMAP.md` §7 or §9).
+
+| Group | Crisis | Cause in the simulation | Warning sign | Player responses | Status |
+|---|---|---|---|---|---|
+| Weather | Cold period | Negative weather offset (R-003). | Forecast. Temperature alert. | Insulate rooms, more hearths, fuel stock, warm clothes, keep colonists inside. | MVP |
+| Weather | Heat wave | Positive weather offset in summer (R-003). | Forecast. Heatstroke alert. | Rock rooms, work at night, cool storage for food. | MVP |
+| Weather | Drought | Many days without rain. Crops grow slower. Wild plants do not grow again. Fire spreads faster. | Days without rain in the ledger. Crop growth why chain. | Irrigation ditch from a river, crops for dry soil, food stock, firebreaks. | Proposed |
+| Weather | Wildfire | Lightning on a dry summer day starts a fire outside. Uses R-024. | Drought warning. Smoke at the map edge. | Firebreaks, stone buildings, extinguish jobs. | Proposed |
+| Weather | Flood | Snow melt raises the river in spring. | River level forecast. | Build away from the river, dikes. | Later |
+| Disease | Food poisoning | A colonist eats raw food or food with a high rot value. Low cooking skill increases the chance. | Rot values in the ledger. Sick colonist alert. | Cook all food, cool storage, remove old food, a better cook. | Proposed |
+| Disease | Wound infection | A wounded colonist without bed rest or treatment. | "Wounded" condition in the inspector. | Bed rest, a doctor job, herbal medicine. | Proposed |
+| Disease | Winter fever | Spreads between colonists who sleep in the same cold room. | First case alert. Number of sick colonists. | A separate sick room, warm bedrooms, isolation, herbal medicine. | Proposed |
+| Disease | Plague | Rats and dead bodies. | Rats in the storage. | Graves, clean storage, cats. | Later |
+| Supply | Famine | Food stock goes to 0 (R-011). | Food days remaining in the ledger. | Rationing by priority, more fields, hunting, gathering. | MVP |
+| Supply | Spoilage | Warm storage (R-005). | Rot values. Storage temperature. | Rock cellar, smoked food, eat old food first. | MVP |
+| Supply | Fuel shortage | Hearths burn fuel (R-022). Trees decrease. | Fuel days remaining. | Charcoal, coal, replant trees, smaller heated rooms. | MVP |
+| Supply | Tool shortage | Tools wear out (R-008). | Tool count in the ledger. | Crafting, better materials, salvage from sites. | MVP |
+| Supply | Crop blight | Pests in large fields of one crop. | Crop health in the inspector. | Mixed crops, burn the infected field. | Later |
+| Attack | Beasts | Notice (R-031). | Beast at the map edge. | Walls, doors, drafted defenders, lower Notice. | MVP |
+| Attack | Dormant threat | Colonists open a sealed site. | Warning legend on the site. | Do not open it. Prepare defenses before opening. | MVP |
+| Attack | Raid by a rival colony | Rival settlements on the world map. Their distance, the colony wealth, and Notice control raids. | A scout at the map edge 1 game day before the raid. | Walls, gates, drafted defenders, pay a tribute, hide colonists in a closed room. | Proposed |
+| Attack | Thieves | Rival settlements steal at night. | Missing items in the ledger. | Locked storage, guards. | Later |
+| Colony | Mood breakdown and desertion | Low mood (R-015). | Mood alert and why chain. | Better rooms, food, rest, fewer dangers. | MVP |
+| Colony | Fights between colonists | Traits and low mood. | Mood alert. | Separate the colonists. | Later |
+| Structure | Fire | Hearths near flammable items (R-023, R-024). | Fire alert. | Stone walls, space around hearths, extinguish jobs. | MVP |
+| Structure | Cave-in | Mining under a large unsupported rock area. | Cracks in the tile inspector. | Leave pillars, build supports. | Later |
+
+### 10.2 Notice
 
 **R-030 Notice:** Notice is the sum of these contributions. Each contribution has a location for the Notice overlay.
 
@@ -400,15 +426,15 @@ There is no AI storyteller and no scripted event deck. Threats come from the wor
 - Beasts in lairs on the map become active when Notice is 30 or more.
 - An awake dormant threat gets 1 strength level for each 25 Notice.
 
-### 10.2 Creatures
+### 10.3 Creatures
 
 - Game animals walk around the map. Colonists with a hunt designation hunt them. They give meat and leather.
 - Beasts attack colonists. They come from the map edge or from lairs.
 - Dormant threats wake up when colonists open a sealed site.
 
-### 10.3 Combat (MVP)
+### 10.4 Combat (MVP)
 
-**R-032 Melee:** The player can draft colonists. A drafted colonist obeys move and attack orders. MVP combat is melee only. Damage is `weapon base damage × (100% + 10% × combat level)` plus a roll from 0% to 20%. Damage decreases health. A hit that does 10 or more damage adds the condition "wounded". There are no body parts in the MVP. [DECISION NEEDED: Q-009]
+**R-032 Melee:** The player can draft colonists. A drafted colonist obeys move and attack orders. MVP combat is melee only. Damage is `weapon base damage × (100% + 10% × combat level)` plus a roll from 0% to 20%. Damage decreases health. A hit that does 10 or more damage adds the condition "wounded". There are no body parts in the MVP. (Q-009, answered)
 
 ## 11. Progression
 
@@ -447,9 +473,9 @@ Tools wear out with use (R-008).
 
 **R-050 End of run:** The run ends when the colony has no colonists. Colonists that leave count as lost. The player can also abandon the colony.
 
-At the end, the game shows the chronicle and the legacy score: years survived, peak population, sites excavated, knowledge unlocked.
+At the end, the game shows the legacy score (years survived, peak population, crises survived, knowledge unlocked) and the chronicle as a short list of key events.
 
-Save mode: ironman by default, with an optional free-save mode. [DECISION NEEDED: Q-003]
+Save mode: ironman (D-032).
 
 ### 12.1 Why failure is likely but fair
 
@@ -504,7 +530,7 @@ Each sprint adds the why chain rows, alerts, and chronicle entries for its own s
 6. Spring: Edda finds a tomb in the gallery. A warning legend tells of "the Grave of the Hundred". The player ignores it. The colonists take a relic.
 7. Summer: A bound guardian wakes up. Edda dies at the gallery entrance. The mood modifier "friend died" makes Joss stop work. Food production decreases.
 8. Year 3: The player gives the jobs to other colonists. The colony survives one more winter with smoked food.
-9. Year 5: The guardian is stronger, because Notice is high. It breaks into the storehouse. A hearth fire spreads through the wooden walls. The last food burns. The colony collapses. The chronicle tells the full story.
+9. Year 5: The guardian is stronger, because Notice is high. It breaks into the storehouse. A hearth fire spreads through the wooden walls. The last food burns. The colony collapses.
 
 ## 16. Scope
 
