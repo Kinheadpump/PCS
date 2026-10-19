@@ -5,13 +5,23 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a PR cancels the older run of that PR. Runs on main never cancel.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
   checks:
+    # A hung job fails after 30 minutes. It never stays "in progress".
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Show toolchain
@@ -24,3 +34,15 @@ jobs:
         run: cargo test --workspace
       - name: Hash is stable in release builds
         run: cargo run --release -p tools -- hash --seed 1
+
+  # One required check for branch protection. It is green only if every
+  # matrix job succeeded. A cancelled, skipped, or failed job makes it red.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All checks must succeed
+        run: test "${{ needs.checks.result }}" = "success"
