@@ -1,0 +1,14 @@
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+# D-010: no hash collections, no time (see TECHNICAL_DESIGN.md section 7).
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "Iteration order is not stable. Use Vec or BTreeMap." },
+    { path = "std::collections::HashSet", reason = "Iteration order is not stable. Use Vec or BTreeSet." },
+    { path = "std::hash::DefaultHasher", reason = "Not stable. Use base::hash." },
+]
+disallowed-methods = [
+    { path = "std::time::Instant::now", reason = "No time in deterministic code." },
+    { path = "std::time::SystemTime::now", reason = "No time in deterministic code." },
+]

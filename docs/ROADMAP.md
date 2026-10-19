@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 0 (not started).
+Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 0 (done on branch `sprint-0-foundation`, waiting for owner review).
 
 This document is the canonical source for phases, sprints, milestones, the Definition of Done, the playtest record, and the backlog. Game rules (`R-nnn`) are in `GAME_DESIGN.md`. Technical rules, required checks, and performance targets (`P-nn`) are in `TECHNICAL_DESIGN.md`.
 

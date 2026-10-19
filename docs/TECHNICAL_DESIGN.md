@@ -19,7 +19,7 @@ Writing rule: This document uses ASD-STE 100 Simplified Technical English. Code 
 
 - Rust stable, edition 2024. `rust-toolchain.toml` sets the version. Sprint 0 selects the current stable version.
 - Tools: `cargo`, `rustfmt`, `clippy`.
-- Development platform: Windows 11. Check platform: Linux in CI. [DECISION NEEDED: Q-010]
+- Development platform: Windows 11. Check platform: Linux in CI.
 - Repository: `https://github.com/Kinheadpump/PCS` (D-028). CI: GitHub Actions on Windows and Linux.
 
 ## 3. Workspace structure
@@ -367,7 +367,7 @@ opt-level = 3
 | `postcard` (alloc) | `sim`, `tools` | Compact and stable binary save format. |
 | `ron` | `base`, `tools` | Human-editable content files with enums and nested data. Debug save dumps. |
 
-Pin exact minor versions in Sprint 0. Check the current versions on crates.io at that time.
+Sprint 0 pinned `macroquad` 0.4.16 and `serde` 1.0.229 in the workspace. `postcard` 1.1.3 and `ron` 0.12.2 are current. Add them when the first code uses them.
 
 ### 13.2 Candidates for later (not approved)
 

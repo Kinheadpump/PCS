@@ -6,9 +6,9 @@ You start a colony in a procedurally generated fantasy world. The world has thou
 
 ## Current status
 
-- **Phase:** 0, Foundation. **Sprint:** 0, not started.
+- **Phase:** 0, Foundation. **Sprint:** 0, done on branch `sprint-0-foundation` (waiting for owner review).
 - The concept and the plan are complete (draft 0.1). The plan has 20 sprints (S0 to S19).
-- No code exists yet. Sprint 0 creates the Cargo workspace.
+- The Cargo workspace exists (Sprint 0). The crates `worldgen` and `sim` are empty.
 - Open decisions are in `docs/DECISIONS.md` §1.
 
 ## Documents
