@@ -1,0 +1,20 @@
+// Skills, work times, and the job board. Integers only (D-014).
+// Times are in ticks at 100% work speed (100 ticks = 1 game hour).
+// Work speed in percent is speed_base_pct + speed_per_level_pct x skill level (R-010).
+(
+    xp_per_job: 100,
+    xp_per_level: 1000,
+    max_level: 10,
+    speed_base_pct: 100,
+    speed_per_level_pct: 5,
+    cut_ticks: 300,
+    mine_ticks_base: 200,
+    mine_ticks_per_10_hardness: 100,
+    log_yield: 4,
+    stone_yield: 2,
+    ore_yield: 1,
+    stack_max: 50,
+    search_budget: 200,
+    retry_ticks: 10,
+    default_priority: 3,
+)

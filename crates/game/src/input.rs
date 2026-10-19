@@ -1,9 +1,10 @@
 //! Input: maps keys and mouse to `Action` values through a binding table (TECHNICAL_DESIGN §4.4).
 //! This module and `render` are the only places that read `macroquad` input.
 
+use crate::tools::Tool;
 use macroquad::prelude::{
     KeyCode, MouseButton, is_key_down, is_key_pressed, is_mouse_button_down,
-    is_mouse_button_pressed, mouse_position, mouse_wheel,
+    is_mouse_button_pressed, is_mouse_button_released, mouse_position, mouse_wheel,
 };
 use sim::Speed;
 
@@ -43,8 +44,14 @@ pub enum Action {
     SetSpeed(Speed),
     /// Left click at a screen position (select).
     LeftClick(f32, f32),
-    /// Right click at a screen position (debug move order).
+    /// Left button released at a screen position (end of a drag).
+    LeftRelease(f32, f32),
+    /// Right click at a screen position (debug move order, or cancel a drag).
     RightClick(f32, f32),
+    /// Choose a map tool.
+    SelectTool(Tool),
+    /// Show or hide the work panel.
+    ToggleWork,
     /// Close the game.
     Close,
 }
@@ -80,6 +87,22 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
     (Trigger::Pressed(KeyCode::Q), Action::SetSpeed(Speed::X1)),
     (Trigger::Pressed(KeyCode::E), Action::SetSpeed(Speed::X3)),
     (Trigger::Pressed(KeyCode::R), Action::SetSpeed(Speed::X6)),
+    (
+        Trigger::Pressed(KeyCode::V),
+        Action::SelectTool(Tool::Select),
+    ),
+    (Trigger::Pressed(KeyCode::T), Action::SelectTool(Tool::Cut)),
+    (Trigger::Pressed(KeyCode::M), Action::SelectTool(Tool::Mine)),
+    (Trigger::Pressed(KeyCode::H), Action::SelectTool(Tool::Haul)),
+    (
+        Trigger::Pressed(KeyCode::Z),
+        Action::SelectTool(Tool::Stockpile),
+    ),
+    (
+        Trigger::Pressed(KeyCode::C),
+        Action::SelectTool(Tool::Cancel),
+    ),
+    (Trigger::Pressed(KeyCode::P), Action::ToggleWork),
     (Trigger::Pressed(KeyCode::Escape), Action::Close),
 ];
 
@@ -116,6 +139,9 @@ impl InputState {
         self.last_mouse = Some(mouse);
         if is_mouse_button_pressed(MouseButton::Left) {
             actions.push(Action::LeftClick(mouse.0, mouse.1));
+        }
+        if is_mouse_button_released(MouseButton::Left) {
+            actions.push(Action::LeftRelease(mouse.0, mouse.1));
         }
         if is_mouse_button_pressed(MouseButton::Right) {
             actions.push(Action::RightClick(mouse.0, mouse.1));
@@ -163,6 +189,13 @@ mod tests {
             Action::SetSpeed(Speed::X3),
             Action::SetSpeed(Speed::X6),
             Action::Close,
+            Action::ToggleWork,
+            Action::SelectTool(Tool::Select),
+            Action::SelectTool(Tool::Cut),
+            Action::SelectTool(Tool::Mine),
+            Action::SelectTool(Tool::Haul),
+            Action::SelectTool(Tool::Stockpile),
+            Action::SelectTool(Tool::Cancel),
         ] {
             assert!(has(a), "missing binding for {a:?}");
         }
@@ -192,6 +225,54 @@ mod tests {
             key_of(Action::TogglePause),
             Some(Trigger::Pressed(KeyCode::Space))
         );
+    }
+
+    fn key_letter(code: KeyCode) -> Option<char> {
+        match code {
+            KeyCode::V => Some('V'),
+            KeyCode::T => Some('T'),
+            KeyCode::M => Some('M'),
+            KeyCode::H => Some('H'),
+            KeyCode::Z => Some('Z'),
+            KeyCode::C => Some('C'),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn tool_keys_match_the_labels_in_the_toolbar() {
+        for tool in Tool::ALL {
+            let binding = KEY_BINDINGS
+                .iter()
+                .find(|(_, a)| *a == Action::SelectTool(tool))
+                .map(|(t, _)| *t);
+            let Some(Trigger::Pressed(code)) = binding else {
+                panic!("no key for {tool:?}");
+            };
+            assert_eq!(key_letter(code), Some(tool.key_label()));
+        }
+    }
+
+    #[test]
+    fn tool_keys_do_not_collide_with_pan_or_speed_keys() {
+        // WASD pans and Q/E/R set the speed, so no tool uses these keys.
+        for (trigger, action) in KEY_BINDINGS {
+            if matches!(action, Action::SelectTool(_) | Action::ToggleWork) {
+                let (Trigger::Pressed(k) | Trigger::Held(k)) = trigger;
+                for pan in [
+                    KeyCode::W,
+                    KeyCode::A,
+                    KeyCode::S,
+                    KeyCode::D,
+                    KeyCode::Q,
+                    KeyCode::E,
+                    KeyCode::R,
+                    KeyCode::G,
+                ] {
+                    assert_ne!(*k, pan);
+                }
+            }
+        }
     }
 
     #[test]

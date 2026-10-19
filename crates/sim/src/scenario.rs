@@ -1,6 +1,6 @@
 //! Scenario test helper: maps from ASCII text (TECHNICAL_DESIGN §11.1).
 //!
-//! Legend: `.` open soil, `#` wall, `~` water, `T` tree (walkable), `c` open soil with a colonist.
+//! Legend: `.` open soil, `#` wall, `~` water, `T` tree (walkable), `R` granite rock wall (mineable), `c` open soil with a colonist.
 //! Empty lines are ignored. All rows must have the same length.
 
 use crate::Sim;
@@ -49,6 +49,7 @@ pub fn map_from_ascii(text: &str) -> Result<(LocalMap, Vec<(u16, u16)>), Scenari
     }
     let len = width * height;
     let (mut water, mut tree, mut wall) = (vec![false; len], vec![false; len], vec![false; len]);
+    let mut rock = vec![false; len];
     let mut spawns = Vec::new();
     for (y, row) in rows.iter().enumerate() {
         if row.chars().count() != width {
@@ -61,12 +62,13 @@ pub fn map_from_ascii(text: &str) -> Result<(LocalMap, Vec<(u16, u16)>), Scenari
                 '#' => wall[i] = true,
                 '~' => water[i] = true,
                 'T' => tree[i] = true,
+                'R' => rock[i] = true,
                 'c' => spawns.push((x as u16, y as u16)),
                 other => return Err(ScenarioError::UnknownChar(y + 1, other)),
             }
         }
     }
-    let map = LocalMap::from_cells(width as u32, height as u32, &water, &tree, &wall);
+    let map = LocalMap::from_cells(width as u32, height as u32, &water, &tree, &wall, &rock);
     Ok((map, spawns))
 }
 

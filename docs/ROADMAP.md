@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 0 (done on branch `sprint-0-foundation`, waiting for owner review).
+Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 3. Sprints 0, 1, and 2 are on `main`. Sprint 3 is on branch `sprint-3-jobs`; live mouse input is not yet verified by an agent. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
 
 This document is the canonical source for phases, sprints, milestones, the Definition of Done, the playtest record, and the backlog. Game rules (`R-nnn`) are in `GAME_DESIGN.md`. Technical rules, required checks, and performance targets (`P-nn`) are in `TECHNICAL_DESIGN.md`.
 

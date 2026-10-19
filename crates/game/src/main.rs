@@ -4,9 +4,13 @@ mod actors;
 mod camera;
 mod clock;
 mod font;
+mod hud;
 mod input;
+mod inspector;
+mod overlay;
 mod render;
 mod sprites;
+mod tools;
 mod ui;
 
 use camera::{Camera, View};
@@ -14,8 +18,10 @@ use clock::Clock;
 use input::{Action, InputState};
 use macroquad::prelude::{Conf, get_frame_time, get_screen_data, mouse_position, next_frame};
 use render::{MapView, Palette};
-use sim::{ColonistId, Command, Event, Sim};
+use sim::{ColonistId, Command, Event, JobEvent, JobKind, Sim};
 use sprites::Sheet;
+use std::collections::BTreeSet;
+use tools::{Area, Tool};
 use ui::{Ui, UiAction};
 use worldgen::{EmbarkSummary, LocalMapData, generate_local};
 
@@ -66,6 +72,20 @@ struct App {
     pending: Vec<Command>,
     /// Text of the last sim event, for the status panel.
     last_event: String,
+    /// The tool of the left mouse button on the map.
+    tool: Tool,
+    /// The tile where a drag started.
+    drag_start: Option<(u16, u16)>,
+    /// The selected tile, shown in the tile panel.
+    selected_tile: Option<(u16, u16)>,
+    /// True if the work panel is open.
+    show_work: bool,
+    /// The panels of the last frame, so the mouse does not act through them.
+    panels: Vec<ui::Rect>,
+    /// Chunks of the baked map that must be baked again.
+    dirty: BTreeSet<(u32, u32)>,
+    /// A drag preview from `PCS_PREVIEW`, for screenshots.
+    preview_override: Option<(Tool, Area)>,
 }
 
 impl App {
@@ -87,6 +107,13 @@ impl App {
             selected: None,
             pending: Vec::new(),
             last_event: String::new(),
+            tool: Tool::Select,
+            drag_start: None,
+            selected_tile: None,
+            show_work: false,
+            panels: Vec::new(),
+            dirty: BTreeSet::new(),
+            preview_override: None,
             palette,
             sheet,
             grid: false,
@@ -97,23 +124,75 @@ impl App {
     }
 
     /// Developer aid for `PCS_SHOT`: select, order, and run ticks from environment values.
+    /// `PCS_TOOL=<word>`, `PCS_DESIGNATE=<tool:x0,y0,x1,y1;...>` (the orders a drag would give),
+    /// `PCS_PREVIEW=<tool:x0,y0,x1,y1>` (draw a drag preview), `PCS_TILE=<x>,<y>`,
+    /// `PCS_WORK=1`, `PCS_PRIORITY=<slot>,<job 0-2>,<priority>`, and
+    /// `PCS_ITEM=<material key>,<count>,<x>,<y>` (several, separated by `;`).
     fn debug_setup(&mut self) {
         let var = |k: &str| std::env::var(k).ok();
+        let numbers = |v: &str| -> Vec<u16> {
+            v.split(',')
+                .filter_map(|p| p.trim().parse::<u16>().ok())
+                .collect()
+        };
+        if let Some(tool) = var("PCS_TOOL").and_then(|v| Tool::from_word(&v)) {
+            self.tool = tool;
+        }
+        self.show_work = var("PCS_WORK").is_some_and(|v| v == "1");
         if let Some(slot) = var("PCS_SELECT").and_then(|v| v.parse::<usize>().ok()) {
             self.selected = self.sim.colonists().iter().nth(slot).map(|(id, _)| id);
         }
-        if let (Some(id), Some(v)) = (self.selected, var("PCS_MOVE")) {
-            let mut it = v.split(',').filter_map(|p| p.trim().parse::<u16>().ok());
-            if let (Some(x), Some(y)) = (it.next(), it.next()) {
-                self.pending.push(Command::MoveColonist { id, x, y });
+        if let (Some(id), Some(v)) = (self.selected, var("PCS_MOVE"))
+            && let [x, y] = numbers(&v)[..]
+        {
+            self.pending.push(Command::MoveColonist { id, x, y });
+        }
+        if let Some(v) = var("PCS_TILE")
+            && let [x, y] = numbers(&v)[..]
+        {
+            self.selected_tile = Some((x, y));
+        }
+        for entry in var("PCS_ITEM").iter().flat_map(|v| v.split(';')) {
+            let mut parts = entry.split(',').map(str::trim);
+            let key = parts.next().unwrap_or_default();
+            let rest: Vec<u16> = parts.filter_map(|p| p.parse().ok()).collect();
+            let material = self.sim.rules().materials.iter().position(|m| m.key == key);
+            if let (Some(material), [count, x, y]) = (material, &rest[..]) {
+                self.sim
+                    .debug_spawn_item(material as u16, u32::from(*count), *x, *y);
             }
         }
+        if let Some(v) = var("PCS_PRIORITY") {
+            let values: Vec<usize> = v.split(',').filter_map(|p| p.trim().parse().ok()).collect();
+            if let [slot, job, priority] = values[..] {
+                let colonist = self.sim.colonists().iter().nth(slot).map(|(id, _)| id);
+                if let (Some(colonist), Some(job)) = (colonist, JobKind::ALL.get(job)) {
+                    self.pending.push(Command::SetPriority {
+                        colonist,
+                        job: *job,
+                        priority: priority as u8,
+                    });
+                }
+            }
+        }
+        for order in var("PCS_DESIGNATE").iter().flat_map(|v| v.split(';')) {
+            if let Some((tool, area)) = tools::parse_order(order, self.tool) {
+                let sim = &self.sim;
+                self.pending
+                    .extend(tools::commands_for_drag(tool, area, |t, x, y| {
+                        tools::applies(sim, t, x, y)
+                    }));
+            }
+        }
+        self.preview_override = var("PCS_PREVIEW").and_then(|v| tools::parse_order(&v, self.tool));
         let ticks = var("PCS_TICKS")
             .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(0);
+            .unwrap_or(0)
+            .max(u32::from(!self.pending.is_empty()));
         for _ in 0..ticks {
             let commands = std::mem::take(&mut self.pending);
             self.sim.step(&commands);
+            self.note_events();
         }
         self.note_events();
     }
@@ -148,12 +227,17 @@ impl App {
                     self.loaded = Self::load_preset(&self.palette, &self.sheet, n);
                     self.sim = Sim::new(&self.loaded.map, SEED, self.content_hash);
                     self.selected = None;
+                    self.selected_tile = None;
+                    self.drag_start = None;
+                    self.dirty.clear();
                     self.pending.clear();
                     self.last_event.clear();
                 }
+                Action::SelectTool(tool) => self.set_tool(tool),
+                Action::ToggleWork => self.show_work = !self.show_work,
                 Action::TogglePause => self.clock.toggle_pause(),
                 Action::SetSpeed(speed) => self.clock.set_speed(speed),
-                Action::LeftClick(..) | Action::RightClick(..) => {}
+                Action::LeftClick(..) | Action::LeftRelease(..) | Action::RightClick(..) => {}
                 Action::ToggleGrid => self.grid = !self.grid,
                 Action::Preset(_) => {}
                 Action::Close => return false,
@@ -170,6 +254,13 @@ impl App {
             self.sim.step(&commands);
             self.note_events();
         }
+        self.rebake();
+    }
+
+    /// Choose a tool. A drag in progress ends.
+    fn set_tool(&mut self, tool: Tool) {
+        self.tool = tool;
+        self.drag_start = None;
     }
 
     fn note_events(&mut self) {
@@ -183,68 +274,121 @@ impl App {
                 }
             };
         }
+        for event in self.sim.drain_job_events() {
+            if let JobEvent::Completed {
+                kind: JobKind::Cut | JobKind::Mine,
+                x,
+                y,
+                ..
+            } = event
+            {
+                self.sync_tile(x, y);
+            }
+            if let Some(text) = inspector::job_event_text(&event) {
+                self.last_event = text;
+            }
+        }
     }
 
-    /// Handle clicks after the UI is built: left selects, right gives a debug move order.
+    /// Copy a tile from the sim map to the baked map data and mark its chunks.
+    fn sync_tile(&mut self, x: u16, y: u16) {
+        let (ix, iy) = (i32::from(x), i32::from(y));
+        let live = self.sim.map();
+        let baked = &mut self.loaded.map;
+        if let Some(v) = live.ground(ix, iy) {
+            baked.ground.set(ix, iy, v);
+        }
+        if let Some(v) = live.rock(ix, iy) {
+            baked.rock.set(ix, iy, v);
+        }
+        if let Some(v) = live.ore(ix, iy) {
+            baked.ore.set(ix, iy, v);
+        }
+        baked.tree.set(ix, iy, live.tree(ix, iy));
+        let size = self.map_size();
+        self.dirty
+            .extend(render::chunks_touched_by(u32::from(x), u32::from(y), size));
+    }
+
+    /// Bake the changed chunks again.
+    fn rebake(&mut self) {
+        if self.dirty.is_empty() {
+            return;
+        }
+        let dirty = std::mem::take(&mut self.dirty);
+        self.loaded
+            .view
+            .rebake_chunks(&self.loaded.map, &self.palette, &self.sheet, &dirty);
+    }
+
+    /// The tile under a screen position, or `None` outside the map.
+    fn tile_under(&self, pos: (f32, f32), view: View) -> Option<(u16, u16)> {
+        self.camera
+            .tile_at(pos, view, self.map_size())
+            .and_then(|(x, y)| Some((u16::try_from(x).ok()?, u16::try_from(y).ok()?)))
+    }
+
+    /// The tile where a drag at a screen position ends. Outside the map it is the nearest edge tile.
+    fn drag_tile(&self, pos: (f32, f32), view: View) -> Option<(u16, u16)> {
+        tools::clamp_tile(self.camera.screen_to_tile(pos, view), self.map_size())
+    }
+
+    /// Handle clicks after the UI is built. With the Select tool the left button selects and the
+    /// right button gives a debug move order. Other tools drag a rectangle.
     fn handle_clicks(&mut self, actions: &[Action], ui: &Ui, view: View) {
-        let size = self.map_size();
         for action in actions {
-            let (pos, order) = match *action {
-                Action::LeftClick(x, y) => ((x, y), false),
-                Action::RightClick(x, y) => ((x, y), true),
-                _ => continue,
-            };
-            if ui.captures(pos) {
-                continue;
-            }
-            if order {
-                let tile = self
-                    .camera
-                    .tile_at(pos, view, size)
-                    .and_then(|(x, y)| Some((u16::try_from(x).ok()?, u16::try_from(y).ok()?)));
-                if let (Some(id), Some((x, y))) = (self.selected, tile) {
-                    self.pending.push(Command::MoveColonist { id, x, y });
+            match *action {
+                Action::LeftClick(x, y) if !ui.captures((x, y)) => {
+                    if self.tool.drags() {
+                        self.drag_start = self.tile_under((x, y), view);
+                    } else {
+                        let point = self.camera.screen_to_tile((x, y), view);
+                        self.selected = actors::pick_colonist(&self.sim, point);
+                        self.selected_tile = if self.selected.is_none() {
+                            self.tile_under((x, y), view)
+                        } else {
+                            None
+                        };
+                    }
                 }
-            } else {
-                let point = self.camera.screen_to_tile(pos, view);
-                self.selected = actors::pick_colonist(&self.sim, point);
+                Action::LeftRelease(x, y) => {
+                    let start = self.drag_start.take();
+                    if let (Some(start), Some(end)) = (start, self.drag_tile((x, y), view)) {
+                        let area = Area::from_corners(start, end);
+                        let sim = &self.sim;
+                        let commands = tools::commands_for_drag(self.tool, area, |t, tx, ty| {
+                            tools::applies(sim, t, tx, ty)
+                        });
+                        self.pending.extend(commands);
+                    }
+                }
+                Action::RightClick(x, y) if !ui.captures((x, y)) => {
+                    if self.drag_start.take().is_some() {
+                        continue;
+                    }
+                    if self.tool != Tool::Select {
+                        self.set_tool(Tool::Select);
+                        continue;
+                    }
+                    if let (Some(id), Some((tx, ty))) =
+                        (self.selected, self.tile_under((x, y), view))
+                    {
+                        self.pending
+                            .push(Command::MoveColonist { id, x: tx, y: ty });
+                    }
+                }
+                _ => {}
             }
         }
     }
 
-    fn hover_text(&self, view: View) -> String {
-        let size = self.map_size();
-        match self.camera.tile_at(mouse_position(), view, size) {
-            Some((x, y)) => {
-                let map = &self.loaded.map;
-                format!(
-                    "Tile ({x}, {y}) ground {:?} rock {:?} ore {:?} tree {}",
-                    map.ground.get(x, y),
-                    map.rock.get(x, y),
-                    map.ore.get(x, y),
-                    map.tree.get(x, y).copied().unwrap_or(false)
-                )
-            }
-            None => "Tile (-, -)".to_owned(),
+    /// The area and tool of the drag preview, if there is one.
+    fn preview(&self, view: View) -> Option<(Tool, Area)> {
+        if let (Some(start), true) = (self.drag_start, self.tool.drags()) {
+            let end = self.drag_tile(mouse_position(), view)?;
+            return Some((self.tool, Area::from_corners(start, end)));
         }
-    }
-
-    fn selection_text(&self) -> String {
-        let Some((id, c)) = self
-            .selected
-            .and_then(|id| self.sim.colonist(id).map(|c| (id, c)))
-        else {
-            return "No colonist selected".to_owned();
-        };
-        match c.target {
-            Some((tx, ty)) => format!(
-                "Colonist {} at ({}, {}) going to ({tx}, {ty})",
-                id.index(),
-                c.x,
-                c.y
-            ),
-            None => format!("Colonist {} at ({}, {}) idle", id.index(), c.x, c.y),
-        }
+        self.preview_override
     }
 
     /// Draw one frame, then apply the UI actions and the clicks.
@@ -255,49 +399,80 @@ impl App {
         if self.grid {
             MapView::draw_grid(&self.camera, size);
         }
+        let frame = overlay::Frame {
+            sim: &self.sim,
+            camera: &self.camera,
+            view,
+            map_size: size,
+        };
+        let selected_zone = self
+            .selected_tile
+            .and_then(|(x, y)| inspector::zone_at(&self.sim, x, y));
+        overlay::draw_zones(&frame, selected_zone);
+        overlay::draw_items(&frame);
+        overlay::draw_designations(&frame);
         actors::draw(&self.sim, &self.camera, view, self.selected);
+        let sprite_size = self.camera.zoom.max(12.0);
+        for (id, c) in self.sim.colonists().iter() {
+            if c.carrying.is_some() {
+                let p = self.camera.tile_to_screen(actors::position_tiles(c), view);
+                overlay::draw_carried(&frame, p, sprite_size, id);
+            }
+        }
+        if let Some((tool, area)) = self.preview(view) {
+            overlay::draw_preview(&frame, tool, area);
+        }
+        let mouse = mouse_position();
+        let hover_tile = if self.panels.iter().any(|r| r.contains(mouse)) {
+            None
+        } else {
+            self.tile_under(mouse, view)
+        };
+        if let (Some(tile), true) = (hover_tile, self.tool.drags() && self.drag_start.is_none()) {
+            overlay::draw_tile_outline(&frame, tile, overlay::hover_color());
+        }
+        if let Some(tile) = self.selected_tile {
+            overlay::draw_tile_outline(&frame, tile, overlay::SELECT);
+        }
 
         let click = actions.iter().find_map(|a| match a {
             Action::LeftClick(x, y) => Some((*x, *y)),
             _ => None,
         });
-        let mut ui = Ui::new(mouse_position(), click);
-        let before = [
-            ui::format_time(&self.sim.time()),
-            format!(
-                "Tick {}   state hash {:016x}",
-                self.sim.tick(),
-                self.sim.state_hash()
-            ),
-        ];
-        let mut after = vec![
-            self.hover_text(view),
-            self.selection_text(),
-            format!(
-                "FPS {}   zoom {:.1} px/tile   map: {}",
-                render::fps(),
-                self.camera.zoom,
-                PRESETS[self.preset].0
-            ),
-        ];
-        if !self.last_event.is_empty() {
-            after.push(self.last_event.clone());
-        }
-        let ui_actions = ui::status_panel(&mut ui, (8.0, 8.0), &before, self.clock.speed(), &after);
-        let help = [
-            "WASD/arrows, middle drag: pan   Wheel, +/-: zoom   G: grid   Esc: quit".to_owned(),
-            "Left click: select   Right click: move selected   Space: pause   Q/E/R: 1x/3x/6x   F1-F3: map"
-                .to_owned(),
-        ];
-        let help_h = ui::hud_layout((0.0, 0.0), &help, &[], &[]).panel.h;
-        ui::text_panel(&mut ui, (8.0, view.1 - help_h - 8.0), &help);
-
+        let right_click = actions.iter().find_map(|a| match a {
+            Action::RightClick(x, y) => Some((*x, *y)),
+            _ => None,
+        });
+        let mut ui = Ui::new(mouse, click).with_right_click(right_click);
+        let input = hud::HudInput {
+            sim: &self.sim,
+            view,
+            tool: self.tool,
+            show_work: self.show_work,
+            selected: self.selected,
+            selected_tile: self.selected_tile,
+            hover_tile,
+            speed: self.clock.speed(),
+            fps: render::fps(),
+            zoom: self.camera.zoom,
+            map_name: PRESETS[self.preset].0,
+            last_event: &self.last_event,
+        };
+        let ui_actions = hud::draw(&mut ui, &input);
         for action in ui_actions {
             match action {
                 UiAction::SetSpeed(speed) => self.clock.set_speed(speed),
+                UiAction::SetTool(tool) => self.set_tool(tool),
+                UiAction::ToggleWork => self.show_work = !self.show_work,
+                UiAction::SelectColonist(id) => {
+                    self.selected = Some(id);
+                    self.selected_tile = None;
+                }
+                UiAction::Command(command) => self.pending.push(command),
             }
         }
         self.handle_clicks(actions, &ui, view);
+        self.panels = ui.panels().to_vec();
     }
 }
 
