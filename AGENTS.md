@@ -47,3 +47,4 @@ Never report that a check passed if you did not run it. Report each check that c
 - Use CLI tools for external services: `gh` for GitHub (issues, PRs, CI runs, releases), and the matching CLI (`aws`, `gcloud`, `sentry-cli`) for other services.
 - One branch for each task. Do not push to `main` without an instruction from the owner.
 - Only one agent edits a file at a time.
+- Never merge a PR until every check on its head commit has finished with the result `success`. Read each job result from the Actions jobs list for that commit, not only from the PR check list. That list can show a finished job as `in_progress`. If a check is not finished, wait and read it again. If a check hangs or is cancelled, re-run it. Never merge to get past a pending, hung, or failed check.
