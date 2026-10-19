@@ -7,7 +7,7 @@ You start a colony in a procedurally generated fantasy world. The world has thou
 ## Current status
 
 - **Phase:** 0, Foundation. **Sprint:** 0, not started.
-- The concept and the plan are complete (draft 0.1). The plan has 17 sprints (S0 to S16).
+- The concept and the plan are complete (draft 0.1). The plan has 20 sprints (S0 to S19).
 - No code exists yet. Sprint 0 creates the Cargo workspace.
 - Open decisions are in `docs/DECISIONS.md` §1.
 

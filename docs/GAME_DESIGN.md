@@ -79,7 +79,10 @@ Use these names in all documents, code, and messages.
 | Skill | A colonist ability with a level from 0 to 10, for example mining. |
 | Trait | A permanent colonist property that changes rules, for example Hardy. |
 | Need | A colonist value that decreases over time: hunger, rest, warmth. |
-| Condition | A health state: starving, hypothermia, heatstroke, wounded, exhausted. |
+| Condition | A health state: starving, hypothermia, heatstroke, wounded, exhausted, or a disease. |
+| Disease | A condition with a severity from 0 to 100: food poisoning, wound infection, winter fever (R-060). |
+| Sick room | A room that the player marks for sick colonists (R-064). |
+| Herbal medicine | An item from gathered herbs. A doctor uses it to treat a disease (R-064). |
 | Mood | A colonist value from 0 to 100. It is the sum of mood modifiers. |
 | Mood modifier | One named contribution to mood, for example "cold bedroom −6". |
 | Comfort band | The temperature range in which a colonist is comfortable (R-001). |
@@ -87,6 +90,10 @@ Use these names in all documents, code, and messages.
 | Game animal | A creature that colonists can hunt. It does not attack. |
 | Beast | A creature that attacks colonists. |
 | Draft | A player order that puts a colonist under direct control for combat. |
+| Rival colony | A living settlement of a historical civilization near the embark cell. It can raid the colony (R-070). |
+| Raid | An attack by a group of fighters from a rival colony (R-071). |
+| Scout | A rival fighter that comes 1 game day before a raid. |
+| Tribute | Goods that the player pays to stop a raid (R-072). |
 
 ### 3.4 Player tools and interface
 
@@ -102,6 +109,8 @@ Use these names in all documents, code, and messages.
 | Wealth | The total value of all colony items and structures. |
 | Fertility | A tile value that multiplies crop yield. |
 | Weather offset | A daily temperature change that makes cold days and warm days (R-003). |
+| Drought | A period with 5 or more days without rain (R-025). |
+| Irrigation ditch | A dug channel that carries water from a water tile (R-025). |
 | Why chain | The list of named contributions to a value, shown in the inspector. |
 | Overlay | A map view that shows one value for each tile, for example temperature. |
 | Inspector | The panel that shows the values and why chains of a selected object. |
@@ -192,7 +201,7 @@ This section is the canonical source for colonist scale.
 Each colonist has:
 
 - Name, age, and sex.
-- Skills: mining, woodcutting, construction, farming, cooking, crafting, hunting, combat. Each skill has a level from 0 to 10.
+- Skills: mining, woodcutting, construction, farming, cooking, crafting, hunting, combat, medicine. Each skill has a level from 0 to 10.
 - Traits: 1 trait in the MVP. MVP traits: Hardy (comfort band lower limit −5 °C), Glutton (hunger decreases 50% faster), Bold (danger mood modifiers are 50% smaller), Lazy (work speed −15%), Strong (carry capacity +50%).
 - Needs: hunger, rest, warmth.
 - Mood and health.
@@ -237,7 +246,30 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
-MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.
+MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.
+
+### 7.7 Disease and medicine
+
+**R-060 Disease:** A disease is a condition with a severity from 0 to 100. Each disease type has these values in the content data: severity at start, severity change each game day without treatment, severity change each game day in a bed, severity change each game day with treatment, work speed penalty, and contagion. At severity 0, the disease ends. Above severity 50, the colonist loses 2 health each game hour. The inspector shows each severity change as a why chain.
+
+**R-061 Food poisoning:** When a colonist eats, the chance of food poisoning is:
+
+- Raw food: 20%.
+- Cooked food: 5% − 0.5% × cook skill level, to a minimum of 0%.
+- Food with rot value 50 or more: +30%.
+
+Food poisoning starts at severity 40 and decreases by 20 each game day. Work speed −50%. It is not contagious.
+
+**R-062 Wound infection:** Each game day, a wounded colonist gets a wound infection with this chance: 15% if the colonist did not sleep in a bed, 5% if the colonist slept in a bed, 1% if a doctor treated the wound. Severity starts at 20. It increases by 15 each game day without treatment and decreases by 20 each game day with treatment and bed rest.
+
+**R-063 Winter fever:** Winter fever is contagious.
+
+- Each game hour, a colonist on a tile below the lower comfort limit has a 0.1% chance to catch it.
+- Each night, each sick colonist infects each other colonist that sleeps in the same room. The chance is 20%, or 10% if the room temperature is inside the comfort band.
+- Severity starts at 20. It increases by 10 each game day, decreases by 15 each game day in a warm bed, and decreases by 30 each game day with herbal medicine.
+- After recovery, the colonist cannot catch winter fever for 20 game days.
+
+**R-064 Doctor and sick room:** A doctor job treats one sick or wounded colonist in a bed. It takes 1 game hour and uses 1 herbal medicine. The treatment lasts 1 game day. The success chance is 60% + 4% × medicine skill level. A colonist makes herbal medicine from gathered herbs at a workshop (start knowledge). The player can mark a room as a sick room. Sick colonists sleep only in a sick room if a bed is free there. Contagion happens only between colonists in the same room.
 
 ### 7.6 Migrants
 
@@ -303,6 +335,16 @@ Smoked food uses 10% of the normal base rate. At rot value 100, the item is rott
 ### 8.5 Plants and crops
 
 **R-006 Crops:** Each crop type has a minimum growth temperature, a maximum growth temperature, a frost kill temperature, and a growth time in game days. A crop grows only when the tile temperature is inside its band. It dies when the temperature is below its kill temperature. Yield is the base yield × fertility (50% to 150%).
+
+**R-025 Drought:** The simulation counts the days without rain. At 5 or more days, a drought is active. A rain day ends it. During a drought:
+
+- Crops on tiles that are not irrigated grow at 50% speed. Crops with the flag "dry soil" grow at normal speed.
+- Gathered wild plants do not grow again.
+- Fire spread chance (R-024) is doubled.
+
+A tile within 4 tiles of a water tile or a connected irrigation ditch is irrigated. A colonist digs an irrigation ditch with a designation. A ditch tile is connected if it touches a water tile or a connected ditch tile. Colonists cannot walk on ditch tiles.
+
+**R-026 Wildfire:** On each summer day with an active drought, there is a 10% chance of lightning. The lightning hits a random tree or grass tile and starts a fire with intensity 5 (R-024). Soil, stone, and ditch tiles do not burn, so the player can make firebreaks.
 
 **R-007 Wild plants:** Each biome has wild plants in the content data, for example berry bushes and roots. A gather designation gives food or fiber. A gathered plant grows again after a time in game days. Wild plants do not grow in winter.
 
@@ -382,18 +424,18 @@ There is no AI storyteller and no scripted event deck. Crises come from the simu
 
 ### 10.1 Crisis catalog
 
-Each crisis must have a cause in the simulation, a warning sign that the player can see before the crisis is serious, and a minimum of two player responses. Status: **MVP** (in the plan), **Proposed** (the owner decides with Q-011), **Later** (`ROADMAP.md` §7 or §9).
+Each crisis must have a cause in the simulation, a warning sign that the player can see before the crisis is serious, and a minimum of two player responses. Status: **MVP** (in the plan), **Later** (`ROADMAP.md` §7 or §9).
 
 | Group | Crisis | Cause in the simulation | Warning sign | Player responses | Status |
 |---|---|---|---|---|---|
 | Weather | Cold period | Negative weather offset (R-003). | Forecast. Temperature alert. | Insulate rooms, more hearths, fuel stock, warm clothes, keep colonists inside. | MVP |
 | Weather | Heat wave | Positive weather offset in summer (R-003). | Forecast. Heatstroke alert. | Rock rooms, work at night, cool storage for food. | MVP |
-| Weather | Drought | Many days without rain. Crops grow slower. Wild plants do not grow again. Fire spreads faster. | Days without rain in the ledger. Crop growth why chain. | Irrigation ditch from a river, crops for dry soil, food stock, firebreaks. | Proposed |
-| Weather | Wildfire | Lightning on a dry summer day starts a fire outside. Uses R-024. | Drought warning. Smoke at the map edge. | Firebreaks, stone buildings, extinguish jobs. | Proposed |
+| Weather | Drought | Many days without rain. Crops grow slower. Wild plants do not grow again. Fire spreads faster. | Days without rain in the ledger. Crop growth why chain. | Irrigation ditch from a river, crops for dry soil, food stock, firebreaks. | MVP |
+| Weather | Wildfire | Lightning on a dry summer day starts a fire outside. Uses R-024. | Drought warning. Smoke at the map edge. | Firebreaks, stone buildings, extinguish jobs. | MVP |
 | Weather | Flood | Snow melt raises the river in spring. | River level forecast. | Build away from the river, dikes. | Later |
-| Disease | Food poisoning | A colonist eats raw food or food with a high rot value. Low cooking skill increases the chance. | Rot values in the ledger. Sick colonist alert. | Cook all food, cool storage, remove old food, a better cook. | Proposed |
-| Disease | Wound infection | A wounded colonist without bed rest or treatment. | "Wounded" condition in the inspector. | Bed rest, a doctor job, herbal medicine. | Proposed |
-| Disease | Winter fever | Spreads between colonists who sleep in the same cold room. | First case alert. Number of sick colonists. | A separate sick room, warm bedrooms, isolation, herbal medicine. | Proposed |
+| Disease | Food poisoning | A colonist eats raw food or food with a high rot value. Low cooking skill increases the chance. | Rot values in the ledger. Sick colonist alert. | Cook all food, cool storage, remove old food, a better cook. | MVP |
+| Disease | Wound infection | A wounded colonist without bed rest or treatment. | "Wounded" condition in the inspector. | Bed rest, a doctor job, herbal medicine. | MVP |
+| Disease | Winter fever | Spreads between colonists who sleep in the same cold room. | First case alert. Number of sick colonists. | A separate sick room, warm bedrooms, isolation, herbal medicine. | MVP |
 | Disease | Plague | Rats and dead bodies. | Rats in the storage. | Graves, clean storage, cats. | Later |
 | Supply | Famine | Food stock goes to 0 (R-011). | Food days remaining in the ledger. | Rationing by priority, more fields, hunting, gathering. | MVP |
 | Supply | Spoilage | Warm storage (R-005). | Rot values. Storage temperature. | Rock cellar, smoked food, eat old food first. | MVP |
@@ -402,7 +444,7 @@ Each crisis must have a cause in the simulation, a warning sign that the player 
 | Supply | Crop blight | Pests in large fields of one crop. | Crop health in the inspector. | Mixed crops, burn the infected field. | Later |
 | Attack | Beasts | Notice (R-031). | Beast at the map edge. | Walls, doors, drafted defenders, lower Notice. | MVP |
 | Attack | Dormant threat | Colonists open a sealed site. | Warning legend on the site. | Do not open it. Prepare defenses before opening. | MVP |
-| Attack | Raid by a rival colony | Rival settlements on the world map. Their distance, the colony wealth, and Notice control raids. | A scout at the map edge 1 game day before the raid. | Walls, gates, drafted defenders, pay a tribute, hide colonists in a closed room. | Proposed |
+| Attack | Raid by a rival colony | Rival settlements on the world map. Their distance, the colony wealth, and Notice control raids. | A scout at the map edge 1 game day before the raid. | Walls, gates, drafted defenders, pay a tribute, hide colonists in a closed room. | MVP |
 | Attack | Thieves | Rival settlements steal at night. | Missing items in the ledger. | Locked storage, guards. | Later |
 | Colony | Mood breakdown and desertion | Low mood (R-015). | Mood alert and why chain. | Better rooms, food, rest, fewer dangers. | MVP |
 | Colony | Fights between colonists | Traits and low mood. | Mood alert. | Separate the colonists. | Later |
@@ -430,11 +472,25 @@ Each crisis must have a cause in the simulation, a warning sign that the player 
 
 - Game animals walk around the map. Colonists with a hunt designation hunt them. They give meat and leather.
 - Beasts attack colonists. They come from the map edge or from lairs.
+- Rival colonies send raids (§10.5).
 - Dormant threats wake up when colonists open a sealed site.
 
 ### 10.4 Combat (MVP)
 
 **R-032 Melee:** The player can draft colonists. A drafted colonist obeys move and attack orders. MVP combat is melee only. Damage is `weapon base damage × (100% + 10% × combat level)` plus a roll from 0% to 20%. Damage decreases health. A hit that does 10 or more damage adds the condition "wounded". There are no body parts in the MVP. (Q-009, answered)
+
+### 10.5 Rival colonies and raids
+
+**R-070 Rival colonies:** Local generation selects up to 3 living settlements of historical civilizations near the embark cell. Each one has a strength (3 to 12 fighters) and a hostility from 0 to 100. Hostility is the base value from history (wars with the owner of the embark area) + wealth / 1,000 + Notice / 2, to a maximum of 100. The lore panel shows each rival colony with its strength and hostility.
+
+**R-071 Raid:** Each game day after day 20 of the run, each rival colony raids with a chance of hostility / 20 percent, to a maximum of 5%. The raid has `strength × hostility / 100` fighters, to a minimum of 2. A scout comes to the map edge 1 game day before the raid and makes a warning alert. Raiders use melee combat (R-032). They attack colonists, break doors and walls (time from material hardness), and carry away items. They leave when half of the raiders are dead or down.
+
+**R-072 Tribute:** When the raiders arrive, the game pauses. The player selects one choice:
+
+- **Pay:** the colony gives goods with a value of 200 × the number of raiders. The player selects the goods. The raiders leave. Hostility decreases by 20.
+- **Fight:** the raid starts. If the colony wins, hostility decreases by 10. If the raiders carry away items, hostility increases by 10.
+
+The player cannot pay if the colony has too few goods. There is no other diplomacy in the MVP.
 
 ## 11. Progression
 
@@ -544,7 +600,9 @@ Each sprint adds the why chain rows, alerts, and chronicle entries for its own s
 - World generation, history, and embark.
 - The five history features in §9.3.
 - Notice, game animals, beasts, dormant threats, and melee combat.
-- Fire and cold periods.
+- Rival colonies, raids, and tribute.
+- Disease, the doctor job, herbal medicine, and sick rooms.
+- Fire, cold periods, heat waves, drought, irrigation, and wildfire.
 - Migrants.
 - Overlays, the inspector with why chains, the ledger, alerts, the chronicle, and the lore panel.
 - Save and load. The end-of-run screen.
@@ -556,8 +614,8 @@ The phase of each later system is in `ROADMAP.md` §7. Each later system connect
 | System | Connection to the core loop |
 |---|---|
 | Relationships and births | Deaths have more effect. The colony can grow from inside. |
-| Hostile descendant civilizations and raids | The main external threat. Notice and old grudges from the history control them. |
-| Ranged combat | Necessary for raids. |
+| Larger wars with rival civilizations | Rival colonies grow, make alliances, and attack with armies. Uses the raid system. |
+| Ranged combat | Raiders and colonists with bows. Walls and towers become more important. |
 | Trade caravans | A solution for depleted local resources. |
 | World map expeditions | Access to sites outside the local map. |
 | Legacy worlds | A dead colony becomes a site for the next run (Q-005). |
@@ -567,7 +625,7 @@ The phase of each later system is in `ROADMAP.md` §7. Each later system connect
 | Diplomacy and allies | Stances and a few actions (gift, tribute, pact). Old grudges become manageable. |
 | Raids on other settlements | Uses the expedition and combat systems. |
 | More metals and longer chains | Longer goals with new knowledge. |
-| Drought, cave-ins, floods, disease, medicine | New environmental pressure. |
+| Cave-ins, floods, plague, crop blight, thieves | More crises from the catalog (§10.1). |
 | Deep underground layer | New content below the map (Q-002). |
 | Social classes | Important above approximately 100 colonists. Uses housing and job type. |
 | Playable fantasy races | Races exist as historical civilizations from the MVP. Playable races need balance work. |

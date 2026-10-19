@@ -40,7 +40,7 @@ A sprint is done when all of its tasks are done and its deliverable works.
 | 0 | Foundation | S0 | Workspace, deterministic base library, checks. |
 | 1 | Colony prototype | S1 to S7 | Colonists survive or fail a first winter on a test map. This tests the core survival loop. |
 | 2 | World and history | S8 to S11 | World generation, history, and embark make the local map. |
-| 3 | MVP | S12 to S16 | The full scope in `GAME_DESIGN.md` §16.1. |
+| 3 | MVP | S12 to S19 | The full scope in `GAME_DESIGN.md` §16.1. |
 | 4 | External threats | Later | See §7. |
 | 5 | Society | Later | See §7. |
 | 6 | Scale and variety | Later | See §7. |
@@ -312,7 +312,10 @@ Risks: civilizations that grow or die without limit, local maps that are not dif
 | S13 Creatures and combat | Add creatures and melee combat. | Game animals, hunting, meat and leather, beasts, drafting, melee, the condition "wounded". | R-032. A drafted colonist obeys a move order in the same tick. Creatures use the path budget (P-04). |
 | S14 Notice, legends, and sealed sites | Make history dangerous and useful. | Notice and its overlay, beast spawns, lair beasts, dormant threats, legends with site markers. | R-030, R-031, R-044. Notice equals the sum of its contributions. Opening a sealed site wakes its threat. |
 | S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save. | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. |
-| S16 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. |
+| S16 Drought and wildfire | Make dry summers a crisis. | Dry-day counter in the ledger, drought effects, irrigation ditches, dry-soil crops, lightning. | R-025, R-026. A crop on an irrigated tile grows at normal speed in a drought. A ditch that does not touch water does not irrigate. Fire does not cross a firebreak of 2 soil tiles. |
+| S17 Disease and medicine | Make sickness a crisis that the player can manage. | Food poisoning, wound infection, winter fever, the medicine skill, herbal medicine, the doctor job, sick rooms, disease alerts. | R-060 to R-064. Winter fever does not spread between colonists in different rooms. Treatment decreases severity by the content value. |
+| S18 Rival colonies and raids | Add attacks by other colonies. | Rival colonies from history, hostility, scouts, raids, door and wall breaking, item theft, the tribute choice. | R-070 to R-072. A scout comes 1 game day before each raid. Paying the tribute removes goods of the correct value and the raiders leave. |
+| S19 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. |
 
 Risks: balance, scope pressure, playtest capacity.
 
@@ -323,7 +326,7 @@ Risks: balance, scope pressure, playtest capacity.
 | M0 Foundation | S0 | Do the checks run? Is the workspace clean? | All S0 criteria pass. |
 | M1 First winter | S7 | Does winter make real decisions? Do players understand deaths? Is the first year interesting? | 3 recorded playtests. A decision to continue, change the design, or cut scope, recorded in `DECISIONS.md`. Check A-001, A-005, A-006, A-008. |
 | M2 World and history | S11 | Does a site change a player decision in each playtest? Are the local maps different enough? | 3 recorded playtests on 3 seeds. The result is recorded. |
-| M3 MVP | S16 | Is the full loop interesting for 3 years or more? Is failure fair? | 5 recorded playtests. The performance results are recorded. |
+| M3 MVP | S19 | Is the full loop interesting for 3 years or more? Is failure fair? | 5 recorded playtests. The performance results are recorded. |
 
 ### 6.1 Playtest record
 
@@ -345,8 +348,8 @@ Get a minimum of 1 tester who is not the developer for each milestone.
 
 Plan these phases in detail only after M3. The connection of each system to the core loop is in `GAME_DESIGN.md` §16.2.
 
-- **Phase 4, External threats:** relationships and births, hostile descendant civilizations and raids, ranged combat, trade caravans, world map expeditions, legacy worlds (Q-005), more traits.
-- **Phase 5, Society:** religion from sites, social conflict and colony rules, diplomacy and allies, raids on other settlements, more metals and longer chains, drought, cave-ins, floods, disease, and medicine.
+- **Phase 4, External threats:** relationships and births, larger wars with rival civilizations, ranged combat, trade caravans, world map expeditions, legacy worlds (Q-005), more traits.
+- **Phase 5, Society:** religion from sites, social conflict and colony rules, diplomacy and allies, raids on other settlements, more metals and longer chains, cave-ins, floods, plague, crop blight, thieves.
 - **Phase 6, Scale and variety:** 300 colonists (`GAME_DESIGN.md` §7.1), 512² maps, social classes, playable races, a deep underground layer (Q-002).
 
 ## 8. Main project risks
@@ -360,7 +363,7 @@ Plan these phases in detail only after M3. The connection of each system to the 
 | Golden hash changes are too frequent | Agents accept wrong changes. | Hashes for each subsystem. Behavior tests in addition to hashes. `AGENTS.md` rule for `UPDATE_GOLDEN`. |
 | Rules and tests do not agree | Wrong behavior passes the tests. | Rule IDs in test names. |
 | Too few playtests | Bad design decisions. | The playtest record (§6.1). External testers. |
-| Balance without data | Runs are too easy or too hard. | The autoplayer in S16. All numbers in content data. |
+| Balance without data | Runs are too easy or too hard. | The autoplayer in S19. All numbers in content data. |
 | UI cost | Phase 3 takes too long. | A small widget set. Inspector from key and value lists from S3. |
 | Agents work in different directions | Code and documents conflict. | `AGENTS.md` rules. Canonical documents. One branch for each agent task. |
 | Art cost | Visual quality blocks playtests. | Placeholder art. Material tint. Q-007. |
@@ -379,7 +382,7 @@ These ideas are not in a sprint. Each item needs a reason and a phase before it 
 | Snow cover that slows movement | 4 | Uses the existing climate model. |
 | More legend reliability levels | 4 | The MVP has "certain" and "rumor" only (R-044). |
 | Salt and salted food | 5 | A longer food chain. |
-| Drought and cave-ins | 5 | Moved from the MVP to control scope. |
+| Cave-ins | 5 | Moved from the MVP to control scope. |
 | Seasonal river floods | 5 | Needs a flood model. |
 | History continues slowly after embark | 4 | Necessary for civilizations that change during play. |
 | Sound effects | 3 or later | The `macroquad` audio feature. |

@@ -27,9 +27,9 @@ Work continues with the recommended choice until the owner answers.
 | Q-008 | Where is the repository hosted? | **Answered 2026-10-19:** `https://github.com/Kinheadpump/PCS` (D-028). | — | — | — |
 | Q-009 | How detailed is combat in the MVP? | **Answered 2026-10-19:** melee only, health and "wounded", no body parts. | — | — | — |
 | Q-010 | Which platforms do we support? | **Answered 2026-10-19:** Windows first. Linux stays in CI only as a determinism check. | — | — | — |
-| Q-011 | Which proposed crises in `GAME_DESIGN.md` §10.1 go into the MVP? | All of them: drought and wildfire, food poisoning, wound infection, winter fever with a doctor job and herbal medicine, and melee raids by rival colonies. This adds approximately 3 sprints. | Only disease and raids (approximately 2 sprints). Keep the MVP as it is and add them in Phase 4. | The owner wants many crises to manage. Each one changes the sprint plan. | The roadmap after S11. |
-| Q-012 | How does the colony learn new knowledge? | Keep lore fragments from ruins. Each one is a short name and an unlock, with no story text. | Research at a workshop with work time. Both. | D-005 links knowledge to history. D-035 limits story. | S12. |
-| Q-013 | Can the player talk to a raiding rival colony? | Yes, with one choice: pay a tribute of goods or fight. No full diplomacy in the MVP. | Fight only. Full diplomacy. | Gives a response that is not combat. | S13 if Q-011 adds raids. |
+| Q-011 | Which proposed crises go into the MVP? | **Answered 2026-10-19:** all of them (D-037). | — | — | — |
+| Q-012 | How does the colony learn new knowledge? | **Answered 2026-10-19:** lore fragments from ruins, with no story text (D-005 stays). | — | — | — |
+| Q-013 | Can the player pay a raiding rival colony? | **Answered 2026-10-19:** yes, one choice between tribute and fight (R-072). | — | — | — |
 
 ## 2. Decisions
 
@@ -54,7 +54,7 @@ Work continues with the recommended choice until the owner answers.
 | D-017 | A year has 4 seasons of 10 days. Playtests tune the value. | Confirmed (owner, Q-004) | A pace of approximately 40 minutes for each year. | 60 or 24 days. |
 | D-018 | One outdoor temperature for the full local map. Room temperature from insulation. No tile-to-tile heat diffusion. | Confirmed | Low cost. Easy for the player to understand. | Per-tile heat diffusion. |
 | D-019 | History runs on the region graph for 3,000 years by default, with hard limits. Each event type must write a map result. | Confirmed | Bounded time and memory. History must change gameplay. | Per-person simulation. Unlimited history. |
-| D-020 | MVP history features are the five features in `GAME_DESIGN.md` §9.3. Hostile descendant civilizations wait for Phase 4. | Confirmed | Best value for cost. Resolves a conflict between the design review (sealed sites first) and the world review (civilizations first). Raids need more combat and AI. | Hostile civilizations in the MVP. |
+| D-020 | MVP history features are the five features in `GAME_DESIGN.md` §9.3. Hostile descendant civilizations wait for Phase 4. Rival colony raids are in the MVP (D-037). | Confirmed | Best value for cost. Resolves a conflict between the design review (sealed sites first) and the world review (civilizations first). Raids need more combat and AI. | Hostile civilizations in the MVP. |
 | D-021 | Each player-visible derived value is a sum of named contributions (why chain). | Confirmed | Pillar 3. Makes deaths and failures understandable. | Hidden formulas with tooltips added later. |
 | D-022 | MVP dependencies are the crates in `TECHNICAL_DESIGN.md` §13.1. Nothing more without a record. | Confirmed | Lightweight. Each one replaces large, risky code. | `rand`, `log`, `clap`, `criterion`, ECS crates. |
 | D-023 | Excluded systems are the list in `GAME_DESIGN.md` §16.3. | Confirmed | High cost, low value for the core loop. | — |
@@ -63,14 +63,15 @@ Work continues with the recommended choice until the owner answers.
 | D-026 | Our own benchmark harness and invariant test loops. No `criterion`. `proptest` only if needed. | Confirmed | Fewer dependencies. Sufficient for current needs. | `criterion`. |
 | D-027 | The MVP has no free text input. The only input field is a numeric seed widget. Save names are automatic. | Confirmed | A text input widget with cursor, selection, and keyboard layouts is a large cost. | Our own text widget. `egui`. |
 | D-028 | The repository is `https://github.com/Kinheadpump/PCS`. CI uses GitHub Actions on Windows and Linux. | Confirmed (owner, 2026-10-19) | The owner made the repository. GitHub Actions has Windows and Linux runners. | Local checks only. |
-| D-029 | The plan has 17 sprints (S0 to S16) in `ROADMAP.md`. It replaces the first plan with 15 sprints. | Confirmed | The quality review found sprints with too much work (needs and climate together, the full Phase 3 readability work in one sprint). Each sprint now delivers its own readability work. | 15 sprints with a readability sprint. |
-| D-030 | Scope cuts from the quality review: no drought, cave-ins, fishing, water need, well, cart, salt, or chronicle export in the MVP. One metal (iron). Legends have two reliability levels. | Confirmed | Each cut item has low value for the core loop or needs a new model. The items are in the backlog (`ROADMAP.md` §9). | Keep the items in Phase 3. |
+| D-029 | The plan has 17 sprints (S0 to S16) in `ROADMAP.md`. It replaces the first plan with 15 sprints. | Replaced by D-037 | The quality review found sprints with too much work (needs and climate together, the full Phase 3 readability work in one sprint). Each sprint now delivers its own readability work. | 15 sprints with a readability sprint. |
+| D-030 | Scope cuts from the quality review: no cave-ins, fishing, water need, well, cart, salt, or chronicle export in the MVP. One metal (iron). Legends have two reliability levels. | Confirmed | Each cut item has low value for the core loop or needs a new model. The items are in the backlog (`ROADMAP.md` §9). | Keep the items in Phase 3. |
 | D-031 | `AGENTS.md` is the canonical file for agent rules. `CLAUDE.md` imports it and adds only rules for Claude Code. | Confirmed (owner request, 2026-10-19) | Many AI tools read `AGENTS.md`. One canonical file prevents conflicts. | Two full copies. |
 | D-032 | Ironman is the only save mode in the MVP. One save file. The game writes it automatically. | Confirmed (owner, Q-003) | Failure must have consequences. | Free saves. |
 | D-033 | Legacy worlds (a dead colony becomes a site in the next run) come in Phase 4. | Confirmed (owner, Q-005) | High value. It uses the site system. | A new world for each run only. |
 | D-034 | Art and sound come from Rust code. The `assetgen` tool makes 16 × 16 PNG sprite sheets and WAV sound files from seeds and parameters. The `art-generator` and `sound-designer` subagents write and tune the generators. Generated files are committed. | Confirmed (owner, Q-007) | The owner wants AI agents to make the assets with Rust. Generators make consistent palettes and styles. | Hand-made placeholders. Asset packs. |
 | D-035 | The game is about the present colony. History is implied. It shapes the map, the resources, and the threats, but the game does not tell a story. Short text (legends, chronicle) is optional information, not the reward. | Confirmed (owner, 2026-10-19) | The owner wants colony management to be the center of the game. | History as the central experience. |
 | D-036 | Project subagents are Markdown files in `.claude/agents/`. The `owner-interviewer` subagent prepares questions when the plan is unclear. The lead agent asks the owner. | Confirmed (owner, 2026-10-19) | The owner wants to correct the course early and often. | No interviews. |
+| D-037 | All crises marked MVP in `GAME_DESIGN.md` §10.1 are in the MVP: drought and wildfire, food poisoning, wound infection, winter fever with medicine, and melee raids by rival colonies with a tribute choice. The plan has 20 sprints (S0 to S19). This replaces D-029 and the drought cut in D-030. | Confirmed (owner, Q-011, Q-013) | The owner wants many crises to manage in the present. | A smaller MVP. |
 
 ## 3. Assumptions
 
@@ -78,7 +79,7 @@ These are not verified. Check them at the given time.
 
 | ID | Assumption | Check at |
 |---|---|---|
-| A-001 | One sprint is approximately 2 weeks of work for one developer with AI agents. The full plan to M3 is approximately 34 weeks. | End of S1. Adjust the plan. |
+| A-001 | One sprint is approximately 2 weeks of work for one developer with AI agents. The full plan to M3 is approximately 40 weeks. | End of S1. Adjust the plan. |
 | A-002 | All performance targets in `TECHNICAL_DESIGN.md` §12.1 are possible on the development machine. | S1 (P-07, P-08), S2 (P-03, P-04), S8 to S10 (P-05, P-06), S16 (all). |
 | A-003 | `macroquad` renders a 256² tile map at 60 FPS with chunk batching. | S1. |
 | A-004 | `postcard` and `ron` remain stable and maintained. | S0 (check versions). |
@@ -99,4 +100,4 @@ The lead used four specialist reviews for version 0.1: game design, world simula
 | Colonist scale: 30 to 80 (design) or 50 to 300 (architecture). | 30 to 50 normal, 100 tested in the MVP. 300 is the stress benchmark and the Phase 6 goal (D-001). |
 | Content format: RON (architecture) or a hand-written format (world). | RON (D-014). |
 | History length: 3,000 years (design) or 1,000 to 2,000 years (world). | 3,000 years default, 1,000 to 5,000 configurable (D-019). |
-| Sprint size: the quality review found sprints with too much work. | 17 sprints (D-029). Scope cuts (D-030). |
+| Sprint size: the quality review found sprints with too much work. | 20 sprints (D-037). Scope cuts (D-030). |

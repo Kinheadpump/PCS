@@ -51,7 +51,7 @@ docs/
 | `game` | Window, camera, rendering, input mapping, interface, speed control, file I/O for saves. | All crates, `macroquad` | Change `Sim` state directly. |
 | `tools` | Command-line tools: `gen-world`, `dump-layers`, `run`, `bench`, `soak`, `hash`, `replay`, `validate-content`, `dump-save`, `assetgen`. | All crates except `game` | Contain game rules. |
 
-Inside `sim`, use modules, not more crates: `time`, `map`, `colonist`, `item`, `job`, `path`, `region`, `build`, `room`, `climate`, `need`, `mood`, `health`, `farm`, `production`, `knowledge`, `site`, `notice`, `creature`, `combat`, `weather`, `fire`, `migrant`, `alert`, `ledger`, `chronicle`, `command`, `event`, `save`.
+Inside `sim`, use modules, not more crates: `time`, `map`, `colonist`, `item`, `job`, `path`, `region`, `build`, `room`, `climate`, `need`, `mood`, `health`, `farm`, `production`, `knowledge`, `site`, `notice`, `creature`, `combat`, `weather`, `fire`, `disease`, `rival`, `migrant`, `alert`, `ledger`, `chronicle`, `command`, `event`, `save`.
 
 The module `chronicle::text` makes chronicle text from `chronicle_templates.ron`. The `game` crate only shows the text.
 
@@ -118,7 +118,7 @@ Each value that the player can inspect (mood, Notice, room temperature, work spe
 - Do not use an ECS crate.
 - Use plain structs in an `Arena<T>`. The arena is a generational arena (`Vec` of slots with a generation counter). Typed IDs, for example `ColonistId`, prevent mix-ups.
 - Iterate arenas in slot order. This gives a deterministic order.
-- Use struct-of-arrays layouts only where a benchmark shows a need. Tile layers are separate `Vec`s from the start: terrain, wall, floor, roof, item index, fire intensity, fire fuel, flags.
+- Use struct-of-arrays layouts only where a benchmark shows a need. Tile layers are separate `Vec`s from the start: terrain, wall, floor, roof, item index, fire intensity, fire fuel, irrigation, flags.
 - The local map stores layers as `Vec<Layer>` with one layer in the MVP. This makes a later underground layer possible without a rewrite (Q-002).
 - Jobs are small state machines: `GoTo`, `PickUp`, `Work(ticks)`, `Drop`. Do not use behavior trees.
 
