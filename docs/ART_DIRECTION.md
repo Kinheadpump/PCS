@@ -103,27 +103,28 @@ Rules:
 
 ## 9. Animation
 
-- Each facing has 3 sprites: stand, step 1, step 2.
-- The walk cycle is step 1, stand, step 2, stand. A cycle takes 1 tile of distance. The game chooses the frame from the distance walked, so the feet do not slide.
+- Each facing has 3 walk sprites: stand, step 1, step 2. The walk cycle is step 1, stand, step 2, stand. A cycle takes 1 tile of distance, so the feet do not slide.
+- Each facing has a work pose without a tool: both hands go up and down, and the body moves 1 pixel. The game alternates the two phases from the job progress.
+- A working colonist faces the job target. A walking colonist faces the move direction. An idle colonist faces south.
 - The ground point stays on row 13 in all frames.
-- A standing colonist uses the south stand sprite.
 
 ## 10. Files
 
 | File | Content |
 |---|---|
-| `crates/tools/src/assetgen.rs` | Ground tiles, trees, walls, edge masks, PNG writer, preview sheet |
-| `crates/tools/src/assetgen_actors.rs` | Colonist sprites, written as text rows |
-| `assets/sprites/tiles.png` | Grayscale tile sheet (256 x 48) |
-| `assets/sprites/actors.png` | Full color colonist sheet (256 x 16) |
-| `assets/sprites/preview.png` | Contact sheet for people. The game does not load it. |
-| `crates/game/src/sprites.rs` | Sheet loading and tinting |
-| `crates/game/src/render.rs` | Map baking, transitions |
-| `crates/game/src/actors.rs` | Colonist drawing |
+| `crates/tools/src/assetgen.rs` | Image type, PNG writer, `make_all`, tests |
+| `crates/tools/src/assetgen_terrain.rs` | Seamless ground textures (128 x 128 each) and ore sprites |
+| `crates/tools/src/assetgen_objects.rs` | Trees, wall pieces, other objects |
+| `crates/tools/src/assetgen_items.rs` | Item sprites and interface icons |
+| `crates/tools/src/assetgen_actors.rs` | Colonist sprites, written as text rows, 4 hair styles |
+| `crates/tools/src/assetgen_preview.rs` | Palette sheet, reference sheet, repeat sheet |
+| `crates/game/src/palette.rs`, `cells.rs` | Palette and sheet cell numbers. The tools include these files. |
+| `crates/game/src/bake.rs` | Pixel bake of each chunk: fringes, shore, wall faces, shadows, decor, trees |
+| `crates/game/src/actors.rs`, `overlay.rs`, `icons.rs` | Colonists, items and markers, icons |
+| `crates/game/src/ui.rs`, `hud.rs` | Framed panels, icon buttons, text with shadow |
+| `assets/sprites/*.png` | Generated sheets. `preview.png` is a contact sheet that the game does not load. |
 
 Run `cargo run -p tools -- assetgen` to make all files again. The tests check that the shipped files equal the generator output.
-
-To add a unit sprite: add its text rows in `assetgen_actors.rs`. Use only the listed symbols. Add a cell number to `sprites.rs`. Keep the feet on row 13.
 
 ## 11. Checks before you accept a sprite
 
@@ -131,13 +132,14 @@ To add a unit sprite: add its text rows in `assetgen_actors.rs`. Use only the li
 2. View it in a group on each ground type: grass, sand, stone, and next to trees.
 3. Check the silhouette. Fill it with one color. The shape must be clear.
 4. Check the grayscale value steps.
-5. Run `cargo test --workspace`.
+5. Check that each ground texture repeats without a seam (the tests do this).
+6. Run `cargo test --workspace`.
 
 ## 12. Known weak points
 
-- The ground has no diagonal transitions.
-- Trees use 2 variants. A large forest shows repeats.
 - Water has no animation.
-- Colonists have one body type. All colonists have the same hair and skin. Only the shirt differs.
-- There are no sprites yet for items, buildings, animals, or effects.
-- A standing colonist always faces south. The sim stores no facing.
+- Colonists have one body type. Hair style, hair color, skin, and shirt differ.
+- Buildings and animals have no sprites yet.
+- Rock plates and clay cracks are still busy at close zoom.
+- The colonist panel and the toolbar overlap at 1280 x 720 when a colonist is selected.
+- The ground texture of a class repeats every 8 tiles. A very large field of one class can show the repeat.

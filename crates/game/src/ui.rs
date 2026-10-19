@@ -4,8 +4,11 @@
 
 use crate::clock::{SPEEDS, speed_label};
 use crate::font;
+use crate::icons;
+use crate::palette::ui as pal;
+use crate::render::color as rgb_color;
 use crate::tools::Tool;
-use macroquad::prelude::{Color, draw_rectangle, draw_rectangle_lines};
+use macroquad::prelude::{Color, draw_rectangle};
 use sim::time::{GameTime, Season};
 use sim::{ColonistId, Command, JobKind, Speed};
 
@@ -32,18 +35,74 @@ pub const CELL_W: f32 = 56.0;
 /// Height of a row in the work panel.
 pub const WORK_ROW_H: f32 = BUTTON_H - 2.0;
 
-const PANEL_BG: Color = Color::new(0.04, 0.05, 0.08, 0.85);
-const PANEL_EDGE: Color = Color::new(1.0, 1.0, 1.0, 0.25);
-const TEXT: Color = Color::new(0.95, 0.95, 0.95, 1.0);
-const BUTTON_BG: Color = Color::new(0.16, 0.18, 0.24, 1.0);
-const BUTTON_HOVER: Color = Color::new(0.26, 0.30, 0.40, 1.0);
-const BUTTON_ACTIVE: Color = Color::new(0.20, 0.45, 0.30, 1.0);
-/// Title text of a key and value panel.
-const ACCENT: Color = Color::new(0.62, 0.80, 1.0, 1.0);
-/// Section heading text.
-const DIM: Color = Color::new(0.58, 0.64, 0.74, 1.0);
-/// Key text of a key and value row.
-const KEY: Color = Color::new(0.72, 0.75, 0.82, 1.0);
+/// Size of one interface pixel in screen pixels: a font pixel. Frames use the same grid.
+const PX: f32 = SCALE as f32;
+/// Width of an icon in a button, in screen pixels.
+pub const ICON_W: f32 = 16.0;
+
+fn text_color() -> Color {
+    rgb_color(pal::TEXT, 255)
+}
+
+/// Title text color of a key and value panel.
+pub fn accent() -> Color {
+    rgb_color(pal::ACCENT, 255)
+}
+
+/// Section heading and hint text color.
+pub fn dim() -> Color {
+    rgb_color(pal::DIM, 255)
+}
+
+fn key_color() -> Color {
+    rgb_color(pal::KEY, 255)
+}
+
+/// Draw a box with a hard 1 pixel outline, rounded corners (one pixel cut), and a bevel: light on
+/// the top and left, dark on the bottom and right. `sunk` swaps the bevel. Pixels are `PX` big.
+pub fn draw_frame(r: Rect, fill: Color, light: Color, dark: Color, ink: Color, sunk: bool) {
+    let (x, y, w, h) = (r.x.round(), r.y.round(), r.w.round(), r.h.round());
+    // Outline with cut corners.
+    draw_rectangle(x + PX, y, w - 2.0 * PX, h, ink);
+    draw_rectangle(x, y + PX, w, h - 2.0 * PX, ink);
+    // Fill.
+    let (ix, iy, iw, ih) = (x + PX, y + PX, w - 2.0 * PX, h - 2.0 * PX);
+    draw_rectangle(ix, iy, iw, ih, fill);
+    let (top, bottom) = if sunk { (dark, light) } else { (light, dark) };
+    // Bevel: one pixel on each side.
+    draw_rectangle(ix + PX, iy, iw - PX, PX, top);
+    draw_rectangle(ix, iy + PX, PX, ih - PX, top);
+    draw_rectangle(ix, iy + ih - PX, iw, PX, bottom);
+    draw_rectangle(ix + iw - PX, iy, PX, ih - PX, bottom);
+}
+
+/// Draw a small plate with an accent colored bevel, for tags on the map.
+pub fn draw_tag(x: f32, y: f32, w: f32, h: f32, accent: Color) {
+    let ink = rgb_color(pal::INK, 255);
+    draw_frame(
+        Rect::new(x, y, w, h),
+        rgb_color(pal::PANEL, 240),
+        accent,
+        rgb_color(pal::PANEL_DARK, 255),
+        ink,
+        false,
+    );
+}
+
+/// Draw text with a one pixel shadow, so it reads on any fill.
+fn shadow_text(text: &str, x: f32, y: f32, color: Color) {
+    font::draw_text(text, x + PX, y + PX, SCALE, rgb_color(pal::INK, 255));
+    font::draw_text(text, x, y, SCALE, color);
+}
+
+fn lighten(c: Color, amount: f32) -> Color {
+    Color::new(
+        (c.r + amount).min(1.0),
+        (c.g + amount).min(1.0),
+        (c.b + amount).min(1.0),
+        c.a,
+    )
+}
 
 /// An axis-aligned rectangle in screen pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -217,35 +276,62 @@ impl Ui {
 
     /// Draw a panel background.
     pub fn panel(&mut self, r: Rect) {
-        draw_rectangle(r.x, r.y, r.w, r.h, PANEL_BG);
-        draw_rectangle_lines(r.x, r.y, r.w, r.h, 1.0, PANEL_EDGE);
+        draw_frame(
+            r,
+            rgb_color(pal::PANEL, 244),
+            rgb_color(pal::PANEL_LIGHT, 255),
+            rgb_color(pal::PANEL_DARK, 255),
+            rgb_color(pal::INK, 255),
+            false,
+        );
         self.panels.push(r);
     }
 
     /// Draw a text label at a top left corner.
     pub fn label(&self, pos: (f32, f32), text: &str) {
-        font::draw_text(text, pos.0, pos.1, SCALE, TEXT);
+        shadow_text(text, pos.0, pos.1, text_color());
     }
 
     /// Draw a text label in a color.
     pub fn label_color(&self, pos: (f32, f32), text: &str, color: Color) {
-        font::draw_text(text, pos.0, pos.1, SCALE, color);
+        shadow_text(text, pos.0, pos.1, color);
+    }
+
+    fn button_frame(&self, r: Rect, fill: Color, pressed: bool) {
+        let light = lighten(fill, 0.16);
+        let dark = Color::new(fill.r * 0.55, fill.g * 0.55, fill.b * 0.62, fill.a);
+        draw_frame(r, fill, light, dark, rgb_color(pal::INK, 255), pressed);
+    }
+
+    fn state_color(&self, r: Rect, active: bool) -> Color {
+        if active {
+            rgb_color(pal::BUTTON_ACTIVE, 255)
+        } else if r.contains(self.mouse) {
+            rgb_color(pal::BUTTON_HOVER, 255)
+        } else {
+            rgb_color(pal::BUTTON, 255)
+        }
     }
 
     /// Draw a button. Returns true if the player clicked it in this frame.
     pub fn button(&self, r: Rect, text: &str, active: bool) -> bool {
-        let color = if active {
-            BUTTON_ACTIVE
-        } else if r.contains(self.mouse) {
-            BUTTON_HOVER
-        } else {
-            BUTTON_BG
-        };
-        draw_rectangle(r.x, r.y, r.w, r.h, color);
-        draw_rectangle_lines(r.x, r.y, r.w, r.h, 1.0, PANEL_EDGE);
+        self.button_frame(r, self.state_color(r, active), active);
+        let drop = f32::from(u8::from(active));
         let tx = r.x + (r.w - text_px(text)) / 2.0;
-        let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
-        font::draw_text(text, tx.round(), ty.round(), SCALE, TEXT);
+        let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0 + drop;
+        shadow_text(text, tx.round(), ty.round(), text_color());
+        self.click.is_some_and(|c| r.contains(c))
+    }
+
+    /// Draw a button with an icon at the left and a text. Returns true if clicked in this frame.
+    pub fn icon_button(&self, r: Rect, icon: usize, text: &str, active: bool) -> bool {
+        self.button_frame(r, self.state_color(r, active), active);
+        let drop = f32::from(u8::from(active));
+        let iy = r.y + (r.h - ICON_W) / 2.0 + drop;
+        icons::draw(icon, r.x + BUTTON_PAD - 2.0, iy, ICON_W, text_color());
+        let tx = r.x + BUTTON_PAD - 2.0 + ICON_W + GAP;
+        let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0 + drop;
+        shadow_text(text, tx.round(), ty.round(), text_color());
         self.click.is_some_and(|c| r.contains(c))
     }
 
@@ -254,15 +340,35 @@ impl Ui {
     pub fn tinted_button(&self, r: Rect, text: &str, fill: Color) -> Press {
         let lift = if r.contains(self.mouse) { 0.10 } else { 0.0 };
         let color = Color::new(fill.r + lift, fill.g + lift, fill.b + lift, fill.a);
-        draw_rectangle(r.x, r.y, r.w, r.h, color);
-        draw_rectangle_lines(r.x, r.y, r.w, r.h, 1.0, PANEL_EDGE);
+        self.button_frame(r, color, false);
         let tx = r.x + (r.w - text_px(text)) / 2.0;
         let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
-        font::draw_text(text, tx.round(), ty.round(), SCALE, TEXT);
+        shadow_text(text, tx.round(), ty.round(), text_color());
         Press {
             left: self.click.is_some_and(|c| r.contains(c)),
             right: self.right_click.is_some_and(|c| r.contains(c)),
         }
+    }
+}
+
+/// Lay out a toolbar: one row of buttons with an icon and a label each.
+pub fn toolbar_layout(origin: (f32, f32), labels: &[&str]) -> HudLayout {
+    let widths: Vec<f32> = labels
+        .iter()
+        .map(|l| text_px(l) + 2.0 * BUTTON_PAD + ICON_W + GAP - 4.0)
+        .collect();
+    let row_w = widths.iter().sum::<f32>() + GAP * widths.len().saturating_sub(1) as f32;
+    let mut buttons = Vec::new();
+    let (mut bx, y) = (origin.0 + PAD, origin.1 + PAD);
+    for w in &widths {
+        buttons.push(Rect::new(bx, y, *w, BUTTON_H));
+        bx += w + GAP;
+    }
+    HudLayout {
+        panel: Rect::new(origin.0, origin.1, row_w + 2.0 * PAD, BUTTON_H + 2.0 * PAD),
+        before: Vec::new(),
+        buttons,
+        after: Vec::new(),
     }
 }
 
@@ -331,11 +437,11 @@ pub fn rows_panel(ui: &mut Ui, origin: (f32, f32), rows: &[Row]) -> Rect {
     ui.panel(layout.panel);
     for (row, (pos, value)) in rows.iter().zip(&layout.rows) {
         match row {
-            Row::Title(t) => ui.label_color(*pos, t, ACCENT),
-            Row::Section(t) => ui.label_color(*pos, t, DIM),
+            Row::Title(t) => ui.label_color(*pos, t, accent()),
+            Row::Section(t) => ui.label_color(*pos, t, dim()),
             Row::Line(t) => ui.label(*pos, t),
             Row::Pair(k, v) => {
-                ui.label_color(*pos, k, KEY);
+                ui.label_color(*pos, k, key_color());
                 if let Some(vp) = value {
                     ui.label(*vp, v);
                 }
