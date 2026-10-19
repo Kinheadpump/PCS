@@ -1,0 +1,3 @@
+local_temperate_forest=97d26f855967b59a
+local_cold_hills=e36c9dc4cf55e9b2
+local_dry_plain=a12d47f34495fbd5
