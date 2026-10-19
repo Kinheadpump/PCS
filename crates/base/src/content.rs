@@ -340,9 +340,153 @@ fn link_materials(file_name: &str, raw: &[RawMaterial]) -> Result<Vec<MaterialDe
     }
 }
 
+/// Numbers for skills, work times, and the job board (`jobs.ron`). All integers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JobRules {
+    /// Experience points that one completed job of a skill type adds (R-010).
+    pub xp_per_job: u32,
+    /// Experience points for one skill level (R-010).
+    pub xp_per_level: u32,
+    /// Highest skill level (R-010).
+    pub max_level: u8,
+    /// Work speed in percent at skill level 0.
+    pub speed_base_pct: i32,
+    /// Work speed in percent that each skill level adds.
+    pub speed_per_level_pct: i32,
+    /// Work time of a cut job, in ticks at 100% speed.
+    pub cut_ticks: u32,
+    /// Base work time of a mine job, in ticks at 100% speed.
+    pub mine_ticks_base: u32,
+    /// Work time that a mine job adds for each 10 hardness units, in ticks.
+    pub mine_ticks_per_10_hardness: u32,
+    /// Logs that a cut tree gives.
+    pub log_yield: u32,
+    /// Stone items that a mined rock tile gives.
+    pub stone_yield: u32,
+    /// Ore items that a mined ore tile gives in addition to the stone.
+    pub ore_yield: u32,
+    /// Largest item stack.
+    pub stack_max: u32,
+    /// Largest number of jobs that the board examines for all colonists in one tick.
+    pub search_budget: u32,
+    /// Ticks that a colonist waits after a search that found no job. Also the wait
+    /// before a job that failed is offered again.
+    pub retry_ticks: u32,
+    /// Work priority that a new colonist has for each job type (1 to 4).
+    pub default_priority: u8,
+}
+
+/// Load and validate a job rules file.
+pub fn load_job_rules(file_name: &str, text: &str) -> Result<JobRules, ContentError> {
+    let fail = |entry: Option<&str>, message: String| ContentError {
+        file: file_name.to_string(),
+        issues: vec![ContentIssue {
+            entry: entry.map(str::to_string),
+            message,
+        }],
+    };
+    if let Some((line, token)) = find_float_literals(text).into_iter().next() {
+        return Err(fail(
+            None,
+            format!("line {line}: float literal '{token}' is not allowed; use integers"),
+        ));
+    }
+    let rules: JobRules =
+        ron::from_str(text).map_err(|e| fail(None, format!("parse error: {e}")))?;
+    let mut issues = Vec::new();
+    let mut check = |ok: bool, field: &str, message: &str| {
+        if !ok {
+            issues.push(ContentIssue {
+                entry: Some(field.to_string()),
+                message: message.to_string(),
+            });
+        }
+    };
+    check(rules.xp_per_level > 0, "xp_per_level", "must be 1 or more");
+    check(rules.xp_per_job > 0, "xp_per_job", "must be 1 or more");
+    check(
+        (1..=100).contains(&rules.max_level),
+        "max_level",
+        "must be from 1 to 100",
+    );
+    check(
+        rules.speed_base_pct > 0 && rules.speed_base_pct <= 1000,
+        "speed_base_pct",
+        "must be from 1 to 1000",
+    );
+    check(
+        (0..=100).contains(&rules.speed_per_level_pct),
+        "speed_per_level_pct",
+        "must be from 0 to 100",
+    );
+    check(rules.cut_ticks > 0, "cut_ticks", "must be 1 or more");
+    check(
+        rules.mine_ticks_base > 0,
+        "mine_ticks_base",
+        "must be 1 or more",
+    );
+    check(
+        (1..=1_000_000).contains(&rules.stack_max),
+        "stack_max",
+        "must be from 1 to 1000000",
+    );
+    for (field, value) in [
+        ("log_yield", rules.log_yield),
+        ("stone_yield", rules.stone_yield),
+        ("ore_yield", rules.ore_yield),
+    ] {
+        check(
+            value >= 1 && value <= rules.stack_max,
+            field,
+            "must be from 1 to stack_max",
+        );
+    }
+    check(
+        rules.search_budget > 0,
+        "search_budget",
+        "must be 1 or more",
+    );
+    check(rules.retry_ticks > 0, "retry_ticks", "must be 1 or more");
+    check(
+        (1..=4).contains(&rules.default_priority),
+        "default_priority",
+        "must be from 1 to 4",
+    );
+    if issues.is_empty() {
+        Ok(rules)
+    } else {
+        Err(ContentError {
+            file: file_name.to_string(),
+            issues,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const VALID_JOBS: &str = "(xp_per_job: 100, xp_per_level: 1000, max_level: 10, speed_base_pct: 100, speed_per_level_pct: 5, cut_ticks: 300, mine_ticks_base: 200, mine_ticks_per_10_hardness: 100, log_yield: 4, stone_yield: 2, ore_yield: 1, stack_max: 50, search_budget: 200, retry_ticks: 10, default_priority: 3)";
+
+    #[test]
+    fn job_rules_load_and_validate() {
+        let rules = load_job_rules("jobs.ron", VALID_JOBS).unwrap_or_default();
+        assert_eq!(rules.xp_per_level, 1000);
+        let bad = VALID_JOBS.replace("max_level: 10", "max_level: 0");
+        let msg = load_job_rules("jobs.ron", &bad)
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        assert!(
+            msg.contains("jobs.ron") && msg.contains("max_level"),
+            "{msg}"
+        );
+        let float = VALID_JOBS.replace("cut_ticks: 300", "cut_ticks: 3.5");
+        assert!(load_job_rules("jobs.ron", &float).is_err());
+        let unknown = VALID_JOBS.replace("(xp_per_job", "(extra: 1, xp_per_job");
+        assert!(load_job_rules("jobs.ron", &unknown).is_err());
+    }
 
     const VALID: &str = r#"#![enable(implicit_some)]
 [

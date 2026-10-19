@@ -8,27 +8,38 @@
 pub mod colonist;
 pub mod command;
 pub mod event;
+pub mod item;
+pub mod job;
 pub mod map;
 pub mod path;
 pub mod region;
+pub mod rules;
 pub mod save;
 pub mod scenario;
+pub mod skill;
+pub mod stockpile;
 pub mod time;
 
 pub use colonist::{Colonist, ColonistId};
 pub use command::Command;
 pub use event::Event;
+pub use item::{Item, ItemId, ItemLoc, Items};
+pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, JobStep, Reject};
 pub use map::LocalMap;
 pub use path::PathFinder;
 pub use region::Regions;
+pub use rules::SimRules;
 pub use save::SaveError;
+pub use skill::{Skill, SpeedCause, SpeedPart, WorkSpeed};
+pub use stockpile::{ItemFilter, Stockpile, StockpileId};
 pub use time::{GameTime, Season, Speed};
 
 use base::hash::fnv1a;
 use base::{Arena, Pcg32};
 use colonist::{START_COLONISTS, WALK_PROGRESS_PER_TICK, step_progress_needed};
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
+use std::sync::Arc;
 use worldgen::LocalMapData;
 
 /// Path request budget for each tick: maximum searches (TECHNICAL_DESIGN §6.3).
@@ -62,9 +73,23 @@ pub struct Sim {
     map: LocalMap,
     colonists: Arena<Colonist>,
     path_queue: VecDeque<PathRequest>,
+    /// All item stacks.
+    items: Items,
+    /// The jobs and their reservations.
+    jobs: JobBoard,
+    /// Cut and mine designations, by tile.
+    designations: BTreeMap<(u16, u16), JobKind>,
+    /// Stockpile zones.
+    stockpiles: Arena<Stockpile>,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
+    /// Job events for the caller. Not part of the state.
+    #[serde(skip)]
+    job_events: Vec<JobEvent>,
+    /// Content for the job systems. Not part of the state.
+    #[serde(skip)]
+    rules: Arc<SimRules>,
     /// Derived cache: connectivity regions.
     #[serde(skip)]
     regions: Regions,
@@ -93,10 +118,13 @@ impl Sim {
     /// Start a colony on a map with colonists on the given tiles. Tiles that are not
     /// passable are skipped.
     pub fn from_map(map: LocalMap, seed: u64, content_hash: u64, spawns: &[(u16, u16)]) -> Self {
+        let rules = SimRules::builtin();
         let mut colonists = Arena::new();
         for &(x, y) in spawns {
             if map.passable(i32::from(x), i32::from(y)) {
-                colonists.insert(Colonist::new(x, y));
+                let mut colonist = Colonist::new(x, y);
+                colonist.priorities = [rules.jobs.default_priority; JobKind::COUNT];
+                colonists.insert(colonist);
             }
         }
         let mut sim = Self {
@@ -106,7 +134,13 @@ impl Sim {
             map,
             colonists,
             path_queue: VecDeque::new(),
+            items: Items::default(),
+            jobs: JobBoard::default(),
+            designations: BTreeMap::new(),
+            stockpiles: Arena::new(),
             events: Vec::new(),
+            job_events: Vec::new(),
+            rules,
             regions: Regions::default(),
             finder: PathFinder::default(),
             scratch_path: Vec::new(),
@@ -120,17 +154,24 @@ impl Sim {
     fn rebuild_caches(&mut self) {
         self.map.rebuild_passable();
         self.regions.rebuild(&self.map);
+        self.items.rebuild_index();
     }
 
-    /// Run one tick. Order: commands, path requests, movement, then the tick number
+    /// Run one tick. Order: commands, jobs, path requests, movement, then the tick number
     /// increases.
     pub fn step(&mut self, commands: &[Command]) {
         for command in commands {
             self.apply_command(command);
         }
+        self.update_jobs();
         self.process_path_queue();
         self.move_colonists();
         self.tick += 1;
+    }
+
+    /// Take the job events that the last ticks made.
+    pub fn drain_job_events(&mut self) -> Vec<JobEvent> {
+        std::mem::take(&mut self.job_events)
     }
 
     /// Take the events that the last ticks made.
@@ -144,6 +185,13 @@ impl Sim {
         if !self.map.set_wall(i32::from(x), i32::from(y), wall) {
             return false;
         }
+        self.passability_changed(x, y);
+        true
+    }
+
+    /// Passability of a tile changed: rebuild the regions and ask a new path for each
+    /// colonist whose path contains the tile.
+    pub(crate) fn passability_changed(&mut self, x: u16, y: u16) {
         self.regions.rebuild(&self.map);
         let affected: Vec<ColonistId> = self
             .colonists
@@ -160,7 +208,6 @@ impl Sim {
                     .push_back(PathRequest { colonist: id, goal });
             }
         }
-        true
     }
 
     fn apply_command(&mut self, command: &Command) {
@@ -184,6 +231,7 @@ impl Sim {
                     c.target = Some((x, y));
                 }
             }
+            _ => self.apply_job_command(command),
         }
     }
 
@@ -306,6 +354,36 @@ impl Sim {
         self.colonists.get(id)
     }
 
+    /// All item stacks.
+    pub fn items(&self) -> &Items {
+        &self.items
+    }
+
+    /// The job board.
+    pub fn jobs(&self) -> &JobBoard {
+        &self.jobs
+    }
+
+    /// The cut and mine designation on a tile, if any.
+    pub fn designation(&self, x: u16, y: u16) -> Option<JobKind> {
+        self.designations.get(&(x, y)).copied()
+    }
+
+    /// All cut and mine designations, in `(x, y)` order.
+    pub fn designations(&self) -> impl Iterator<Item = ((u16, u16), JobKind)> + '_ {
+        self.designations.iter().map(|(&t, &k)| (t, k))
+    }
+
+    /// All stockpile zones, in ID order.
+    pub fn stockpiles(&self) -> &Arena<Stockpile> {
+        &self.stockpiles
+    }
+
+    /// The content that the job systems use.
+    pub fn rules(&self) -> &SimRules {
+        &self.rules
+    }
+
     /// The connectivity regions.
     pub fn regions(&self) -> &Regions {
         &self.regions
@@ -354,7 +432,7 @@ impl Sim {
             return None;
         }
         sim.rebuild_caches();
-        Some(sim)
+        sim.jobs_state_ok().then_some(sim)
     }
 }
 

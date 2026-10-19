@@ -1,5 +1,8 @@
 //! Colonists: tile position, sub-tile progress, and the current path.
 
+use crate::item::ItemId;
+use crate::job::{ActiveJob, JobKind};
+use crate::skill::SKILL_COUNT;
 use base::Id;
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +33,17 @@ pub struct Colonist {
     pub path: Vec<(u16, u16)>,
     /// Goal tile of the current move, if any.
     pub target: Option<(u16, u16)>,
+    /// Experience points of each skill, in `Skill::index` order (R-010).
+    pub skill_xp: [u32; SKILL_COUNT],
+    /// Work priority for each job type, in `JobKind::index` order: 1 (highest) to 4,
+    /// or 0 for "off". `Sim` gives new colonists the default from `jobs.ron`.
+    pub priorities: [u8; JobKind::COUNT],
+    /// The job that the colonist does now.
+    pub job: Option<ActiveJob>,
+    /// The item stack that the colonist carries.
+    pub carrying: Option<ItemId>,
+    /// The colonist looks for a new job from this tick on.
+    pub next_search: u64,
 }
 
 impl Colonist {
@@ -41,6 +55,11 @@ impl Colonist {
             progress: 0,
             path: Vec::new(),
             target: None,
+            skill_xp: [0; SKILL_COUNT],
+            priorities: [0; JobKind::COUNT],
+            job: None,
+            carrying: None,
+            next_search: 0,
         }
     }
 

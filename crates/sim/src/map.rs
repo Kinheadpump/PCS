@@ -55,6 +55,7 @@ impl LocalMap {
         water: &[bool],
         tree: &[bool],
         wall: &[bool],
+        rock: &[bool],
     ) -> Self {
         let len = width as usize * height as usize;
         let mut map = Self {
@@ -70,7 +71,16 @@ impl LocalMap {
                     }
                 })
                 .collect(),
-            rock: vec![RockKind::None as u8; len],
+            rock: rock
+                .iter()
+                .map(|&r| {
+                    if r {
+                        RockKind::Granite as u8
+                    } else {
+                        RockKind::None as u8
+                    }
+                })
+                .collect(),
             ore: vec![Ore::None as u8; len],
             tree: tree.to_vec(),
             wall: wall.to_vec(),
@@ -192,6 +202,33 @@ impl LocalMap {
             .and_then(|i| self.wall.get(i))
             .copied()
             .unwrap_or(false)
+    }
+
+    /// Remove the tree on a tile. Return true if a tree stood there.
+    pub(crate) fn clear_tree(&mut self, x: i32, y: i32) -> bool {
+        match self.index(x, y) {
+            Some(i) if self.tree[i] => {
+                self.tree[i] = false;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Mine the rock wall on a tile: the rock and the ore are gone and the ground is bare
+    /// stone. Return the rock and the ore that were there, or `None` if there was no rock.
+    pub(crate) fn mine_rock(&mut self, x: i32, y: i32) -> Option<(RockKind, Ore)> {
+        let i = self.index(x, y)?;
+        let rock = self.rock(x, y)?;
+        if rock == RockKind::None {
+            return None;
+        }
+        let ore = self.ore(x, y).unwrap_or(Ore::None);
+        self.rock[i] = RockKind::None as u8;
+        self.ore[i] = Ore::None as u8;
+        self.ground[i] = Ground::Stone as u8;
+        self.passable[i] = self.compute_passable(i);
+        Some((rock, ore))
     }
 
     /// Put a wall on a tile or remove it. Return true if passability changed.
