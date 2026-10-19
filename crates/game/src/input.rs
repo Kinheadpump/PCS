@@ -34,6 +34,8 @@ pub enum Action {
     },
     /// Switch to embark preset number N (0-based).
     Preset(usize),
+    /// Show or hide the tile grid.
+    ToggleGrid,
     /// Close the game.
     Close,
 }
@@ -64,6 +66,7 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
     (Trigger::Pressed(KeyCode::Key1), Action::Preset(0)),
     (Trigger::Pressed(KeyCode::Key2), Action::Preset(1)),
     (Trigger::Pressed(KeyCode::Key3), Action::Preset(2)),
+    (Trigger::Pressed(KeyCode::G), Action::ToggleGrid),
     (Trigger::Pressed(KeyCode::Escape), Action::Close),
 ];
 
