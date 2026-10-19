@@ -463,6 +463,207 @@ pub fn load_job_rules(file_name: &str, text: &str) -> Result<JobRules, ContentEr
     }
 }
 
+fn single_issue(file_name: &str, entry: Option<&str>, message: String) -> ContentError {
+    ContentError {
+        file: file_name.to_string(),
+        issues: vec![ContentIssue {
+            entry: entry.map(str::to_string),
+            message,
+        }],
+    }
+}
+
+/// Refuse float literals, then parse RON text into a value. No file I/O.
+fn parse_integer_ron<T: serde::de::DeserializeOwned>(
+    file_name: &str,
+    text: &str,
+) -> Result<T, ContentError> {
+    let floats = find_float_literals(text);
+    if !floats.is_empty() {
+        let issues = floats
+            .into_iter()
+            .map(|(line, token)| ContentIssue {
+                entry: None,
+                message: format!(
+                    "line {line}: float literal '{token}' is not allowed; use integers"
+                ),
+            })
+            .collect();
+        return Err(ContentError {
+            file: file_name.to_string(),
+            issues,
+        });
+    }
+    ron::from_str(text).map_err(|e| single_issue(file_name, None, format!("parse error: {e}")))
+}
+
+/// A geological setting with its pool of rocks (rocks.ron).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SettingDef {
+    /// String ID from the file.
+    pub key: String,
+    /// Rock indices (into RockTable::rocks) that can appear in a province of this setting.
+    pub pool: Vec<usize>,
+}
+
+/// The rock set and the setting pools after validation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RockTable {
+    /// Rock IDs in file order. The position is the rock index.
+    pub rocks: Vec<String>,
+    /// Settings in file order. The position is the setting index.
+    pub settings: Vec<SettingDef>,
+}
+
+/// A mineral with its affinity to each rock (deposits.ron).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MineralDef {
+    /// String ID from the file.
+    pub key: String,
+    /// Affinity (0 to 100) for each rock, in the rock index order. 0 if the file omits the rock.
+    pub affinity: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRock {
+    id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSetting {
+    id: String,
+    pool: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRockFile {
+    rocks: Vec<RawRock>,
+    settings: Vec<RawSetting>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMineral {
+    id: String,
+    affinity: Vec<(String, u8)>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMineralFile {
+    minerals: Vec<RawMineral>,
+}
+
+fn finish<T>(file_name: &str, issues: Vec<ContentIssue>, ok: T) -> Result<T, ContentError> {
+    if issues.is_empty() {
+        Ok(ok)
+    } else {
+        Err(ContentError {
+            file: file_name.to_string(),
+            issues,
+        })
+    }
+}
+
+/// Load and validate a rocks file: the rock set and the rock pool of each setting.
+pub fn load_rocks(file_name: &str, text: &str) -> Result<RockTable, ContentError> {
+    let raw: RawRockFile = parse_integer_ron(file_name, text)?;
+    let mut issues: Vec<ContentIssue> = Vec::new();
+    let mut add = |entry: &str, message: String| {
+        issues.push(ContentIssue {
+            entry: Some(entry.to_string()),
+            message,
+        });
+    };
+    let mut index: BTreeMap<&str, usize> = BTreeMap::new();
+    for (i, r) in raw.rocks.iter().enumerate() {
+        if index.insert(r.id.as_str(), i).is_some() {
+            add(&r.id, String::from("duplicate ID"));
+        }
+    }
+    let mut seen: BTreeMap<&str, ()> = BTreeMap::new();
+    let mut settings = Vec::with_capacity(raw.settings.len());
+    for s in &raw.settings {
+        if seen.insert(s.id.as_str(), ()).is_some() {
+            add(&s.id, String::from("duplicate ID"));
+        }
+        let mut pool = Vec::with_capacity(s.pool.len());
+        for target in &s.pool {
+            let found = index.get(target.as_str()).copied();
+            let Some(r) = found else {
+                add(&s.id, format!("pool refers to unknown rock '{target}'"));
+                continue;
+            };
+            if pool.contains(&r) {
+                add(&s.id, format!("pool repeats rock {target}"));
+            } else {
+                pool.push(r);
+            }
+        }
+        settings.push(SettingDef {
+            key: s.id.clone(),
+            pool,
+        });
+    }
+    let rocks = raw.rocks.iter().map(|r| r.id.clone()).collect();
+    finish(file_name, issues, RockTable { rocks, settings })
+}
+
+/// Load and validate a deposits file. Rock references must name rocks in the rock table.
+pub fn load_minerals(
+    file_name: &str,
+    text: &str,
+    rocks: &RockTable,
+) -> Result<Vec<MineralDef>, ContentError> {
+    let raw: RawMineralFile = parse_integer_ron(file_name, text)?;
+    let mut issues: Vec<ContentIssue> = Vec::new();
+    let mut add = |entry: &str, message: String| {
+        issues.push(ContentIssue {
+            entry: Some(entry.to_string()),
+            message,
+        });
+    };
+    let mut seen: BTreeMap<&str, ()> = BTreeMap::new();
+    let mut out = Vec::with_capacity(raw.minerals.len());
+    for m in &raw.minerals {
+        if seen.insert(m.id.as_str(), ()).is_some() {
+            add(&m.id, String::from("duplicate ID"));
+        }
+        let mut affinity = vec![0u8; rocks.rocks.len()];
+        let mut given = vec![false; rocks.rocks.len()];
+        for (target, value) in &m.affinity {
+            let found = rocks.rocks.iter().position(|k| k == target);
+            let Some(r) = found else {
+                add(&m.id, format!("affinity names unknown rock {target}"));
+                continue;
+            };
+            if given.get(r) == Some(&true) {
+                add(&m.id, format!("affinity repeats rock {target}"));
+            }
+            if let Some(slot) = given.get_mut(r) {
+                *slot = true;
+            }
+            if *value > 100 {
+                add(
+                    &m.id,
+                    format!("affinity for {target} is {value}, above 100"),
+                );
+            }
+            if let Some(slot) = affinity.get_mut(r) {
+                *slot = *value;
+            }
+        }
+        out.push(MineralDef {
+            key: m.id.clone(),
+            affinity,
+        });
+    }
+    finish(file_name, issues, out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -543,5 +744,76 @@ mod tests {
     fn out_of_range_per_mille_is_refused() {
         let msg = error_text(&VALID.replace("insulation: 100", "insulation: 1001"));
         assert!(msg.contains("'ice'") && msg.contains("insulation"), "{msg}");
+    }
+
+    const ROCKS: &str =
+        r#"(rocks: [(id: "a"), (id: "b")], settings: [(id: "plain", pool: ["a", "b"])])"#;
+    const MINERALS: &str = r#"(minerals: [(id: "coal", affinity: [("a", 30)])])"#;
+
+    fn empty_rocks() -> RockTable {
+        RockTable {
+            rocks: vec![],
+            settings: vec![],
+        }
+    }
+
+    fn rock_error(text: &str) -> String {
+        let r = load_rocks("rocks.ron", text);
+        r.err().map(|e| e.to_string()).unwrap_or_default()
+    }
+
+    fn mineral_error(text: &str) -> String {
+        let rocks = load_rocks("rocks.ron", ROCKS).unwrap_or_else(|_| empty_rocks());
+        let r = load_minerals("deposits.ron", text, &rocks);
+        r.err().map(|e| e.to_string()).unwrap_or_default()
+    }
+
+    #[test]
+    fn rock_and_mineral_tables_load() {
+        let rocks = load_rocks("rocks.ron", ROCKS).unwrap_or_else(|_| empty_rocks());
+        assert_eq!(rocks.rocks.len(), 2);
+        let first = rocks.settings.first().map(|s| s.pool.clone());
+        assert_eq!(first, Some(vec![0, 1]));
+        let m = load_minerals("deposits.ron", MINERALS, &rocks).unwrap_or_default();
+        assert_eq!(m.first().map(|d| d.affinity.clone()), Some(vec![30, 0]));
+    }
+
+    const ROCKS_MISSING: &str =
+        r#"(rocks: [(id: "a")], settings: [(id: "plain", pool: ["a", "zinc"])])"#;
+    const ROCKS_DUP: &str = r#"(rocks: [(id: "a"), (id: "a")], settings: [])"#;
+    const ROCKS_FLOAT: &str = r#"(rocks: [(id: "a")], settings: [], x: 1.5)"#;
+
+    #[test]
+    fn rock_table_missing_reference_names_file_and_entry() {
+        let msg = rock_error(ROCKS_MISSING);
+        assert!(msg.contains("rocks.ron"), "{msg}");
+        assert!(msg.contains("'plain'"), "{msg}");
+        assert!(msg.contains("zinc"), "{msg}");
+    }
+
+    #[test]
+    fn rock_table_duplicate_id_and_float_are_refused() {
+        assert!(rock_error(ROCKS_DUP).contains("duplicate ID"));
+        assert!(rock_error(ROCKS_FLOAT).contains("float literal"));
+    }
+
+    const MIN_MISSING: &str = r#"(minerals: [(id: "coal", affinity: [("zinc", 30)])])"#;
+    const MIN_DUP: &str = r#"(minerals: [(id: "coal", affinity: []), (id: "coal", affinity: [])])"#;
+    const MIN_FLOAT: &str = r#"(minerals: [(id: "coal", affinity: [("a", 30.5)])])"#;
+    const MIN_RANGE: &str = r#"(minerals: [(id: "coal", affinity: [("a", 101)])])"#;
+
+    #[test]
+    fn mineral_table_missing_reference_names_file_and_entry() {
+        let msg = mineral_error(MIN_MISSING);
+        assert!(msg.contains("deposits.ron"), "{msg}");
+        assert!(msg.contains("'coal'"), "{msg}");
+        assert!(msg.contains("zinc"), "{msg}");
+    }
+
+    #[test]
+    fn mineral_table_duplicate_float_and_range_are_refused() {
+        assert!(mineral_error(MIN_DUP).contains("duplicate ID"));
+        assert!(mineral_error(MIN_FLOAT).contains("float literal"));
+        assert!(mineral_error(MIN_RANGE).contains("above 100"));
     }
 }
