@@ -1,0 +1,22 @@
+// Materials. Integers only (D-014).
+// hardness, density, value, beauty: whole units. insulation, flammability, rot_rate: per-mille.
+// melts_at: tenths of a degree Celsius. color: (red, green, blue).
+#![enable(implicit_some)]
+[
+    (id: "soil", name: "Soil", category: Soil, hardness: 10, density: 150, value: 1, insulation: 300, flammability: 0, beauty: 0, color: (110, 80, 50)),
+    (id: "sand", name: "Sand", category: Soil, hardness: 8, density: 160, value: 1, insulation: 200, flammability: 0, beauty: 0, color: (214, 196, 128)),
+    (id: "clay", name: "Clay", category: Soil, hardness: 12, density: 180, value: 2, insulation: 350, flammability: 0, beauty: 0, color: (170, 100, 70)),
+    (id: "granite", name: "Granite", category: Stone, hardness: 90, density: 270, value: 4, insulation: 600, flammability: 0, beauty: 6, color: (128, 124, 122), ore_in_rock: ["iron_ore", "copper_ore"]),
+    (id: "limestone", name: "Limestone", category: Stone, hardness: 50, density: 240, value: 3, insulation: 550, flammability: 0, beauty: 5, color: (190, 186, 170), ore_in_rock: ["coal"]),
+    (id: "sandstone", name: "Sandstone", category: Stone, hardness: 40, density: 220, value: 3, insulation: 500, flammability: 0, beauty: 4, color: (196, 154, 108), ore_in_rock: ["coal", "copper_ore"]),
+    (id: "slate", name: "Slate", category: Stone, hardness: 60, density: 250, value: 3, insulation: 580, flammability: 0, beauty: 4, color: (84, 92, 104), ore_in_rock: ["iron_ore"]),
+    (id: "iron_ore", name: "Iron ore", category: Ore, hardness: 70, density: 380, value: 8, insulation: 400, flammability: 0, beauty: 1, color: (150, 84, 66), smelts_to: (metal: "iron", fuel_cost: 2)),
+    (id: "copper_ore", name: "Copper ore", category: Ore, hardness: 50, density: 340, value: 10, insulation: 400, flammability: 0, beauty: 3, color: (66, 150, 120), smelts_to: (metal: "copper", fuel_cost: 1)),
+    (id: "coal", name: "Coal", category: Fuel, hardness: 30, density: 130, value: 5, insulation: 300, flammability: 600, beauty: 0, color: (34, 34, 38)),
+    (id: "iron", name: "Iron", category: Metal, hardness: 80, density: 780, value: 20, insulation: 100, flammability: 0, beauty: 2, color: (176, 180, 188), melts_at: 15380),
+    (id: "copper", name: "Copper", category: Metal, hardness: 40, density: 890, value: 25, insulation: 80, flammability: 0, beauty: 6, color: (200, 120, 70), melts_at: 10850),
+    (id: "log", name: "Log", category: Wood, hardness: 30, density: 60, value: 2, insulation: 450, flammability: 500, beauty: 3, color: (120, 84, 52)),
+    (id: "grass", name: "Grass", category: Plant, hardness: 2, density: 10, value: 1, insulation: 250, flammability: 800, beauty: 4, color: (96, 150, 70)),
+    (id: "water", name: "Water", category: Fluid, hardness: 0, density: 100, value: 0, insulation: 0, flammability: 0, beauty: 5, color: (50, 100, 190)),
+    (id: "ice", name: "Ice", category: Fluid, hardness: 10, density: 92, value: 0, insulation: 100, flammability: 0, beauty: 6, color: (190, 225, 240), melts_at: 0, melts_into: "water"),
+]
