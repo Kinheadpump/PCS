@@ -19,4 +19,6 @@
     (id: "grass", name: "Grass", category: Plant, hardness: 2, density: 10, value: 1, insulation: 250, flammability: 800, beauty: 4, color: (96, 150, 70)),
     (id: "water", name: "Water", category: Fluid, hardness: 0, density: 100, value: 0, insulation: 0, flammability: 0, beauty: 5, color: (50, 100, 190)),
     (id: "ice", name: "Ice", category: Fluid, hardness: 10, density: 92, value: 0, insulation: 100, flammability: 0, beauty: 6, color: (190, 225, 240), melts_at: 0, melts_into: "water"),
+    (id: "plank", name: "Plank", category: Wood, hardness: 25, density: 50, value: 3, insulation: 480, flammability: 500, beauty: 4, color: (176, 134, 84)),
+    (id: "firewood", name: "Firewood", category: Fuel, hardness: 20, density: 50, value: 2, insulation: 400, flammability: 700, beauty: 1, color: (140, 96, 60)),
 ]

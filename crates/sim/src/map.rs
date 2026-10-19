@@ -24,6 +24,10 @@ pub struct LocalMap {
     tree: Vec<bool>,
     /// True where a built or scenario wall stands.
     wall: Vec<bool>,
+    /// Derived cache: true where a building that blocks walking stands. `Sim` fills it
+    /// from the buildings. Rebuilt on load.
+    #[serde(skip)]
+    solid: Vec<bool>,
     /// Derived cache: true where a colonist can stand (not water, rock, or wall). Rebuilt on load.
     #[serde(skip)]
     passable: Vec<bool>,
@@ -41,6 +45,7 @@ impl LocalMap {
             ore: data.ore.as_slice().iter().map(|&o| o as u8).collect(),
             tree: data.tree.as_slice().to_vec(),
             wall: vec![false; len],
+            solid: Vec::new(),
             passable: Vec::new(),
         };
         map.rebuild_passable();
@@ -84,6 +89,7 @@ impl LocalMap {
             ore: vec![Ore::None as u8; len],
             tree: tree.to_vec(),
             wall: wall.to_vec(),
+            solid: Vec::new(),
             passable: Vec::new(),
         };
         map.rebuild_passable();
@@ -118,6 +124,43 @@ impl LocalMap {
         self.ground[i] != Ground::Water as u8
             && self.rock[i] == RockKind::None as u8
             && !self.wall[i]
+            && !self.solid.get(i).copied().unwrap_or(false)
+    }
+
+    /// True if a building that blocks walking stands on the tile.
+    pub fn solid(&self, x: i32, y: i32) -> bool {
+        self.index(x, y)
+            .and_then(|i| self.solid.get(i))
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Set the tiles that a building blocks, and rebuild the passability. Tiles outside
+    /// the map are ignored.
+    pub(crate) fn reset_solid(&mut self, tiles: impl Iterator<Item = (u16, u16)>) {
+        self.solid = vec![false; self.ground.len()];
+        for (x, y) in tiles {
+            if let Some(i) = self.index(i32::from(x), i32::from(y)) {
+                self.solid[i] = true;
+            }
+        }
+        self.rebuild_passable();
+    }
+
+    /// Mark or unmark a tile as blocked by a building. Return true if passability
+    /// changed. `Sim` calls this and then updates the regions and the paths.
+    pub(crate) fn set_solid(&mut self, x: i32, y: i32, solid: bool) -> bool {
+        let Some(i) = self.index(x, y) else {
+            return false;
+        };
+        if self.solid.len() != self.ground.len() {
+            self.solid = vec![false; self.ground.len()];
+        }
+        self.solid[i] = solid;
+        let now = self.compute_passable(i);
+        let changed = self.passable[i] != now;
+        self.passable[i] = now;
+        changed
     }
 
     /// Map width in tiles.

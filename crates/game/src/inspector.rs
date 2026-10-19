@@ -62,13 +62,18 @@ fn speed_rows(kind: JobKind, speed: &WorkSpeed, rows: &mut Vec<Row>) {
     rows.extend(speed_part_lines(&speed.parts).into_iter().map(Row::Line));
 }
 
-/// Text of the priorities of a colonist, for example `Cut 3  Mine 1  Haul off`.
-pub fn priorities_text(priorities: &[u8; JobKind::COUNT]) -> String {
+/// The priorities as lines of two job types each, so the panel stays narrow.
+pub fn priorities_lines(priorities: &[u8; JobKind::COUNT]) -> Vec<String> {
     JobKind::ALL
-        .iter()
-        .map(|k| format!("{} {}", k.name(), priority_text(priorities[k.index()])))
-        .collect::<Vec<_>>()
-        .join("  ")
+        .chunks(2)
+        .map(|kinds| {
+            kinds
+                .iter()
+                .map(|k| format!("{} {}", k.name(), priority_text(priorities[k.index()])))
+                .collect::<Vec<_>>()
+                .join("  ")
+        })
+        .collect()
 }
 
 /// The rows for the selected colonist. Empty if the colonist does not exist.
@@ -102,10 +107,10 @@ pub fn colonist_rows(sim: &Sim, id: ColonistId) -> Vec<Row> {
             |i| format!("{} x{}", material_name(sim, i.material), i.count),
         );
     rows.push(Row::Pair("Carrying".to_owned(), carrying));
-    rows.push(Row::Pair(
-        "Priorities".to_owned(),
-        priorities_text(&c.priorities),
-    ));
+    for (i, line) in priorities_lines(&c.priorities).into_iter().enumerate() {
+        let key = if i == 0 { "Priorities" } else { "" };
+        rows.push(Row::Pair(key.to_owned(), line));
+    }
 
     rows.push(Row::Section("Skills".to_owned()));
     let max_level = sim.rules().jobs.max_level;
@@ -257,6 +262,7 @@ pub fn job_event_text(event: &JobEvent) -> Option<String> {
             match reason {
                 AbortReason::JobGone => "the order is gone",
                 AbortReason::NoPath => "no path",
+                AbortReason::NoMaterial => "no material",
             }
         )),
         JobEvent::Rejected(reject) => Some(format!(
@@ -270,6 +276,8 @@ pub fn job_event_text(event: &JobEvent) -> Option<String> {
                 Reject::ZoneOverlap => "the zone overlaps another zone",
                 Reject::UnknownTarget => "unknown target",
                 Reject::BadPriority => "bad priority",
+                // Building rejects have no interface yet (Sprint 4 game side).
+                _ => "not possible here",
             }
         )),
     }
@@ -332,7 +340,7 @@ mod tests {
         assert_eq!(pair(&rows, "Position"), Some("(0, 0)"));
         assert_eq!(pair(&rows, "Job"), Some("idle"));
         assert_eq!(pair(&rows, "Carrying"), Some("nothing"));
-        assert_eq!(pair(&rows, "Priorities"), Some("Cut 3  Mine 3  Haul 3"));
+        assert_eq!(pair(&rows, "Priorities"), Some("Cut 3  Mine 3"));
         for skill in Skill::ALL {
             assert_eq!(pair(&rows, skill.name()), Some("L0  0 xp"));
         }
@@ -426,8 +434,8 @@ mod tests {
         let rows = work_rows(&sim);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].name, "Colonist 0");
-        assert_eq!(rows[0].priorities, [3, 1, 3]);
-        assert_eq!(rows[1].priorities, [3, 3, 3]);
+        assert_eq!(rows[0].priorities, [3, 1, 3, 3, 3, 3]);
+        assert_eq!(rows[1].priorities, [3, 3, 3, 3, 3, 3]);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 3. Sprints 0, 1, and 2 are on `main`. Sprint 3 is on branch `sprint-3-jobs`; live mouse input is not yet verified by an agent. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
+Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 4 (the sim part is on `main`; the Sprint 4 UI is in progress). Sprints 0 to 3 are on `main`. The world generation work of Sprints 8 and 9 (steps 1 to 12) is also on `main`. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
 
 This document is the canonical source for phases, sprints, milestones, the Definition of Done, the playtest record, and the backlog. Game rules (`R-nnn`) are in `GAME_DESIGN.md`. Technical rules, required checks, and performance targets (`P-nn`) are in `TECHNICAL_DESIGN.md`.
 
@@ -298,7 +298,7 @@ These sprints have less detail. Add the full detail at the start of each phase. 
 | Sprint | Goal | Deliverable | Main acceptance criteria |
 |---|---|---|---|
 | S8 World terrain | Generate the world terrain. | `tools gen-world` and `tools dump-layers` write height, temperature, moisture, river, and biome images. | Rules 1 to 7. Status: done on `main` (PR #5). P-05 for steps 1 to 9 is about 40 ms against 300 ms. Biome balance needs tuning: temperate forest is 1 to 3% and taiga is 22% of land (D-046). P-05 for steps 1 to 9. Plates are a stretch task. Ridged noise is the fallback. |
-| S9 Geology, deposits, regions, world view | Complete the world data and show it. | `game` shows the world map with overlays. The seed widget accepts numbers. | Each land region has a minimum of 1 deposit type. Each region is one connected area. P-05. |
+| S9 Geology, deposits, regions, world view | Complete the world data and show it. | `game` shows the world map with overlays. The seed widget accepts numbers. | Each land region has a minimum of 1 deposit type. Each region is one connected area. P-05. Status: world steps 10 and 11 are done on `main` (PR #9). Step 12 (regions, region graph, deposit repair) is done on `main` (PR #11). The rock and mineral tables are in `rocks.ron` and `deposits.ron`, embedded in `worldgen` (D-049). P-05 for steps 1 to 12 is about 61 ms against 300 ms. The world map view, seed widget, and cell inspector in `game` wait for the graphics pass and Sprint 4. Golden files: `golden_world_s9.txt`, `golden_world_s9_regions.txt`. |
 | S10 History | Simulate the history. | `tools gen-world --history` prints a chronicle summary and statistics. | Rule 8. P-06. Approximately 10 event types. Each event type writes a map result (R-040, test). |
 | S11 Embark and site stamping | Make the local map from the world. | The player selects a world cell. The local map has ruins, roads, old tunnels, and depleted deposits. Sites contain structure and salvage. | Rule 9. R-041. A ruin of age 1,500 years has 2 times or more the rubble of a ruin of age 200 years. Depletion decreases ore (test). The history overlay works. Milestone M2. |
 

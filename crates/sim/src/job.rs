@@ -27,13 +27,26 @@ pub enum JobKind {
     Mine,
     /// Carry an item stack to a stockpile.
     Haul,
+    /// Bring material to a blueprint and build the building.
+    Construct,
+    /// Take a finished building down. Part of its material units come back.
+    Deconstruct,
+    /// Make one run of a workshop recipe.
+    Craft,
 }
 
 impl JobKind {
     /// Number of job types.
-    pub const COUNT: usize = 3;
+    pub const COUNT: usize = 6;
     /// All job types, in index order.
-    pub const ALL: [JobKind; Self::COUNT] = [JobKind::Cut, JobKind::Mine, JobKind::Haul];
+    pub const ALL: [JobKind; Self::COUNT] = [
+        JobKind::Cut,
+        JobKind::Mine,
+        JobKind::Haul,
+        JobKind::Construct,
+        JobKind::Deconstruct,
+        JobKind::Craft,
+    ];
 
     /// Index in the priority array of a colonist.
     pub fn index(self) -> usize {
@@ -46,6 +59,9 @@ impl JobKind {
             JobKind::Cut => "Cut",
             JobKind::Mine => "Mine",
             JobKind::Haul => "Haul",
+            JobKind::Construct => "Construct",
+            JobKind::Deconstruct => "Deconstruct",
+            JobKind::Craft => "Craft",
         }
     }
 
@@ -55,6 +71,8 @@ impl JobKind {
             JobKind::Cut => Some(Skill::Woodcutting),
             JobKind::Mine => Some(Skill::Mining),
             JobKind::Haul => None,
+            JobKind::Construct | JobKind::Deconstruct => Some(Skill::Construction),
+            JobKind::Craft => Some(Skill::Crafting),
         }
     }
 }
@@ -73,6 +91,9 @@ pub struct Job {
     pub y: u16,
     /// The item to haul (hauling jobs only).
     pub item: Option<ItemId>,
+    /// Extra number of the job: the layer code of a construction or deconstruction job, the
+    /// recipe index of a craft job, and 0 for other jobs.
+    pub arg: u16,
     /// The colonist who does the job. Only one colonist can.
     pub claimed_by: Option<ColonistId>,
     /// The job is not offered before this tick (after a failure).
@@ -172,9 +193,31 @@ impl JobBoard {
             x,
             y,
             item,
+            arg: 0,
             claimed_by: None,
             blocked_until: 0,
         })
+    }
+
+    /// Put a job with an argument on the board (construction, deconstruction, craft).
+    pub(crate) fn add_arg(&mut self, kind: JobKind, x: u16, y: u16, arg: u16) -> JobId {
+        self.jobs.insert(Job {
+            kind,
+            x,
+            y,
+            item: None,
+            arg,
+            claimed_by: None,
+            blocked_until: 0,
+        })
+    }
+
+    /// The job of a type with this tile and argument, if any.
+    pub fn find_arg(&self, kind: JobKind, x: u16, y: u16, arg: u16) -> Option<JobId> {
+        self.jobs
+            .iter()
+            .find(|(_, j)| j.kind == kind && j.x == x && j.y == y && j.arg == arg)
+            .map(|(id, _)| id)
     }
 
     pub(crate) fn remove(&mut self, id: JobId) -> Option<Job> {
@@ -205,6 +248,30 @@ pub enum Reject {
     UnknownTarget,
     /// A priority must be 0 (off) or 1 to 4.
     BadPriority,
+    /// Only cut, mine, and haul are designations.
+    BadDesignation,
+    /// The building type does not exist.
+    UnknownBuilding,
+    /// The material is not in a category that the building accepts.
+    BadMaterial,
+    /// Water, rock, a tree, or a wall tile is on the tile.
+    TileBlocked,
+    /// A building or a blueprint is on this layer of the tile.
+    TileOccupied,
+    /// A roof needs a wall or natural rock within the roof support radius (A-008).
+    NoRoofSupport,
+    /// There is no blueprint on this layer of the tile.
+    NoBlueprint,
+    /// There is no building on this layer of the tile.
+    NoBuilding,
+    /// The building already has a deconstruction order.
+    AlreadyOrdered,
+    /// The recipe does not exist.
+    UnknownRecipe,
+    /// A craft order needs a count of 1 or more.
+    BadCount,
+    /// The tile has no workshop that can make the recipe.
+    NoWorkshop,
 }
 
 /// Why a job stopped before it was done.
@@ -214,6 +281,8 @@ pub enum AbortReason {
     JobGone,
     /// The colonist found no path.
     NoPath,
+    /// A construction or craft job found no material to bring.
+    NoMaterial,
 }
 
 /// Job events for the interface. They are not part of the state. `Sim::drain_job_events`
@@ -256,14 +325,14 @@ struct Pick {
 }
 
 /// Estimated walking cost between two tiles (octile, costs 10 and 14).
-fn octile(a: (u16, u16), b: (u16, u16)) -> u32 {
+pub(crate) fn octile(a: (u16, u16), b: (u16, u16)) -> u32 {
     let dx = u32::from(a.0.abs_diff(b.0));
     let dy = u32::from(a.1.abs_diff(b.1));
     14 * dx.min(dy) + 10 * (dx.max(dy) - dx.min(dy))
 }
 
 /// The four neighbors of a tile, in a fixed order.
-const NEIGHBORS: [(i32, i32); 4] = [(0, -1), (-1, 0), (1, 0), (0, 1)];
+pub(crate) const NEIGHBORS: [(i32, i32); 4] = [(0, -1), (-1, 0), (1, 0), (0, 1)];
 
 enum Leg {
     Arrived,
@@ -313,6 +382,12 @@ impl Sim {
                 }
             }
             Command::MoveColonist { .. } => {}
+            Command::PlaceBlueprint { .. }
+            | Command::CancelBlueprint { .. }
+            | Command::Deconstruct { .. }
+            | Command::CancelDeconstruct { .. }
+            | Command::OrderCraft { .. }
+            | Command::CancelCraft { .. } => self.apply_build_command(command),
         }
     }
 
@@ -336,7 +411,7 @@ impl Sim {
     }
 
     /// Let idle colonists search the board in this tick.
-    fn wake_idle(&mut self) {
+    pub(crate) fn wake_idle(&mut self) {
         let tick = self.tick;
         let ids: Vec<ColonistId> = self.colonists.iter().map(|(id, _)| id).collect();
         for id in ids {
@@ -348,7 +423,7 @@ impl Sim {
         }
     }
 
-    fn reject(&mut self, reason: Reject) {
+    pub(crate) fn reject(&mut self, reason: Reject) {
         self.job_events.push(JobEvent::Rejected(reason));
     }
 
@@ -389,6 +464,9 @@ impl Sim {
                     self.items.set_to_haul(id, true);
                     self.queue_haul(id);
                 }
+            }
+            JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
+                self.reject(Reject::BadDesignation);
             }
         }
     }
@@ -456,7 +534,7 @@ impl Sim {
     }
 
     /// True if the tile of the item lies in a stockpile that accepts its material.
-    fn is_stockpiled(&self, item: ItemId) -> bool {
+    pub(crate) fn is_stockpiled(&self, item: ItemId) -> bool {
         let Some(i) = self.items.get(item) else {
             return false;
         };
@@ -469,7 +547,7 @@ impl Sim {
     }
 
     /// Make the hauling job for a flagged item, if it needs one and has none.
-    fn queue_haul(&mut self, item: ItemId) {
+    pub(crate) fn queue_haul(&mut self, item: ItemId) {
         let Some(i) = self.items.get(item) else {
             return;
         };
@@ -628,6 +706,9 @@ impl Sim {
                 let dest = self.find_dest(region, item.material, item.count, (ix, iy))?;
                 Some(((ix, iy), Some(dest), Some(item_id)))
             }
+            JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
+                self.eval_build(region, from, job)
+            }
         }
     }
 
@@ -745,6 +826,9 @@ impl Sim {
                         }
                         None => true,
                     },
+                    JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
+                        self.build_job_stale(j)
+                    }
                 }
             })
             .map(|(id, _)| id)
@@ -768,10 +852,12 @@ impl Sim {
         if let Some(item) = pick.item {
             self.items.set_reserved(item, Some(id));
         }
-        if let Some(dest) = pick.dest {
+        if let Some(dest) = pick.dest
+            && pick.kind == JobKind::Haul
+        {
             self.jobs.dest_reservations.insert(dest, id);
         }
-        let step = if pick.kind == JobKind::Haul {
+        let step = if pick.item.is_some() {
             JobStep::GoToItem
         } else {
             JobStep::GoToWork
@@ -790,7 +876,7 @@ impl Sim {
     }
 
     /// Ask a path to a tile. A colonist who is already there does not move.
-    fn start_leg(&mut self, id: ColonistId, goal: (u16, u16)) {
+    pub(crate) fn start_leg(&mut self, id: ColonistId, goal: (u16, u16)) {
         let Some(c) = self.colonists.get_mut(id) else {
             return;
         };
@@ -870,6 +956,9 @@ impl Sim {
                 rules.mine_ticks_base + hardness * rules.mine_ticks_per_10_hardness / 10
             }
             JobKind::Haul => 0,
+            JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
+                self.build_work_ticks(job)
+            }
         }
     }
 
@@ -885,6 +974,9 @@ impl Sim {
                 .rock(x, y)
                 .is_some_and(|r| r != worldgen::RockKind::None),
             JobKind::Haul => false,
+            JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
+                self.build_target_ok(&job)
+            }
         };
         if !target_ok {
             self.abort_job(id, AbortReason::JobGone, false);
@@ -896,6 +988,13 @@ impl Sim {
         let progress = progress.saturating_add(pct);
         if u64::from(progress) < u64::from(self.work_ticks(&job)) * 100 {
             self.set_step(id, JobStep::Work { progress });
+            return;
+        }
+        if matches!(
+            job.kind,
+            JobKind::Construct | JobKind::Deconstruct | JobKind::Craft
+        ) {
+            self.complete_build_work(id, active, &job);
             return;
         }
         let rules = self.rules.clone();
@@ -925,9 +1024,10 @@ impl Sim {
                         );
                     }
                     self.passability_changed(job.x, job.y);
+                    self.rooms_dirty = true;
                 }
             }
-            JobKind::Haul => {}
+            JobKind::Haul | JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {}
         }
         self.designations.remove(&(job.x, job.y));
         self.finish_job(id, active, job.x, job.y);
@@ -947,6 +1047,9 @@ impl Sim {
             (i32::from(here.0), i32::from(here.1)),
             (i32::from(dest.0), i32::from(dest.1)),
         );
+        if valid && dest_ok && active.kind != JobKind::Haul {
+            self.trim_to_need(&active, item);
+        }
         if !valid || !dest_ok || !self.items.pick_up(item, id) {
             self.abort_job(id, AbortReason::JobGone, !dest_ok);
             return;
@@ -959,6 +1062,10 @@ impl Sim {
     }
 
     fn drop_item(&mut self, id: ColonistId, active: ActiveJob, dest: (u16, u16)) {
+        if active.kind != JobKind::Haul {
+            self.deliver_item(id, active);
+            return;
+        }
         let stack_max = self.rules.jobs.stack_max;
         if let Some(item) = active.item
             && let Some(kept) = self.items.put_down(item, dest.0, dest.1, stack_max)
@@ -972,7 +1079,7 @@ impl Sim {
     }
 
     /// The job is done: free the reservations, remove the job, add experience.
-    fn finish_job(&mut self, id: ColonistId, active: ActiveJob, x: u16, y: u16) {
+    pub(crate) fn finish_job(&mut self, id: ColonistId, active: ActiveJob, x: u16, y: u16) {
         self.jobs.remove(active.job);
         self.jobs.dest_reservations.retain(|_, who| *who != id);
         let rules = self.rules.jobs;
@@ -996,7 +1103,7 @@ impl Sim {
     /// Stop the job of a colonist. Free the reservations. A carried stack goes down on the
     /// tile of the colonist and keeps its haul flag. `block` keeps the job off the
     /// board for a while, so the same colonist does not retry at once.
-    fn abort_job(&mut self, id: ColonistId, reason: AbortReason, block: bool) {
+    pub(crate) fn abort_job(&mut self, id: ColonistId, reason: AbortReason, block: bool) {
         let Some(c) = self.colonists.get_mut(id) else {
             return;
         };
@@ -1026,11 +1133,13 @@ impl Sim {
                 let stack_max = self.rules.jobs.stack_max;
                 if let Some(kept) = self.items.put_down(item, here.0, here.1, stack_max) {
                     self.items.set_to_haul(kept, true);
-                    if kept != item {
-                        self.jobs.remove(active.job);
-                    } else if let Some(job) = self.jobs.get_mut(active.job) {
-                        job.x = here.0;
-                        job.y = here.1;
+                    if active.kind == JobKind::Haul {
+                        if kept != item {
+                            self.jobs.remove(active.job);
+                        } else if let Some(job) = self.jobs.get_mut(active.job) {
+                            job.x = here.0;
+                            job.y = here.1;
+                        }
                     }
                     self.queue_haul(kept);
                 }
@@ -1074,7 +1183,7 @@ impl Sim {
                     inside(a.stand.0, a.stand.1) && a.dest.is_none_or(|d| inside(d.0, d.1))
                 })
             });
-        tiles_ok && self.check_invariants().is_ok()
+        tiles_ok && self.check_invariants().is_ok() && self.buildings_state_ok()
     }
 
     /// Check the job, item, and reservation invariants. Return the first problem.
@@ -1109,7 +1218,9 @@ impl Sim {
                         ));
                     }
                 }
-                if let Some(dest) = a.dest {
+                if let Some(dest) = a.dest
+                    && a.kind == JobKind::Haul
+                {
                     dest_tiles.push(dest);
                     if self.jobs.dest_reserved_by(dest) != Some(cid) {
                         return Err(format!(
@@ -1185,7 +1296,7 @@ impl Sim {
                 return Err("destination reserved without a job".to_string());
             }
         }
-        Ok(())
+        self.check_building_invariants()
     }
 }
 

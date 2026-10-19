@@ -5,6 +5,7 @@
 //! This crate uses no floats, no hash collections, no file I/O, no time, and no threads
 //! (TECHNICAL_DESIGN §7).
 
+pub mod build;
 pub mod colonist;
 pub mod command;
 pub mod event;
@@ -13,6 +14,7 @@ pub mod job;
 pub mod map;
 pub mod path;
 pub mod region;
+pub mod room;
 pub mod rules;
 pub mod save;
 pub mod scenario;
@@ -20,6 +22,7 @@ pub mod skill;
 pub mod stockpile;
 pub mod time;
 
+pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
 pub use colonist::{Colonist, ColonistId};
 pub use command::Command;
 pub use event::Event;
@@ -28,6 +31,10 @@ pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, J
 pub use map::LocalMap;
 pub use path::PathFinder;
 pub use region::Regions;
+pub use room::{
+    BeautyCause, BeautyPart, BorderKind, BorderTile, InsulationPart, Room, RoomBeauty,
+    RoomInsulation, Rooms,
+};
 pub use rules::SimRules;
 pub use save::SaveError;
 pub use skill::{Skill, SpeedCause, SpeedPart, WorkSpeed};
@@ -81,6 +88,8 @@ pub struct Sim {
     designations: BTreeMap<(u16, u16), JobKind>,
     /// Stockpile zones.
     stockpiles: Arena<Stockpile>,
+    /// Buildings and blueprints.
+    buildings: Buildings,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -93,6 +102,15 @@ pub struct Sim {
     /// Derived cache: connectivity regions.
     #[serde(skip)]
     regions: Regions,
+    /// Derived cache: the rooms.
+    #[serde(skip)]
+    rooms: Rooms,
+    /// A structural change waits for the room detection in the next tick. Derived.
+    #[serde(skip)]
+    rooms_dirty: bool,
+    /// How many times the room detection ran. Not part of the state.
+    #[serde(skip)]
+    room_detections: u64,
     /// Derived cache: A* buffers.
     #[serde(skip)]
     finder: PathFinder,
@@ -138,28 +156,45 @@ impl Sim {
             jobs: JobBoard::default(),
             designations: BTreeMap::new(),
             stockpiles: Arena::new(),
+            buildings: Buildings::default(),
             events: Vec::new(),
             job_events: Vec::new(),
             rules,
+            rooms: Rooms::default(),
+            rooms_dirty: false,
+            room_detections: 0,
             regions: Regions::default(),
             finder: PathFinder::default(),
             scratch_path: Vec::new(),
             path_stats: PathStats::default(),
         };
         sim.rebuild_caches();
+        sim.refresh_rooms();
         sim
     }
 
-    /// Rebuild all derived caches. Call after a load.
+    /// Rebuild the derived caches except the rooms. Call after a load.
     fn rebuild_caches(&mut self) {
-        self.map.rebuild_passable();
+        let blocking = self
+            .buildings
+            .object_tiles(|def| self.rules.building(def).is_some_and(|d| d.blocks_walking));
+        self.map.reset_solid(blocking.into_iter());
         self.regions.rebuild(&self.map);
         self.items.rebuild_index();
     }
 
-    /// Run one tick. Order: commands, jobs, path requests, movement, then the tick number
-    /// increases.
+    /// Replace the content rules. For tests that use their own content. Call before the
+    /// first tick; the buildings must fit the new rules.
+    pub fn debug_set_rules(&mut self, rules: Arc<SimRules>) {
+        self.rules = rules;
+        self.rebuild_caches();
+        self.refresh_rooms();
+    }
+
+    /// Run one tick. Order: room detection (only after a structural change), commands, jobs,
+    /// path requests, movement, then the tick number increases.
     pub fn step(&mut self, commands: &[Command]) {
+        self.detect_rooms();
         for command in commands {
             self.apply_command(command);
         }
@@ -185,6 +220,7 @@ impl Sim {
         if !self.map.set_wall(i32::from(x), i32::from(y), wall) {
             return false;
         }
+        self.rooms_dirty = true;
         self.passability_changed(x, y);
         true
     }
@@ -431,8 +467,15 @@ impl Sim {
         if !colonists_ok || !queue_ok {
             return None;
         }
+        if !sim.buildings_state_ok() {
+            return None;
+        }
         sim.rebuild_caches();
-        sim.jobs_state_ok().then_some(sim)
+        if !sim.jobs_state_ok() {
+            return None;
+        }
+        sim.refresh_rooms();
+        Some(sim)
     }
 }
 

@@ -1,55 +1,41 @@
 //! Colonist sprites for `assetgen`. Pixel art is written as text rows and decoded here.
 //!
-//! The sheet `actors.png` has full color. One exception: the shirt uses gray values
-//! (red = green = blue). The game multiplies those pixels with the colonist color, so
-//! each colonist gets its own shirt. No other sprite color may be gray.
+//! The sheet `actors.png` has full color. The shirt uses gray values (red = green = blue). The
+//! game multiplies those pixels with the shirt color. Hair and skin use the colors of index 0 in
+//! `palette.rs`; the game swaps them per colonist (palette swap). No other color may be gray.
 //!
-//! Cells (16 x 16 pixels each): south frames 0..3, north frames 3..6, east frames 6..9.
-//! Frame 0 of each facing is standing. Frames 1 and 2 are the two walking steps.
-//! West is the east sprite flipped in the game. The feet touch the bottom of row 13.
+//! The sheet has 4 hair styles. Each style has 15 cells: 9 walk frames (stand, step 1, step 2
+//! for south, north, east) and 6 work frames (2 for each facing). West is east flipped.
+//! The work pose has no tool: the arms move and the body bobs (D-039).
 
-use super::{COLUMNS, TILE};
-
-/// Cell of the first south-facing frame.
-pub const SOUTH: usize = 0;
-/// Cell of the first north-facing frame.
-#[allow(dead_code)] // The game repeats this number; the tests use it.
-pub const NORTH: usize = 3;
-/// Cell of the first east-facing frame.
-pub const EAST: usize = 6;
-/// Number of colonist sprites.
-pub const COUNT: usize = 9;
-/// Rows of the actor sheet.
-pub const ROWS: usize = 1;
+use super::Image;
+use super::cells::actors as a;
+use super::palette as pal;
 
 /// Color of one text symbol: RGBA. `None` means the symbol is unknown.
 pub fn symbol(c: char) -> Option<[u8; 4]> {
+    let rgb = |c: pal::Rgb| [c[0], c[1], c[2], 255];
     Some(match c {
         '.' => [0, 0, 0, 0],
-        // Outline: a dark, slightly purple color. Never pure black.
-        'o' => [30, 24, 40, 255],
-        // Hair and hair light.
-        'h' => [88, 58, 40, 255],
-        'H' => [128, 88, 56, 255],
-        // Skin, skin shade, and eye.
-        's' => [236, 188, 148, 255],
-        'S' => [200, 144, 112, 255],
-        'e' => [40, 30, 44, 255],
+        'o' => rgb(pal::OUTLINE),
+        'h' => rgb(pal::HAIR[0][0]),
+        'H' => rgb(pal::HAIR[0][1]),
+        's' => rgb(pal::SKIN[0][0]),
+        'S' => rgb(pal::SKIN[0][1]),
+        'e' => rgb(pal::EYE),
         // Shirt (gray, tinted in the game): light, base, shade.
         'a' => [255, 255, 255, 255],
         'c' => [224, 224, 224, 255],
         'd' => [150, 150, 150, 255],
-        // Pants, pants shade, boots.
-        'p' => [72, 80, 112, 255],
-        'P' => [50, 54, 82, 255],
-        'b' => [92, 62, 44, 255],
-        // Ground shadow.
+        'p' => rgb(pal::PANTS[0]),
+        'P' => rgb(pal::PANTS[1]),
+        'b' => rgb(pal::BOOTS),
         'z' => [0, 0, 0, 90],
         _ => return None,
     })
 }
 
-type Rows = [&'static str; 16];
+type Grid = [[char; 16]; 16];
 
 const HEAD_SOUTH: [&str; 6] = [
     "................",
@@ -149,59 +135,177 @@ const LEGS_SIDE: [[&str; 5]; 3] = [
     ],
 ];
 
-fn frame(head: &[&'static str; 6], torso: &[&'static str; 4], legs: &[&'static str; 5]) -> Rows {
-    let mut rows = [""; 16];
-    rows[..6].copy_from_slice(head);
-    rows[6..10].copy_from_slice(torso);
-    rows[10..15].copy_from_slice(legs);
-    rows[15] = "................";
-    rows
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Facing {
+    South,
+    North,
+    East,
 }
 
-/// The text rows of all colonist sprites, in cell order.
-pub fn frames() -> Vec<Rows> {
-    let mut out = Vec::with_capacity(COUNT);
-    for legs in &LEGS_FRONT {
-        out.push(frame(&HEAD_SOUTH, &TORSO_FRONT, &legs.clone()));
+fn put(g: &mut Grid, x: usize, y: usize, c: char) {
+    if x < 16 && y < 16 {
+        g[y][x] = c;
     }
-    for legs in &LEGS_FRONT {
-        out.push(frame(&HEAD_NORTH, &TORSO_BACK, &legs.clone()));
+}
+
+fn base(facing: Facing, legs: usize) -> Grid {
+    let (head, torso, set) = match facing {
+        Facing::South => (&HEAD_SOUTH, &TORSO_FRONT, &LEGS_FRONT),
+        Facing::North => (&HEAD_NORTH, &TORSO_BACK, &LEGS_FRONT),
+        Facing::East => (&HEAD_EAST, &TORSO_SIDE, &LEGS_SIDE),
+    };
+    let mut rows: Vec<&str> = Vec::new();
+    rows.extend(head.iter());
+    rows.extend(torso.iter());
+    rows.extend(set[legs].iter());
+    let mut g = [['.'; 16]; 16];
+    for (y, row) in rows.iter().enumerate() {
+        for (x, c) in row.chars().enumerate() {
+            g[y][x] = c;
+        }
     }
-    for legs in &LEGS_SIDE {
-        out.push(frame(&HEAD_EAST, &TORSO_SIDE, &legs.clone()));
+    g
+}
+
+/// Change the hair of a frame to a style. Style 0 is short hair.
+fn style_hair(g: &mut Grid, facing: Facing, style: usize) {
+    match (style, facing) {
+        // Long hair: falls to the shoulders.
+        (1, Facing::South | Facing::North) => {
+            for y in 3..8 {
+                put(g, 3, y, 'o');
+                put(g, 12, y, 'o');
+                put(g, 4, y, 'h');
+                put(g, 11, y, 'h');
+            }
+            put(g, 4, 3, 'o');
+            put(g, 11, 3, 'o');
+            put(g, 4, 5, 'h');
+            put(g, 11, 5, 'h');
+            put(g, 5, 5, 'o');
+            put(g, 10, 5, 'o');
+            put(g, 4, 8, 'o');
+            put(g, 11, 8, 'o');
+        }
+        (1, Facing::East) => {
+            for y in 3..8 {
+                put(g, 3, y, 'o');
+                put(g, 4, y, 'h');
+            }
+            put(g, 4, 8, 'o');
+            put(g, 3, 8, 'o');
+        }
+        // Spiky hair: two tufts above the head.
+        (2, _) => {
+            put(g, 6, 0, 'o');
+            put(g, 9, 0, 'o');
+            put(g, 6, 1, 'h');
+            put(g, 9, 1, 'H');
+            put(g, 5, 1, 'o');
+            put(g, 10, 1, 'o');
+        }
+        // Ponytail: a tail that hangs at one side.
+        (3, Facing::South | Facing::North) => {
+            for y in 2..6 {
+                put(g, 12, y, 'h');
+                put(g, 13, y, 'o');
+            }
+            put(g, 12, 6, 'h');
+            put(g, 12, 7, 'o');
+            put(g, 11, 2, 'h');
+            put(g, 12, 1, 'o');
+        }
+        (3, Facing::East) => {
+            for y in 2..7 {
+                put(g, 3, y, 'h');
+                put(g, 2, y, 'o');
+            }
+            put(g, 3, 7, 'o');
+            put(g, 4, 2, 'h');
+        }
+        _ => {}
+    }
+}
+
+/// A work frame: `phase` 0 has the hands up, phase 1 has the hands down and the body low.
+fn work_frame(facing: Facing, style: usize, phase: usize) -> Grid {
+    let mut g = base(facing, 0);
+    style_hair(&mut g, facing, style);
+    if phase == 1 {
+        // The body bobs: rows 1 to 9 move one pixel down.
+        for y in (1..10).rev() {
+            g[y + 1] = g[y];
+        }
+        g[1] = ['.'; 16];
+    }
+    let (hy, dy) = if phase == 0 { (6, 0) } else { (9, 1) };
+    let _ = dy;
+    match facing {
+        Facing::South | Facing::North => {
+            for (x, ox) in [(2, 1), (13, 14)] {
+                put(&mut g, x, hy, 's');
+                put(&mut g, x, hy + 1, 's');
+                put(&mut g, ox, hy, 'o');
+                put(&mut g, ox, hy + 1, 'o');
+                put(&mut g, x, hy - 1, 'o');
+                put(&mut g, x, hy + 2, 'o');
+            }
+            put(&mut g, 3, hy + 1, 'c');
+            put(&mut g, 12, hy + 1, 'c');
+        }
+        Facing::East => {
+            let y = hy;
+            put(&mut g, 12, y, 's');
+            put(&mut g, 13, y, 's');
+            put(&mut g, 12, y + 1, 's');
+            put(&mut g, 14, y, 'o');
+            put(&mut g, 13, y + 1, 'o');
+            put(&mut g, 12, y - 1, 'o');
+            put(&mut g, 13, y - 1, 'o');
+            put(&mut g, 12, y + 2, 'o');
+        }
+    }
+    g
+}
+
+fn walk_frame(facing: Facing, style: usize, legs: usize) -> Grid {
+    let mut g = base(facing, legs);
+    style_hair(&mut g, facing, style);
+    g
+}
+
+/// All 15 frames of one style, in cell order.
+pub fn frames(style: usize) -> Vec<Grid> {
+    let mut out = Vec::with_capacity(a::STYLE_CELLS);
+    for facing in [Facing::South, Facing::North, Facing::East] {
+        for legs in 0..3 {
+            out.push(walk_frame(facing, style, legs));
+        }
+    }
+    for facing in [Facing::South, Facing::North, Facing::East] {
+        for phase in 0..2 {
+            out.push(work_frame(facing, style, phase));
+        }
     }
     out
 }
 
-/// An RGBA image of the actor sprites.
-pub struct ActorSheet {
-    /// Width in pixels.
-    pub width: usize,
-    /// Height in pixels.
-    pub height: usize,
-    /// RGBA bytes, row-major.
-    pub rgba: Vec<u8>,
-}
-
 /// Build the actor sheet.
-pub fn make_sheet() -> ActorSheet {
-    let (width, height) = (COLUMNS * TILE, ROWS * TILE);
-    let mut rgba = vec![0u8; width * height * 4];
-    for (cell, rows) in frames().iter().enumerate() {
-        for (y, row) in rows.iter().enumerate() {
-            for (x, ch) in row.chars().enumerate() {
-                let Some(px) = symbol(ch) else { continue };
-                let (sx, sy) = ((cell % COLUMNS) * TILE + x, (cell / COLUMNS) * TILE + y);
-                let i = (sy * width + sx) * 4;
-                rgba[i..i + 4].copy_from_slice(&px);
+pub fn make_sheet() -> Image {
+    let mut img = Image::cell_sheet(a::ROWS);
+    for style in 0..pal::HAIR_STYLES {
+        for (i, g) in frames(style).iter().enumerate() {
+            let cell = style * a::STYLE_CELLS + i;
+            for (y, row) in g.iter().enumerate() {
+                for (x, &ch) in row.iter().enumerate() {
+                    if let Some(px) = symbol(ch).filter(|p| p[3] != 0) {
+                        img.set_cell(cell, x as i32, y as i32, px);
+                    }
+                }
             }
         }
     }
-    ActorSheet {
-        width,
-        height,
-        rgba,
-    }
+    img
 }
 
 #[cfg(test)]
@@ -209,31 +313,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_row_has_16_known_symbols() {
-        for rows in frames() {
-            for row in rows {
-                assert_eq!(row.chars().count(), 16, "row {row:?}");
-                assert!(row.chars().all(|c| symbol(c).is_some()), "row {row:?}");
+    fn every_symbol_is_known() {
+        for style in 0..pal::HAIR_STYLES {
+            let f = frames(style);
+            assert_eq!(f.len(), a::STYLE_CELLS);
+            for g in f {
+                for row in g {
+                    assert!(row.iter().all(|&c| symbol(c).is_some()));
+                }
             }
         }
-        assert_eq!(frames().len(), COUNT);
     }
 
     #[test]
     fn only_the_shirt_is_gray() {
-        for c in "ohHsSepPbz".chars() {
-            if let Some([r, g, b, a]) = symbol(c) {
-                assert!(a == 0 || !(r == g && g == b) || c == 'z', "symbol {c}");
-            }
+        for c in "ohHsSepPb".chars() {
+            let [r, g, b, _] = symbol(c).unwrap_or_default();
+            assert!(!(r == g && g == b), "symbol {c}");
         }
     }
 
     #[test]
     fn feet_stay_on_one_row_in_each_standing_frame() {
-        for cell in [SOUTH, NORTH, EAST] {
-            let rows = &frames()[cell];
-            assert!(rows[13].contains('b'));
-            assert!(!rows[14].contains('b'));
+        for style in 0..pal::HAIR_STYLES {
+            let f = frames(style);
+            for cell in [a::SOUTH, a::NORTH, a::EAST] {
+                assert!(f[cell][13].contains(&'b'));
+                assert!(!f[cell][14].contains(&'b'));
+            }
         }
+    }
+
+    #[test]
+    fn styles_differ_and_work_frames_differ_from_standing() {
+        let s0 = frames(0);
+        for style in 1..pal::HAIR_STYLES {
+            assert_ne!(frames(style)[a::SOUTH], s0[a::SOUTH], "style {style}");
+        }
+        assert_ne!(s0[a::WORK_SOUTH], s0[a::WORK_SOUTH + 1]);
+        assert_ne!(s0[a::WORK_SOUTH], s0[a::SOUTH]);
     }
 }

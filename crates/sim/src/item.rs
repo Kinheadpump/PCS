@@ -182,6 +182,46 @@ impl Items {
         Some(id)
     }
 
+    /// Take a stack out of the world (a building uses its units). Return the stack.
+    pub(crate) fn remove(&mut self, id: ItemId) -> Option<Item> {
+        let item = self.arena.remove(id)?;
+        if let ItemLoc::Tile(x, y) = item.loc {
+            self.unindex(id, (x, y));
+        }
+        Some(item)
+    }
+
+    /// Cut `count` units from a stack on a tile into a new stack on the same tile. The new
+    /// stack has no reservation and keeps the haul flag. Return `None` if the stack has
+    /// `count` units or fewer, is not on a tile, or `count` is 0.
+    pub(crate) fn split_off(&mut self, id: ItemId, count: u32) -> Option<ItemId> {
+        let item = self.arena.get_mut(id)?;
+        let ItemLoc::Tile(x, y) = item.loc else {
+            return None;
+        };
+        if count == 0 || item.count <= count {
+            return None;
+        }
+        item.count -= count;
+        let (material, to_haul) = (item.material, item.to_haul);
+        self.spawn(material, count, x, y, to_haul)
+    }
+
+    /// Move a stack that lies on a tile to another tile. Return false if the stack does
+    /// not lie on a tile.
+    pub(crate) fn relocate(&mut self, id: ItemId, x: u16, y: u16) -> bool {
+        let Some(item) = self.arena.get_mut(id) else {
+            return false;
+        };
+        let ItemLoc::Tile(ox, oy) = item.loc else {
+            return false;
+        };
+        item.loc = ItemLoc::Tile(x, y);
+        self.unindex(id, (ox, oy));
+        self.by_tile.entry((x, y)).or_default().push(id);
+        true
+    }
+
     /// Rebuild the tile index from the arena. Call after a load.
     pub(crate) fn rebuild_index(&mut self) {
         self.by_tile.clear();

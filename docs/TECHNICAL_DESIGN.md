@@ -208,9 +208,9 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 | 7. Moisture | Wind bands by latitude. A row sweep carries moisture. Mountains remove moisture (rain shadow). | `u8` moisture |
 | 8. Rivers | D8 flow directions follow the parent pointers of the Priority-Flood fill (D-045). All tunables are in the `WorldParams` struct, not in `.ron` files. Flow accumulation in descending height order. River above a threshold. 3 size classes. | River flag and size |
 | 9. Biomes | Lookup table: 6 temperature bands × 6 moisture bands. Overrides: ocean, lake, glacier, high mountain, coast, floodplain, volcanic. | Biome ID |
-| 10. Geology | Stratigraphy for each plate or province: soil depth and 2 or 3 rock layers by setting. | Rock layer materials |
-| 11. Deposits | A stateless hash roll for each mineral. Weighted by host rock affinity. Richness 1 to 3. | Deposit mask, richness |
-| 12. Regions | 300 to 500 land regions. Voronoi seeds + flood fill that stops at coasts and ridges. Adjacency graph with travel costs. | Region ID, region graph |
+| 10. Geology | Provinces from a jittered lattice (cell size 16). Each province has a setting (plain, mountain, volcanic, coast) and 2 or 3 distinct rock layers. Each cell has a soil depth in decimeters. Step 10 has its own seed and hash (`LayerStage`, D-047). | Province grid, setting, rock layers, soil depth |
+| 11. Deposits | A stateless hash roll `roll(deposit_seed, cell, mineral)` for each land cell and mineral. Weighted by host rock affinity. A cell holds one deposit: the mineral with the largest margin, ties to the lowest mineral index (D-048). Richness 1 to 3. | Deposit mask, mineral, richness, host layer |
+| 12. Regions | One seed for each 8 × 8 block that has land. A cost-ordered flood fill (binary heap, ties by cell index) with ridge, river, and slope costs. Ocean and lake are walls, so isolated islands become their own regions. Pieces that are not connected merge into a neighbor. Regions under 24 cells merge into the neighbor with the longest border. The adjacency graph has sorted edges with border length and travel cost. The repair step gives each region with no deposit one richness-1 deposit on its best host rock. The repair result is a separate overlay `Regions.deposits`. It does not change the step 11 output (D-047). | Region ID, region graph, repaired deposit overlay |
 | 13. History | §8.1 | `History`, cell overlays |
 | 14. Embark | Read the selected cell, its 8 neighbors, and the site records. | `EmbarkSummary` |
 | 15. Local map | §8.2 | `LocalMapData` |
@@ -266,7 +266,8 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 
 ## 10. Content data (D-014)
 
-- RON files in `assets/content/`: materials, items, buildings, recipes, crops, wild plants, creatures, site templates, legend templates, chronicle templates.
+- RON files in `assets/content/`: materials, rocks, deposits, items, buildings, recipes, crops, wild plants, creatures, site templates, legend templates, chronicle templates.
+- `worldgen` does no file I/O. It embeds `rocks.ron` and `deposits.ron` with `include_str!` and parses them once with `base::content` (`load_rocks`, `load_minerals`). The file order feeds the hashes and must match the `Rock`, `Setting`, and `Mineral` enums. `rocks.ron` has `rocks` and `settings` (each with a `pool`). `deposits.ron` has `minerals` (each with an `affinity` list).
 - All numbers in content are integers: tenths of °C, per-mille (‰), or whole units. The loader refuses float literals.
 - Load into `Raw*` structs with `serde`. Then validate and link into `Content`:
   - Convert string IDs to dense typed IDs, for example `MaterialId(u16)`.
@@ -313,6 +314,8 @@ CI also runs `tools validate-content` and the golden hash tests on Windows and L
 7. On average, moisture behind major mountain ranges is lower than in front of them.
 8. History limits hold over 100 seeds. Alive civilizations stay in the range 2 to 8 for 90% of years. Each ruin site refers to a destruction or abandon event. Each lost artifact has a valid site. Event years do not decrease.
 9. On 80% of seeds, a minimum of 30% of habitable cells have a site record or a road within their embark area.
+10. Each deposit lies on a host rock with an affinity above 0 for its mineral. Richness is 1 to 3. No deposit lies on ocean or lake. Each province has 2 or 3 distinct rock layers.
+11. Each land cell is in exactly 1 region. No ocean or lake cell is in a region. Each region is one 4-connected area. The land region count is 300 to 500 on 90% of seeds. Each region has a minimum of 1 deposit type in `Regions.deposits`. The region graph is symmetric and sorted. The tests use 30 seeds, because the world size is fixed at 256 × 256.
 
 ## 12. Performance targets
 

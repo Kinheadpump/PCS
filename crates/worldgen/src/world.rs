@@ -1,4 +1,4 @@
-//! World data and the generation pipeline for steps 1 to 11 (TECHNICAL_DESIGN §8).
+//! World data and the generation pipeline for steps 1 to 12 (TECHNICAL_DESIGN §8).
 //!
 //! Each stage writes integer outputs. The next stage reads only these outputs. Each stage
 //! has a seed (mix of the world seed and a fixed tag) and a stage hash of its outputs.
@@ -6,6 +6,7 @@
 use crate::biome::{self, WorldBiome};
 use crate::deposit::{self, Deposits};
 use crate::geology::{self, GeoInputs, Geology};
+use crate::region::{self, RegionInputs, Regions};
 use crate::{climate, height, hydro, plates};
 use base::Grid;
 use base::hash::Fnv1a;
@@ -104,6 +105,33 @@ impl LayerStage {
     }
 }
 
+/// Number of region stages (step 12). They have their own seed and hash arrays so that the
+/// hashes of steps 1 to 11 stay as they were.
+pub const REGION_STAGE_COUNT: usize = 1;
+
+/// A generation stage after step 11. The number is the index in the region arrays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RegionStage {
+    /// Step 12: regions, region graph, and deposit repair.
+    Regions,
+}
+
+impl RegionStage {
+    /// All region stages in generation order.
+    pub const ALL: [RegionStage; REGION_STAGE_COUNT] = [RegionStage::Regions];
+
+    /// Short stable name, used in golden files and tool output.
+    pub fn name(self) -> &'static str {
+        const NAMES: [&str; REGION_STAGE_COUNT] = ["regions"];
+        NAMES[self as usize]
+    }
+
+    /// Fixed tag constant of the stage. It continues the tags of steps 1 to 11.
+    fn tag(self) -> u64 {
+        0x574F_524C_4400_0000 + STAGE_COUNT as u64 + LAYER_STAGE_COUNT as u64 + self as u64
+    }
+}
+
 /// Tunable numbers of the world generator. All values are integers.
 /// A stage reads only its own fields, so a change in one stage keeps the earlier stages.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -174,6 +202,16 @@ pub struct WorldParams {
     pub rich2_per_mille: u32,
     /// Deposits: share of richness 3, per-mille.
     pub rich3_per_mille: u32,
+    /// Regions: side of the seed blocks in cells. Each block with land has one seed.
+    pub region_cell: u32,
+    /// Regions: a region with fewer cells is merged into a neighbor.
+    pub region_min_cells: u32,
+    /// Regions: extra flood fill cost to enter a high mountain cell.
+    pub region_ridge_cost: u32,
+    /// Regions: extra cost for each river size step (also the cost to cross a river).
+    pub region_river_cost: u32,
+    /// Regions: cost for each 16 height units of climb.
+    pub region_slope_cost: u32,
 }
 
 impl Default for WorldParams {
@@ -212,6 +250,11 @@ impl Default for WorldParams {
             deposit_base_per_10k: 100,
             rich2_per_mille: 300,
             rich3_per_mille: 100,
+            region_cell: 8,
+            region_min_cells: 24,
+            region_ridge_cost: 60,
+            region_river_cost: 12,
+            region_slope_cost: 16,
         }
     }
 }
@@ -259,6 +302,12 @@ pub struct WorldData {
     pub geology: Geology,
     /// Mineral deposits (step 11).
     pub deposits: Deposits,
+    /// Seeds of step 12, indexed by `RegionStage`.
+    pub region_seeds: [u64; REGION_STAGE_COUNT],
+    /// Hashes of the outputs of step 12, indexed by `RegionStage`.
+    pub region_hashes: [u64; REGION_STAGE_COUNT],
+    /// Regions, region graph, and the repaired deposits (step 12).
+    pub regions: Regions,
 }
 
 impl WorldData {
@@ -282,7 +331,7 @@ fn feed<T: Copy, const N: usize>(h: &mut Fnv1a, items: &[T], bytes: impl Fn(T) -
     }
 }
 
-/// Generate the world (steps 1 to 11) for a seed.
+/// Generate the world (steps 1 to 12) for a seed.
 pub fn generate_world(seed: u64, params: &WorldParams) -> WorldData {
     let mut stage_seeds = [0u64; STAGE_COUNT];
     for stage in Stage::ALL {
@@ -389,6 +438,38 @@ pub fn generate_world(seed: u64, params: &WorldParams) -> WorldData {
     feed(&mut h, deposits.host.as_slice(), |v| [v]);
     layer_hashes[LayerStage::Deposits as usize] = h.finish();
 
+    let mut region_seeds = [0u64; REGION_STAGE_COUNT];
+    for stage in RegionStage::ALL {
+        region_seeds[stage as usize] = mix(seed ^ stage.tag());
+    }
+    let region_inputs = RegionInputs {
+        height: &height,
+        biome: &biome,
+        river: &rivers.river,
+        geology: &geology,
+        deposits: &deposits,
+    };
+    let regions = region::make_regions(
+        region_seeds[RegionStage::Regions as usize],
+        &region_inputs,
+        params,
+    );
+    let mut h = Fnv1a::new();
+    feed(&mut h, regions.id.as_slice(), u16::to_le_bytes);
+    for info in &regions.info {
+        feed(&mut h, &[info.size], u32::to_le_bytes);
+        feed(&mut h, &[info.cx, info.cy], u16::to_le_bytes);
+        h.write(&[info.minerals]);
+    }
+    for e in &regions.edges {
+        feed(&mut h, &[e.a, e.b], u16::to_le_bytes);
+        feed(&mut h, &[e.border, e.cost], u32::to_le_bytes);
+    }
+    feed(&mut h, regions.deposits.mineral.as_slice(), |v| [v]);
+    feed(&mut h, regions.deposits.richness.as_slice(), |v| [v]);
+    feed(&mut h, regions.deposits.host.as_slice(), |v| [v]);
+    let region_hashes = [h.finish()];
+
     WorldData {
         seed,
         stage_seeds,
@@ -410,6 +491,9 @@ pub fn generate_world(seed: u64, params: &WorldParams) -> WorldData {
         biome,
         geology,
         deposits,
+        region_seeds,
+        region_hashes,
+        regions,
     }
 }
 
