@@ -1,9 +1,11 @@
-//! World data and the generation pipeline for steps 1 to 9 (TECHNICAL_DESIGN §8).
+//! World data and the generation pipeline for steps 1 to 11 (TECHNICAL_DESIGN §8).
 //!
 //! Each stage writes integer outputs. The next stage reads only these outputs. Each stage
 //! has a seed (mix of the world seed and a fixed tag) and a stage hash of its outputs.
 
 use crate::biome::{self, WorldBiome};
+use crate::deposit::{self, Deposits};
+use crate::geology::{self, GeoInputs, Geology};
 use crate::{climate, height, hydro, plates};
 use base::Grid;
 use base::hash::Fnv1a;
@@ -73,6 +75,35 @@ impl Stage {
     }
 }
 
+/// Number of geology and deposit stages (steps 10 and 11). They have their own seed and
+/// hash arrays so that the hashes of steps 1 to 9 stay as they were.
+pub const LAYER_STAGE_COUNT: usize = 2;
+
+/// A generation stage after step 9. The number is the index in the layer arrays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayerStage {
+    /// Step 10: geology.
+    Geology,
+    /// Step 11: deposits.
+    Deposits,
+}
+
+impl LayerStage {
+    /// All layer stages in generation order.
+    pub const ALL: [LayerStage; LAYER_STAGE_COUNT] = [LayerStage::Geology, LayerStage::Deposits];
+
+    /// Short stable name, used in golden files and tool output.
+    pub fn name(self) -> &'static str {
+        const NAMES: [&str; LAYER_STAGE_COUNT] = ["geology", "deposits"];
+        NAMES[self as usize]
+    }
+
+    /// Fixed tag constant of the stage. It continues the tags of the first 9 stages.
+    fn tag(self) -> u64 {
+        0x574F_524C_4400_0000 + STAGE_COUNT as u64 + self as u64
+    }
+}
+
 /// Tunable numbers of the world generator. All values are integers.
 /// A stage reads only its own fields, so a change in one stage keeps the earlier stages.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,6 +142,38 @@ pub struct WorldParams {
     pub mountain_min: i16,
     /// Biomes: maximum height above sea level of a floodplain.
     pub floodplain_max: i16,
+    /// Geology: lattice spacing of the province points in cells.
+    pub province_cell: u32,
+    /// Geology: height above sea level that counts as mountain rock.
+    pub rock_mountain_min: i16,
+    /// Geology: share of volcanic land cells that makes a volcanic province, per-mille.
+    pub prov_volcanic_pm: i32,
+    /// Geology: share of mountain land cells that makes a mountain province, per-mille.
+    pub prov_mountain_pm: i32,
+    /// Geology: share of coast land cells that makes a coast province, per-mille.
+    pub prov_coast_pm: i32,
+    /// Geology: chance of a third rock layer, per-mille.
+    pub layer3_per_mille: u32,
+    /// Geology: soil depth of dry flat land in decimeters.
+    pub soil_flat: i32,
+    /// Geology: extra soil depth at full moisture in decimeters.
+    pub soil_wet: i32,
+    /// Geology: soil lost for each 1,000 height units above sea level, in decimeters.
+    pub soil_slope: i32,
+    /// Geology: extra soil depth on rivers and floodplains in decimeters.
+    pub soil_river: i32,
+    /// Geology: extra soil depth on volcanic ash in decimeters.
+    pub soil_ash: i32,
+    /// Geology: range of the random soil term in decimeters.
+    pub soil_jitter: i32,
+    /// Geology: maximum soil depth in decimeters.
+    pub soil_max: i32,
+    /// Deposits: chance for each 100 points of rock affinity, in 1/10,000 per cell.
+    pub deposit_base_per_10k: u32,
+    /// Deposits: share of richness 2, per-mille.
+    pub rich2_per_mille: u32,
+    /// Deposits: share of richness 3, per-mille.
+    pub rich3_per_mille: u32,
 }
 
 impl Default for WorldParams {
@@ -133,6 +196,22 @@ impl Default for WorldParams {
             glacier_max_temp: -14,
             mountain_min: 1800,
             floodplain_max: 300,
+            province_cell: 16,
+            rock_mountain_min: 1200,
+            prov_volcanic_pm: 150,
+            prov_mountain_pm: 300,
+            prov_coast_pm: 250,
+            layer3_per_mille: 500,
+            soil_flat: 20,
+            soil_wet: 30,
+            soil_slope: 20,
+            soil_river: 15,
+            soil_ash: 10,
+            soil_jitter: 8,
+            soil_max: 60,
+            deposit_base_per_10k: 100,
+            rich2_per_mille: 300,
+            rich3_per_mille: 100,
         }
     }
 }
@@ -146,6 +225,10 @@ pub struct WorldData {
     pub stage_seeds: [u64; STAGE_COUNT],
     /// Hash of the outputs of each stage, indexed by stage number.
     pub stage_hashes: [u64; STAGE_COUNT],
+    /// Seeds of steps 10 and 11, indexed by `LayerStage`.
+    pub layer_seeds: [u64; LAYER_STAGE_COUNT],
+    /// Hashes of the outputs of steps 10 and 11, indexed by `LayerStage`.
+    pub layer_hashes: [u64; LAYER_STAGE_COUNT],
     /// Uplift from mountain ridges, in height units.
     pub uplift: Grid<i16>,
     /// Volcanic flag.
@@ -172,6 +255,10 @@ pub struct WorldData {
     pub river: Grid<u8>,
     /// Biome of each cell.
     pub biome: Grid<WorldBiome>,
+    /// Provinces, rock layers, and soil (step 10).
+    pub geology: Geology,
+    /// Mineral deposits (step 11).
+    pub deposits: Deposits,
 }
 
 impl WorldData {
@@ -195,7 +282,7 @@ fn feed<T: Copy, const N: usize>(h: &mut Fnv1a, items: &[T], bytes: impl Fn(T) -
     }
 }
 
-/// Generate the world terrain (steps 1 to 9) for a seed.
+/// Generate the world (steps 1 to 11) for a seed.
 pub fn generate_world(seed: u64, params: &WorldParams) -> WorldData {
     let mut stage_seeds = [0u64; STAGE_COUNT];
     for stage in Stage::ALL {
@@ -262,10 +349,52 @@ pub fn generate_world(seed: u64, params: &WorldParams) -> WorldData {
     feed(&mut h, biome.as_slice(), |v| [v as u8]);
     hashes[Stage::Biomes as usize] = h.finish();
 
+    let mut layer_seeds = [0u64; LAYER_STAGE_COUNT];
+    for stage in LayerStage::ALL {
+        layer_seeds[stage as usize] = mix(seed ^ stage.tag());
+    }
+    let mut layer_hashes = [0u64; LAYER_STAGE_COUNT];
+
+    let geo_inputs = GeoInputs {
+        height: &height,
+        sea_level,
+        moisture: &moisture,
+        river: &rivers.river,
+        biome: &biome,
+    };
+    let geology = geology::make_geology(
+        layer_seeds[LayerStage::Geology as usize],
+        &geo_inputs,
+        params,
+    );
+    let mut h = Fnv1a::new();
+    feed(&mut h, geology.province.as_slice(), u16::to_le_bytes);
+    feed(&mut h, &geology.settings, |v| [v as u8]);
+    feed(&mut h, &geology.layer_count, |v| [v]);
+    for layer in &geology.layers {
+        feed(&mut h, layer, |v| [v as u8]);
+    }
+    feed(&mut h, geology.soil.as_slice(), |v| [v]);
+    layer_hashes[LayerStage::Geology as usize] = h.finish();
+
+    let deposits = deposit::make_deposits(
+        layer_seeds[LayerStage::Deposits as usize],
+        &geology,
+        &biome,
+        params,
+    );
+    let mut h = Fnv1a::new();
+    feed(&mut h, deposits.mineral.as_slice(), |v| [v]);
+    feed(&mut h, deposits.richness.as_slice(), |v| [v]);
+    feed(&mut h, deposits.host.as_slice(), |v| [v]);
+    layer_hashes[LayerStage::Deposits as usize] = h.finish();
+
     WorldData {
         seed,
         stage_seeds,
         stage_hashes: hashes,
+        layer_seeds,
+        layer_hashes,
         uplift,
         volcanic,
         height,
@@ -279,6 +408,8 @@ pub fn generate_world(seed: u64, params: &WorldParams) -> WorldData {
         flow: rivers.flow,
         river: rivers.river,
         biome,
+        geology,
+        deposits,
     }
 }
 
