@@ -297,7 +297,7 @@ These sprints have less detail. Add the full detail at the start of each phase. 
 
 | Sprint | Goal | Deliverable | Main acceptance criteria |
 |---|---|---|---|
-| S8 World terrain | Generate the world terrain. | `tools gen-world` and `tools dump-layers` write height, temperature, moisture, river, and biome images. | Rules 1 to 7. P-05 for steps 1 to 9. Plates are a stretch task. Ridged noise is the fallback. |
+| S8 World terrain | Generate the world terrain. | `tools gen-world` and `tools dump-layers` write height, temperature, moisture, river, and biome images. | Rules 1 to 7. Status: done on `main` (PR #5). P-05 for steps 1 to 9 is about 40 ms against 300 ms. Biome balance needs tuning: temperate forest is 1 to 3% and taiga is 22% of land (D-046). P-05 for steps 1 to 9. Plates are a stretch task. Ridged noise is the fallback. |
 | S9 Geology, deposits, regions, world view | Complete the world data and show it. | `game` shows the world map with overlays. The seed widget accepts numbers. | Each land region has a minimum of 1 deposit type. Each region is one connected area. P-05. |
 | S10 History | Simulate the history. | `tools gen-world --history` prints a chronicle summary and statistics. | Rule 8. P-06. Approximately 10 event types. Each event type writes a map result (R-040, test). |
 | S11 Embark and site stamping | Make the local map from the world. | The player selects a world cell. The local map has ruins, roads, old tunnels, and depleted deposits. Sites contain structure and salvage. | Rule 9. R-041. A ruin of age 1,500 years has 2 times or more the rubble of a ruin of age 200 years. Depletion decreases ore (test). The history overlay works. Milestone M2. |

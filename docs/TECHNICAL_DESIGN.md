@@ -55,7 +55,9 @@ Inside `sim`, use modules, not more crates: `time`, `map`, `colonist`, `item`, `
 
 The module `chronicle::text` makes chronicle text from `chronicle_templates.ron`. The `game` crate only shows the text.
 
-Inside `worldgen`, use modules: `plates`, `height`, `hydro`, `climate`, `biome`, `geology`, `deposit`, `region`, `history`, `embark`, `local`.
+Inside `worldgen`, use modules: `world` (stage seeds, `WorldParams`, step order), `plates`, `height`, `hydro`, `climate`, `biome`, `geology`, `deposit`, `region`, `history`, `embark`, `local`.
+
+Inside `sim`, Sprint 3 added modules `item`, `job`, `skill`, `stockpile`, and `rules`. Job numbers are in `assets/content/jobs.ron`. The save `FORMAT_VERSION` is 2. `Sim::drain_job_events()` returns `JobEvent` values. The `game` crate has the modules `ui`, `hud`, `overlay`, `tools`, and `inspector`.
 
 ### 3.2 Data ownership
 
@@ -198,13 +200,13 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 | Step | Method | Output |
 |---|---|---|
 | 1. Seeds | Stage seeds from the world seed. | Stage seeds |
-| 2. Plates (stretch task) | 12 to 20 jittered Voronoi plate seeds. Continental or oceanic. Drift vector. Uplift at converging borders. Fallback: ridged noise for mountain ranges. | Plate ID, uplift, volcanic flag |
+| 2. Plates (stretch task) | 12 to 20 jittered Voronoi plate seeds. Continental or oceanic. Drift vector. Uplift at converging borders. Fallback: ridged noise for mountain ranges. S8 uses the fallback (D-044); `plates.rs` holds the ridged noise. | Plate ID, uplift, volcanic flag |
 | 3. Height | Plate base + uplift + fBm (5 to 6 octaves of integer value or gradient noise) + one domain warp. Ocean at the map edges. | `i16` height |
 | 4. Sea level | Percentile of heights. The default land fraction is 40%. | Sea level |
 | 5. Lakes | Priority-Flood depression filling (binary heap, ties broken by cell index). Deep depressions become lakes with an outlet. | Filled height, lake ID |
 | 6. Temperature | Latitude table − lapse rate × height + noise. Seasonal amplitude from latitude and distance to ocean. | `i8` mean °C, amplitude |
 | 7. Moisture | Wind bands by latitude. A row sweep carries moisture. Mountains remove moisture (rain shadow). | `u8` moisture |
-| 8. Rivers | D8 flow directions on the filled height. Flow accumulation in descending height order. River above a threshold. 3 size classes. | River flag and size |
+| 8. Rivers | D8 flow directions follow the parent pointers of the Priority-Flood fill (D-045). All tunables are in the `WorldParams` struct, not in `.ron` files. Flow accumulation in descending height order. River above a threshold. 3 size classes. | River flag and size |
 | 9. Biomes | Lookup table: 6 temperature bands × 6 moisture bands. Overrides: ocean, lake, glacier, high mountain, coast, floodplain, volcanic. | Biome ID |
 | 10. Geology | Stratigraphy for each plate or province: soil depth and 2 or 3 rock layers by setting. | Rock layer materials |
 | 11. Deposits | A stateless hash roll for each mineral. Weighted by host rock affinity. Richness 1 to 3. | Deposit mask, richness |
