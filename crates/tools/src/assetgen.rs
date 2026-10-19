@@ -6,6 +6,9 @@
 
 use base::rng::Pcg32;
 
+#[path = "assetgen_actors.rs"]
+pub mod actors;
+
 /// Sprite side in pixels.
 pub const TILE: usize = 16;
 /// Sprites per sheet row.
@@ -99,13 +102,16 @@ fn fill_noise(sheet: &mut Sheet, cell: usize, rng: &mut Pcg32, base: i32, spread
 
 fn grass(sheet: &mut Sheet, cell: usize, seed: u64) {
     let mut rng = rng_for(seed, cell);
-    fill_noise(sheet, cell, &mut rng, BASE_LEVEL - 4, 9);
-    for _ in 0..7 {
-        let x = 1 + rng.below(14) as i32;
+    // Quiet base: two close values only, so the ground does not fight with the units.
+    fill_noise(sheet, cell, &mut rng, BASE_LEVEL - 2, 3);
+    // Tufts: a dark root pixel with a light blade above it and one beside it.
+    for _ in 0..5 {
+        let x = 1 + rng.below(13) as i32;
         let y = 3 + rng.below(11) as i32;
-        sheet.put(cell, x, y, 184, 255);
-        sheet.put(cell, x, y - 1, 238, 255);
-        sheet.put(cell, x, y - 2, 252, 255);
+        sheet.put(cell, x, y, 190, 255);
+        sheet.put(cell, x, y - 1, 244, 255);
+        sheet.put(cell, x + 1, y - 2, 252, 255);
+        sheet.put(cell, x + 1, y, 198, 255);
     }
 }
 
@@ -179,24 +185,40 @@ fn floor(sheet: &mut Sheet, cell: usize, seed: u64) {
 
 fn wall(sheet: &mut Sheet, cell: usize, seed: u64) {
     let mut rng = rng_for(seed, cell);
-    // Rough stone: 2 x 2 blocks with a lighter top left and a darker crack pattern.
-    for by in 0..8 {
-        for bx in 0..8 {
-            let v = BASE_LEVEL + 10 + jitter(&mut rng, 16);
-            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-                let n = jitter(&mut rng, 4);
-                sheet.put(cell, bx * 2 + dx, by * 2 + dy, v + n, 255);
+    // Rock plates in three staggered rows. Each plate has a dark seam on its top and left,
+    // a light line under the seam, and a dark bottom line (light from the north west).
+    const ROWS_Y: [(i32, i32); 2] = [(0, 8), (8, 16)];
+    const SEAMS_X: [[i32; 2]; 2] = [[0, 10], [5, 13]];
+    for (r, &(y0, y1)) in ROWS_Y.iter().enumerate() {
+        for (k, &x0) in SEAMS_X[r].iter().enumerate() {
+            let x1 = if k == 0 {
+                SEAMS_X[r][1]
+            } else {
+                SEAMS_X[r][0] + TILE as i32
+            };
+            let tone = jitter(&mut rng, 9);
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let px = x.rem_euclid(TILE as i32);
+                    let mut v = BASE_LEVEL + 6 + tone + jitter(&mut rng, 2);
+                    if y == y0 || x == x0 {
+                        v = BASE_LEVEL - 30;
+                    } else if y == y0 + 1 || x == x0 + 1 {
+                        v += 8;
+                    } else if y == y1 - 1 || x == x1 - 1 {
+                        v -= 10;
+                    }
+                    sheet.put(cell, px, y, v, 255);
+                }
             }
         }
     }
+    // One short crack and one chip, so the plates do not look printed.
+    let (mut x, mut y) = (2 + rng.below(12) as i32, 1 + rng.below(4) as i32);
     for _ in 0..3 {
-        let (mut x, mut y) = (rng.below(16) as i32, rng.below(16) as i32);
-        for _ in 0..6 {
-            sheet.put(cell, x, y, 150, 255);
-            sheet.put(cell, x + 1, y + 1, 250, 255);
-            x += rng.below(3) as i32 - 1;
-            y += rng.below(2) as i32 + 1;
-        }
+        sheet.put(cell, x, y, BASE_LEVEL - 70, 255);
+        x += rng.below(3) as i32 - 1;
+        y += 1;
     }
 }
 
@@ -227,29 +249,66 @@ fn ore(sheet: &mut Sheet, cell: usize, seed: u64) {
     }
 }
 
+/// Value of the canopy outline. The game multiplies it with the tree color.
+const TREE_OUTLINE: i32 = 88;
+
 fn tree(sheet: &mut Sheet, cell: usize, seed: u64) {
     let mut rng = rng_for(seed, cell);
-    // Radius varies with the angle bucket so the outline is lumpy.
-    let bumps: Vec<i32> = (0..8).map(|_| rng.below(3) as i32).collect();
+    // Four round clumps. Centers and radii are in half pixels, so the shape stays lumpy.
+    let mut clumps: Vec<(i32, i32, i32)> = vec![
+        (16, 17, 10),
+        (12, 13, 7),
+        (20, 13, 7),
+        (13, 20, 7),
+        (20, 20, 7),
+    ];
+    for c in &mut clumps {
+        c.0 += jitter(&mut rng, 2);
+        c.1 += jitter(&mut rng, 2);
+    }
+    // Per pixel: the deepest clump decides the shade. 0 means outside.
+    let mut depth = [[0i32; TILE]; TILE];
+    let mut shade = [[0i32; TILE]; TILE];
     for y in 0..TILE as i32 {
         for x in 0..TILE as i32 {
-            let (dx, dy) = (2 * x - 15, 2 * y - 15);
-            let bucket = ((dx >= 0) as usize)
-                + 2 * ((dy >= 0) as usize)
-                + 4 * ((dx.abs() > dy.abs()) as usize);
-            let radius = 12 + bumps[bucket];
-            let d2 = dx * dx + dy * dy;
-            if d2 > radius * radius {
+            let (px, py) = (2 * x + 1, 2 * y + 1);
+            let mut best = 0;
+            for &(cx, cy, r) in &clumps {
+                let (dx, dy) = (px - cx, py - cy);
+                let d = ((dx * dx + dy * dy) as f32).sqrt() as i32;
+                if r - d > best {
+                    best = r - d;
+                    // Light from the north west: bright on the upper left of each clump.
+                    shade[y as usize][x as usize] = -(dx + dy) * 14 / r;
+                }
+            }
+            depth[y as usize][x as usize] = best;
+        }
+    }
+    let inside = |x: i32, y: i32| {
+        (0..TILE as i32).contains(&x)
+            && (0..TILE as i32).contains(&y)
+            && depth[y as usize][x as usize] > 0
+    };
+    for y in 0..TILE as i32 {
+        for x in 0..TILE as i32 {
+            if !inside(x, y) {
                 continue;
             }
-            // Light from the north west.
-            let light = (-(dx + dy)) * 3 / 2;
-            let mut v = BASE_LEVEL + 12 + light + jitter(&mut rng, 14);
-            if d2 > (radius - 3) * (radius - 3) {
-                v -= 52;
+            let edge =
+                !(inside(x - 1, y) && inside(x + 1, y) && inside(x, y - 1) && inside(x, y + 1));
+            let (d, sh) = (depth[y as usize][x as usize], shade[y as usize][x as usize]);
+            let mut v = BASE_LEVEL + 6 + sh;
+            // A dark seam where two clumps meet.
+            if d <= 2 {
+                v -= 34;
             }
-            if rng.below(9) == 0 {
-                v += 30;
+            // Sparse light leaf dots on the lit side.
+            if sh > 6 && rng.below(5) == 0 {
+                v += 18;
+            }
+            if edge {
+                v = TREE_OUTLINE + if sh > 4 { 14 } else { 0 };
             }
             sheet.put(cell, x, y, v, 255);
         }
@@ -257,11 +316,12 @@ fn tree(sheet: &mut Sheet, cell: usize, seed: u64) {
 }
 
 fn tree_shadow(sheet: &mut Sheet, cell: usize) {
+    // An ellipse under the canopy, pushed to the south east (the light comes from the north west).
     for y in 0..TILE as i32 {
         for x in 0..TILE as i32 {
-            let (dx, dy) = (2 * x - 18, 2 * y - 19);
-            if dx * dx + dy * dy <= 11 * 11 {
-                sheet.put(cell, x, y, 0, 90);
+            let (dx, dy) = (2 * x - 19, 2 * y - 21);
+            if dx * dx + dy * dy * 5 / 4 <= 11 * 11 {
+                sheet.put(cell, x, y, 0, 80);
             }
         }
     }
@@ -397,6 +457,67 @@ pub fn encode_png(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
     out
 }
 
+/// A contact sheet for people: the tile sheet at 4 x, then the colonist sprites at 5 x
+/// (shirt tinted red, west flipped) on a green ground. Not used by the game.
+pub fn preview(seed: u64) -> (usize, usize, Vec<u8>) {
+    let tiles = make_sheet(seed);
+    let actor = actors::make_sheet();
+    let (tz, az) = (4usize, 5usize);
+    let width = tiles.width * tz;
+    let height = tiles.height * tz + 16 * az + 8;
+    let mut rgba = vec![0u8; width * height * 4];
+    for px in rgba.chunks_mut(4) {
+        px.copy_from_slice(&[70, 120, 60, 255]);
+    }
+    for y in 0..tiles.height * tz {
+        for x in 0..width {
+            let i = ((y / tz) * tiles.width + x / tz) * 4;
+            let a = u32::from(tiles.rgba[i + 3]);
+            let o = (y * width + x) * 4;
+            for c in 0..3 {
+                let v = u32::from(tiles.rgba[i + c]);
+                rgba[o + c] = ((u32::from(rgba[o + c]) * (255 - a) + v * a) / 255) as u8;
+            }
+        }
+    }
+    let top = tiles.height * tz + 8;
+    // Nine sprites, then the flipped east sprites (the west facing).
+    for n in 0..actors::COUNT + 3 {
+        let (cell, flip) = if n < actors::COUNT {
+            (actors::SOUTH + n, false)
+        } else {
+            (actors::EAST + n - actors::COUNT, true)
+        };
+        for y in 0..TILE * az {
+            for x in 0..TILE * az {
+                let sx = if flip { TILE - 1 - x / az } else { x / az };
+                let i = ((y / az) * actor.width + cell * TILE + sx) * 4;
+                let p = &actor.rgba[i..i + 4];
+                if p[3] == 0 {
+                    continue;
+                }
+                let gray = p[0] == p[1] && p[1] == p[2] && p[3] == 255;
+                let a = u32::from(p[3]);
+                let o = ((top + y) * width + n * TILE * az + x) * 4;
+                if o + 4 > rgba.len() {
+                    continue;
+                }
+                let tint = [220u32, 70, 60];
+                for c in 0..3 {
+                    let v = if gray {
+                        tint[c] * u32::from(p[c]) / 224
+                    } else {
+                        u32::from(p[c])
+                    };
+                    rgba[o + c] =
+                        ((u32::from(rgba[o + c]) * (255 - a) + v.min(255) * a) / 255) as u8;
+                }
+            }
+        }
+    }
+    (width, height, rgba)
+}
+
 /// Run `assetgen [--seed <n>] [--out <dir>]`. Returns a message.
 pub fn run(args: &[String]) -> Result<String, String> {
     let mut seed = DEFAULT_SEED;
@@ -417,8 +538,19 @@ pub fn run(args: &[String]) -> Result<String, String> {
     let sheet = make_sheet(seed);
     let png = encode_png(sheet.width, sheet.height, &sheet.rgba);
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {dir}: {e}"))?;
+    let write = |name: &str, bytes: &[u8]| {
+        let path = std::path::Path::new(&dir).join(name);
+        std::fs::write(&path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))
+    };
+    write("tiles.png", &png)?;
+    let actor = actors::make_sheet();
+    write(
+        "actors.png",
+        &encode_png(actor.width, actor.height, &actor.rgba),
+    )?;
+    let (pw, ph, prgba) = preview(seed);
+    write("preview.png", &encode_png(pw, ph, &prgba))?;
     let path = std::path::Path::new(&dir).join("tiles.png");
-    std::fs::write(&path, &png).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     Ok(format!("{} ({} bytes)", path.display(), png.len()))
 }
 
@@ -464,6 +596,28 @@ mod tests {
     fn sheet_png_known_answer() {
         let sheet = make_sheet(DEFAULT_SEED);
         let png = encode_png(sheet.width, sheet.height, &sheet.rgba);
-        assert_eq!(base::hash::fnv1a(&png), 0xe51512f7cf6219c1);
+        assert_eq!(base::hash::fnv1a(&png), 0xc0e5a88bd8b736f9);
+    }
+
+    #[test]
+    fn shipped_actor_file_matches_generator() {
+        let sheet = actors::make_sheet();
+        let png = encode_png(sheet.width, sheet.height, &sheet.rgba);
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/sprites/actors.png"
+        );
+        assert_eq!(std::fs::read(path).ok(), Some(png));
+    }
+
+    #[test]
+    fn shipped_preview_matches_generator() {
+        let (w, h, rgba) = preview(DEFAULT_SEED);
+        let png = encode_png(w, h, &rgba);
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/sprites/preview.png"
+        );
+        assert_eq!(std::fs::read(path).ok(), Some(png));
     }
 }
