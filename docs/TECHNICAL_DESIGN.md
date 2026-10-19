@@ -267,6 +267,7 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 ## 10. Content data (D-014)
 
 - RON files in `assets/content/`: materials, rocks, deposits, items, buildings, recipes, crops, wild plants, creatures, site templates, legend templates, chronicle templates.
+- `worldgen` does no file I/O. It embeds `rocks.ron` and `deposits.ron` with `include_str!` and parses them once with `base::content` (`load_rocks`, `load_minerals`). The file order feeds the hashes and must match the `Rock`, `Setting`, and `Mineral` enums. `rocks.ron` has `rocks` and `settings` (each with a `pool`). `deposits.ron` has `minerals` (each with an `affinity` list).
 - All numbers in content are integers: tenths of °C, per-mille (‰), or whole units. The loader refuses float literals.
 - Load into `Raw*` structs with `serde`. Then validate and link into `Content`:
   - Convert string IDs to dense typed IDs, for example `MaterialId(u16)`.

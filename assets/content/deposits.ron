@@ -1,0 +1,13 @@
+// Minerals and their affinity (0 to 100) to host rocks. Integers only (D-014).
+// The order of the minerals is stable: it feeds world hashes.
+// A rock that a mineral does not list has affinity 0.
+(
+    minerals: [
+        (id: "coal",   affinity: [("sandstone", 30), ("shale", 60), ("limestone", 20)]),
+        (id: "iron",   affinity: [("sandstone", 20), ("shale", 10), ("limestone", 40), ("granite", 20), ("gneiss", 30), ("basalt", 20), ("tuff", 10)]),
+        (id: "copper", affinity: [("sandstone", 10), ("limestone", 20), ("granite", 30), ("gneiss", 30), ("marble", 10), ("basalt", 50), ("tuff", 30)]),
+        (id: "tin",    affinity: [("granite", 60), ("gneiss", 30)]),
+        (id: "gold",   affinity: [("granite", 30), ("gneiss", 20), ("marble", 30), ("basalt", 10), ("tuff", 20)]),
+        (id: "gems",   affinity: [("limestone", 5), ("granite", 10), ("gneiss", 20), ("marble", 50), ("basalt", 20), ("tuff", 40)]),
+    ],
+)

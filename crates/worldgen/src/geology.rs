@@ -1,9 +1,12 @@
 //! Step 10: geology. Provinces with a setting, 2 or 3 rock layers, and soil depth per cell.
 
 use crate::biome::WorldBiome;
+use crate::deposit::Mineral;
 use crate::world::{WORLD_SIZE, WorldParams, world_grid};
 use base::Grid;
+use base::content::{ContentError, ContentIssue, load_rocks};
 use base::rng::mix;
+use std::sync::OnceLock;
 
 /// Rock types. The order is stable: it feeds hashes and the affinity table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -71,22 +74,102 @@ pub enum Setting {
 }
 
 impl Setting {
+    /// All settings in index order.
+    pub const ALL: [Setting; 4] = [
+        Setting::Plain,
+        Setting::Mountain,
+        Setting::Volcanic,
+        Setting::Coast,
+    ];
     /// Short stable name.
     pub fn name(self) -> &'static str {
         const SETTING_NAMES: [&str; 4] = ["plain", "mountain", "volcanic", "coast"];
         SETTING_NAMES[self as usize]
     }
+}
 
-    /// The 4 rock types that can appear in a province of this setting.
-    fn pool(self) -> [Rock; 4] {
-        const POOLS: [[Rock; 4]; 4] = [
-            [Rock::Sandstone, Rock::Shale, Rock::Limestone, Rock::Granite],
-            [Rock::Granite, Rock::Gneiss, Rock::Marble, Rock::Limestone],
-            [Rock::Basalt, Rock::Tuff, Rock::Granite, Rock::Gneiss],
-            [Rock::Limestone, Rock::Sandstone, Rock::Shale, Rock::Marble],
-        ];
-        POOLS[self as usize]
+const ROCKS_RON: &str = include_str!("../../../assets/content/rocks.ron");
+const DEPOSITS_RON: &str = include_str!("../../../assets/content/deposits.ron");
+
+/// Game tables from rocks.ron and deposits.ron. Parsed once, then read only.
+#[derive(Debug)]
+pub struct Tables {
+    pools: [[Rock; 4]; 4],
+    affinity: [[u8; Mineral::COUNT]; Rock::COUNT],
+}
+
+static TABLES: OnceLock<Result<Tables, ContentError>> = OnceLock::new();
+
+impl Tables {
+    /// The 4 rock types that can appear in a province of a setting.
+    pub fn pool(&self, setting: Setting) -> [Rock; 4] {
+        self.pools
+            .get(setting as usize)
+            .copied()
+            .unwrap_or([Rock::Sandstone; 4])
     }
+
+    /// Affinity of a mineral to a host rock, 0 to 100.
+    pub fn affinity(&self, rock: Rock, mineral: Mineral) -> u8 {
+        let row = self.affinity.get(rock as usize);
+        row.and_then(|r| r.get(mineral as usize))
+            .copied()
+            .unwrap_or(0)
+    }
+}
+
+fn issue(entry: &str, message: String) -> ContentIssue {
+    ContentIssue {
+        entry: Some(entry.to_string()),
+        message,
+    }
+}
+
+fn build_tables() -> Result<Tables, ContentError> {
+    let table = load_rocks("rocks.ron", ROCKS_RON)?;
+    let mut issues = Vec::new();
+    let names = Rock::ALL.iter().map(|r| r.name());
+    if !table.rocks.iter().map(String::as_str).eq(names) {
+        issues.push(issue(
+            "rocks",
+            "must match the Rock type, in order".to_string(),
+        ));
+    }
+    let names = Setting::ALL.iter().map(|s| s.name());
+    if !table.settings.iter().map(|s| s.key.as_str()).eq(names) {
+        issues.push(issue(
+            "settings",
+            "must match the Setting type, in order".to_string(),
+        ));
+    }
+    let mut pools = [[Rock::Sandstone; 4]; 4];
+    for (def, out) in table.settings.iter().zip(pools.iter_mut()) {
+        let found = def.pool.iter().filter_map(|&i| Rock::ALL.get(i));
+        let rocks: Vec<Rock> = found.copied().collect();
+        let pool: Result<[Rock; 4], _> = rocks.try_into();
+        if let Ok(pool) = pool {
+            *out = pool;
+        } else {
+            issues.push(issue(&def.key, "pool must hold 4 rocks".to_string()));
+        }
+    }
+    if !issues.is_empty() {
+        let file = "rocks.ron".to_string();
+        return Err(ContentError { file, issues });
+    }
+    let affinity = crate::deposit::load_affinity(&table, DEPOSITS_RON)?;
+    Ok(Tables { pools, affinity })
+}
+
+/// The game tables. Parsed from the embedded files on the first call.
+/// A bad embedded file gives an error. World generation start must check this.
+pub fn tables() -> Result<&'static Tables, &'static ContentError> {
+    TABLES.get_or_init(build_tables).as_ref()
+}
+
+/// Check the embedded rock and mineral tables. Call it at world generation start.
+pub fn check_tables() -> Result<(), ContentError> {
+    tables().map(|_| ()).map_err(Clone::clone)
 }
 
 /// Output of step 10.
@@ -199,6 +282,9 @@ fn pick_setting(land: u32, volc: u32, mount: u32, coast: u32, params: &WorldPara
 
 /// Make the geology: provinces, settings, rock layers, and soil.
 pub fn make_geology(seed: u64, inp: &GeoInputs, params: &WorldParams) -> Geology {
+    let Ok(tables) = tables() else {
+        return fallback_geology(seed, inp, params);
+    };
     let province = make_provinces(seed, params);
     let n = (lattice(params) * lattice(params)) as usize;
     let mut land = vec![0u32; n];
@@ -235,7 +321,7 @@ pub fn make_geology(seed: u64, inp: &GeoInputs, params: &WorldParams) -> Geology
             2u8
         };
         // Draw distinct rocks from the pool of the setting.
-        let mut pool = setting.pool().to_vec();
+        let mut pool = tables.pool(setting).to_vec();
         let mut chosen = [Rock::Sandstone; 3];
         for (k, slot) in chosen.iter_mut().enumerate().take(usize::from(count)) {
             let pick = roll(seed, 0x20_0000 + id as u64, k as u64) as usize % pool.len();
@@ -256,6 +342,19 @@ pub fn make_geology(seed: u64, inp: &GeoInputs, params: &WorldParams) -> Geology
         layer_count,
         layers,
         soil,
+    }
+}
+
+/// Geology for the case that the embedded tables are bad: 1 plain province. Unreachable when
+/// the check at world generation start passes. It keeps the stages free of panics.
+fn fallback_geology(seed: u64, inp: &GeoInputs, params: &WorldParams) -> Geology {
+    let size = WORLD_SIZE as usize;
+    Geology {
+        province: world_grid(vec![0u16; size * size], 0u16),
+        settings: vec![Setting::Plain],
+        layer_count: vec![2],
+        layers: vec![[Rock::Sandstone, Rock::Shale, Rock::Shale]],
+        soil: make_soil(seed, inp, params),
     }
 }
 
