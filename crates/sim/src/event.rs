@@ -24,4 +24,13 @@ pub enum Event {
         /// Tile row.
         y: u16,
     },
+    /// A workshop finished one run of a recipe.
+    Crafted {
+        /// Recipe index.
+        recipe: u16,
+        /// Workshop tile column.
+        x: u16,
+        /// Workshop tile row.
+        y: u16,
+    },
 }

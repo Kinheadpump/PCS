@@ -1,25 +1,30 @@
 //! The game: window, rendering, input, and interface.
 
 mod actors;
+mod bake;
 mod camera;
+mod cells;
 mod clock;
 mod font;
 mod hud;
+mod icons;
 mod input;
 mod inspector;
 mod overlay;
+mod palette;
 mod render;
 mod sprites;
 mod tools;
 mod ui;
 
+use bake::Palette;
 use camera::{Camera, View};
 use clock::Clock;
 use input::{Action, InputState};
 use macroquad::prelude::{Conf, get_frame_time, get_screen_data, mouse_position, next_frame};
-use render::{MapView, Palette};
+use render::MapView;
 use sim::{ColonistId, Command, Event, JobEvent, JobKind, Sim};
-use sprites::Sheet;
+use sprites::Sprites;
 use std::collections::BTreeSet;
 use tools::{Area, Tool};
 use ui::{Ui, UiAction};
@@ -58,7 +63,7 @@ struct Loaded {
 
 struct App {
     palette: Palette,
-    sheet: Sheet,
+    sprites: Sprites,
     grid: bool,
     loaded: Loaded,
     preset: usize,
@@ -86,18 +91,20 @@ struct App {
     dirty: BTreeSet<(u32, u32)>,
     /// A drag preview from `PCS_PREVIEW`, for screenshots.
     preview_override: Option<(Tool, Area)>,
+    /// True if `PCS_HUD=0` is set: the screenshot shows the map only.
+    hide_hud: bool,
 }
 
 impl App {
-    fn load_preset(palette: &Palette, sheet: &Sheet, preset: usize) -> Loaded {
+    fn load_preset(palette: &Palette, sprites: &Sprites, preset: usize) -> Loaded {
         let embark = PRESETS[preset % PRESETS.len()].1().with_seed(SEED);
         let map = generate_local(&embark);
-        let view = MapView::new(&map, palette, sheet);
+        let view = MapView::new(&map, palette, sprites);
         Loaded { map, view }
     }
 
-    fn new(palette: Palette, sheet: Sheet, content_hash: u64) -> Self {
-        let loaded = Self::load_preset(&palette, &sheet, 0);
+    fn new(palette: Palette, sprites: Sprites, content_hash: u64) -> Self {
+        let loaded = Self::load_preset(&palette, &sprites, 0);
         let size = (loaded.map.ground.width(), loaded.map.ground.height());
         let sim = Sim::new(&loaded.map, SEED, content_hash);
         Self {
@@ -114,8 +121,9 @@ impl App {
             panels: Vec::new(),
             dirty: BTreeSet::new(),
             preview_override: None,
+            hide_hud: std::env::var("PCS_HUD").is_ok_and(|v| v == "0"),
             palette,
-            sheet,
+            sprites,
             grid: false,
             loaded,
             preset: 0,
@@ -224,7 +232,7 @@ impl App {
                 }
                 Action::Preset(n) if n < PRESETS.len() && n != self.preset => {
                     self.preset = n;
-                    self.loaded = Self::load_preset(&self.palette, &self.sheet, n);
+                    self.loaded = Self::load_preset(&self.palette, &self.sprites, n);
                     self.sim = Sim::new(&self.loaded.map, SEED, self.content_hash);
                     self.selected = None;
                     self.selected_tile = None;
@@ -272,6 +280,7 @@ impl App {
                 Event::ColonistArrived { colonist, x, y } => {
                     format!("Colonist {} arrived at ({x}, {y})", colonist.index())
                 }
+                Event::Crafted { x, y, .. } => format!("Crafted at ({x}, {y})"),
             };
         }
         for event in self.sim.drain_job_events() {
@@ -307,7 +316,7 @@ impl App {
         baked.tree.set(ix, iy, live.tree(ix, iy));
         let size = self.map_size();
         self.dirty
-            .extend(render::chunks_touched_by(u32::from(x), u32::from(y), size));
+            .extend(bake::chunks_touched_by(u32::from(x), u32::from(y), size));
     }
 
     /// Bake the changed chunks again.
@@ -318,7 +327,7 @@ impl App {
         let dirty = std::mem::take(&mut self.dirty);
         self.loaded
             .view
-            .rebake_chunks(&self.loaded.map, &self.palette, &self.sheet, &dirty);
+            .rebake_chunks(&self.loaded.map, &self.palette, &self.sprites, &dirty);
     }
 
     /// The tile under a screen position, or `None` outside the map.
@@ -458,7 +467,12 @@ impl App {
             map_name: PRESETS[self.preset].0,
             last_event: &self.last_event,
         };
-        let ui_actions = hud::draw(&mut ui, &input);
+        // Developer aid: PCS_HUD=0 hides the panels, for clean screenshots of the map.
+        let ui_actions = if self.hide_hud {
+            Vec::new()
+        } else {
+            hud::draw(&mut ui, &input)
+        };
         for action in ui_actions {
             match action {
                 UiAction::SetSpeed(speed) => self.clock.set_speed(speed),
@@ -481,7 +495,8 @@ fn draw_error(message: &str) {
     render::clear();
     let mut lines = vec!["Cannot start: content error".to_owned()];
     lines.extend(message.lines().map(str::to_owned));
-    render::draw_overlay(&lines);
+    let mut ui = Ui::new(mouse_position(), None);
+    render::draw_overlay(&mut ui, &lines);
 }
 
 #[macroquad::main(window_conf)]
@@ -490,9 +505,9 @@ async fn main() {
     let setup = base::content::load_materials("materials.ron", text)
         .map_err(|e| e.to_string())
         .and_then(|materials| Palette::from_materials(&materials))
-        .and_then(|palette| Sheet::shipped().map(|sheet| (palette, sheet)));
+        .and_then(|palette| Sprites::shipped().map(|sprites| (palette, sprites)));
     let content_hash = base::hash::fnv1a(text.as_bytes());
-    let mut state = setup.map(|(palette, sheet)| App::new(palette, sheet, content_hash));
+    let mut state = setup.map(|(palette, sprites)| App::new(palette, sprites, content_hash));
     // Developer aid: PCS_SHOT=<file.png> saves one screenshot and quits.
     // PCS_PRESET=<0-2> and PCS_ZOOM=<n> choose the view. PCS_SELECT=<colonist slot>,
     // PCS_MOVE=<x>,<y> (move order for the selected colonist), and PCS_TICKS=<n> (run n

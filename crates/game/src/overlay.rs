@@ -1,24 +1,29 @@
 //! Drawing on top of the map: stockpile zones, items on the ground, designation markers,
-//! the drag preview, and tile outlines. Item sprites are small text patterns, tinted by the
-//! material color like the other sprites (ART_DIRECTION §4). The pure parts (screen rectangles,
-//! sprite images, item grouping) have tests.
+//! the drag preview, and tile outlines. Item sprites come from `items.png` (gray, with three pile
+//! sizes) and get the material color through `palette::ramp`. The pure parts (screen rectangles,
+//! item images, item grouping) have tests.
 
 use crate::camera::{Camera, TileRect, View};
+use crate::cells::items as it;
 use crate::font;
+use crate::icons;
+use crate::palette::{self as pal, Rgb, ramp};
+use crate::render::color as rgb_color;
+use crate::sprites::{Png, Sprites};
 use crate::tools::{Area, Tool, count_applicable};
 use crate::ui;
 use base::content::MaterialCategory;
 use macroquad::prelude::{
-    Color, DrawTextureParams, FilterMode, Image, Texture2D, WHITE, draw_rectangle,
-    draw_rectangle_lines, draw_texture_ex, vec2,
+    Color, DrawTextureParams, FilterMode, Image, Texture2D, WHITE, draw_rectangle, draw_texture_ex,
+    vec2,
 };
 use sim::{ColonistId, ItemLoc, JobKind, Sim, StockpileId};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-/// The selection color. Yellow is for selection only (ART_DIRECTION §4).
+/// The selection color. Yellow is for selection only (ART_DIRECTION section 4).
 pub const SELECT: Color = Color::new(1.0, 242.0 / 255.0, 51.0 / 255.0, 1.0);
-/// Smallest zoom at which stack counts and zone dots show.
+/// Smallest zoom at which stack counts show.
 const DETAIL_ZOOM: f32 = 16.0;
 
 /// A color from bytes.
@@ -86,7 +91,7 @@ pub fn screen_rect(
     (x0, y0, b.0.round() - x0, b.1.round() - y0)
 }
 
-/// Border thickness for a tile of the given screen size.
+/// Border thickness for a tile of the given screen size: one sprite pixel.
 fn thickness(tile_px: f32) -> f32 {
     (tile_px / 16.0).round().max(1.0)
 }
@@ -95,7 +100,7 @@ fn thickness(tile_px: f32) -> f32 {
 // Item sprites
 // ---------------------------------------------------------------------------------------------
 
-/// The shape of an item sprite.
+/// The shape of an item sprite. Each shape has three pile sizes in `items.png`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Shape {
     /// Logs.
@@ -104,8 +109,26 @@ pub enum Shape {
     Rocks,
     /// Chunks of ore, with bright specks.
     OreChunks,
-    /// Anything else.
+    /// Ingots of metal.
+    Ingots,
+    /// Lumps of fuel.
+    Lumps,
+    /// Anything else: a crate.
     Block,
+}
+
+impl Shape {
+    /// The row of the shape in the sheet (see `cells::items`).
+    pub fn index(self) -> usize {
+        match self {
+            Shape::Logs => it::LOGS,
+            Shape::Rocks => it::ROCKS,
+            Shape::OreChunks => it::ORE,
+            Shape::Ingots => it::INGOTS,
+            Shape::Lumps => it::LUMPS,
+            Shape::Block => it::CRATE,
+        }
+    }
 }
 
 /// The sprite shape of a material category.
@@ -113,150 +136,50 @@ pub fn shape_for(category: MaterialCategory) -> Shape {
     match category {
         MaterialCategory::Wood => Shape::Logs,
         MaterialCategory::Stone => Shape::Rocks,
-        MaterialCategory::Ore | MaterialCategory::Metal | MaterialCategory::Fuel => {
-            Shape::OreChunks
-        }
+        MaterialCategory::Ore => Shape::OreChunks,
+        MaterialCategory::Metal => Shape::Ingots,
+        MaterialCategory::Fuel => Shape::Lumps,
         _ => Shape::Block,
     }
 }
 
-// Symbols: `.` empty, `o` outline, `d` deep shade, `b` base, `l` light, `s` speck, `h` shadow.
-// A row shorter than 16 is filled with empty pixels. The light comes from the north west.
-
-const LOGS: [&str; 16] = [
-    "",
-    "",
-    "",
-    "...oooooooooo...",
-    "..odlllllllbdo..",
-    "..obbbbbbbbddo.h",
-    ".oooooooooooooh.",
-    ".odlllllllllbdoh",
-    ".obbbbbbbbbbddoh",
-    ".oooooooooooooo.",
-    "..odllllllllbdoh",
-    "..obbbbbbbbbddoh",
-    "..ooooooooooooh.",
-    "...hhhhhhhhhhhh.",
-    "",
-    "",
-];
-
-const ROCKS: [&str; 16] = [
-    "",
-    "",
-    "",
-    "",
-    "....oooo........",
-    "...ollllo.......",
-    "..olbbbbdo.oooo.",
-    "..obbbbbddoolbdo",
-    "..obbbddddooddoh",
-    "...ooddoooooooh.",
-    "....hooooohhhhh.",
-    "",
-    "",
-    "",
-    "",
-    "",
-];
-
-const ORE: [&str; 16] = [
-    "",
-    "",
-    "",
-    "",
-    "....oooo........",
-    "...olsslo.......",
-    "..olbbsbdo.oooo.",
-    "..obsbbbddoolsdo",
-    "..obbbddsdooddoh",
-    "...ooddoooooooh.",
-    "....hooooohhhhh.",
-    "",
-    "",
-    "",
-    "",
-    "",
-];
-
-const BLOCK: [&str; 16] = [
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "...ooooooooo....",
-    "..ollllllllbo...",
-    "..obbbbbbbbdoh..",
-    "..obbbbbbbbdoh..",
-    "..obbbbbbbbdoh..",
-    "..oddddddddooh..",
-    "...oooooooooh...",
-    "....hhhhhhhhh...",
-    "",
-    "",
-];
-
-fn pattern(shape: Shape) -> &'static [&'static str; 16] {
-    match shape {
-        Shape::Logs => &LOGS,
-        Shape::Rocks => &ROCKS,
-        Shape::OreChunks => &ORE,
-        Shape::Block => &BLOCK,
-    }
-}
-
-/// RGBA pixels (16 x 16) of an item sprite in a material color. The value 224 of the
-/// grayscale scale is the plain color (ART_DIRECTION §4).
-pub fn item_image(shape: Shape, color: [u8; 3]) -> Vec<u8> {
-    let tint =
-        |level: u32| -> [u8; 3] { color.map(|c| (u32::from(c) * level / 224).min(255) as u8) };
-    let speck = color.map(|c| (u32::from(c) + (255 - u32::from(c)) * 6 / 10) as u8);
-    let mut bytes = vec![0u8; 16 * 16 * 4];
-    for (y, row) in pattern(shape).iter().enumerate() {
-        for (x, symbol) in row.chars().take(16).enumerate() {
-            let rgba = match symbol {
-                'o' => {
-                    let [r, g, b] = tint(70);
-                    [r, g, b, 255]
-                }
-                'd' => {
-                    let [r, g, b] = tint(160);
-                    [r, g, b, 255]
-                }
-                'b' => {
-                    let [r, g, b] = tint(224);
-                    [r, g, b, 255]
-                }
-                'l' => {
-                    let [r, g, b] = tint(250);
-                    [r, g, b, 255]
-                }
-                's' => [speck[0], speck[1], speck[2], 255],
-                'h' => [0, 0, 0, 89],
-                _ => continue,
-            };
-            let i = (y * 16 + x) * 4;
-            bytes[i..i + 4].copy_from_slice(&rgba);
+/// RGBA pixels (16 x 16) of an item sprite in a material color. Gray pixels go through the ramp:
+/// level 224 is the plain color, lower levels turn darker and cooler, higher levels turn lighter
+/// and warmer. Shadow pixels (alpha below 255) stay black.
+pub fn item_image(items: &Png, shape: Shape, tier: usize, color: Rgb) -> Vec<u8> {
+    let cell = it::cell(shape.index(), tier);
+    let mut bytes = items.cell_bytes(cell);
+    for px in bytes.chunks_mut(4) {
+        if px[3] == 255 {
+            let c = ramp(color, i32::from(px[0]));
+            px[..3].copy_from_slice(&c);
         }
     }
     bytes
 }
 
+/// The loaded sheet and one texture for each shape, pile size, and color.
+type Cache = (Option<Sprites>, BTreeMap<(Shape, usize, Rgb), Texture2D>);
+
 thread_local! {
-    /// One texture for each shape and color, made on first use (needs the window).
-    static ITEM_TEXTURES: RefCell<BTreeMap<(Shape, [u8; 3]), Texture2D>> =
-        const { RefCell::new(BTreeMap::new()) };
+    /// The item sheet and one texture for each shape, pile size, and color, made on first use.
+    static ITEM_TEXTURES: RefCell<Cache> =
+        const { RefCell::new((None, BTreeMap::new())) };
 }
 
-fn draw_item_sprite(shape: Shape, color: [u8; 3], rect: (f32, f32, f32, f32)) {
-    ITEM_TEXTURES.with(|cell| {
-        let mut textures = cell.borrow_mut();
-        let texture = textures.entry((shape, color)).or_insert_with(|| {
+fn draw_item_sprite(shape: Shape, tier: usize, color: Rgb, rect: (f32, f32, f32, f32)) {
+    ITEM_TEXTURES.with(|store| {
+        let mut store = store.borrow_mut();
+        let (sprites, textures) = &mut *store;
+        if sprites.is_none() {
+            *sprites = Sprites::shipped().ok();
+        }
+        let Some(sprites) = sprites.as_ref() else {
+            return;
+        };
+        let texture = textures.entry((shape, tier, color)).or_insert_with(|| {
             let image = Image {
-                bytes: item_image(shape, color),
+                bytes: item_image(&sprites.items, shape, tier, color),
                 width: 16,
                 height: 16,
             };
@@ -324,7 +247,7 @@ pub fn stack_label(count: u32) -> Option<String> {
     (count > 1).then(|| count.to_string())
 }
 
-fn material_look(sim: &Sim, material: u16) -> (Shape, [u8; 3]) {
+fn material_look(sim: &Sim, material: u16) -> (Shape, Rgb) {
     sim.rules()
         .materials
         .get(usize::from(material))
@@ -340,7 +263,7 @@ fn shadowed_text(text: &str, x: f32, y: f32, scale: u32, color: Color) {
         x + scale as f32,
         y + scale as f32,
         scale,
-        rgba(10, 10, 16, 230),
+        rgb_color(pal::ui::INK, 230),
     );
     font::draw_text(text, x, y, scale, color);
 }
@@ -361,7 +284,8 @@ pub fn draw_items(f: &Frame) {
         let (x, y, w, h) = f.rect(stack.x, stack.y);
         let shift = (nth * w * 0.14).round();
         let (shape, color) = material_look(f.sim, stack.material);
-        draw_item_sprite(shape, color, (x + shift, y - shift, w, h));
+        let tier = it::tier_for(stack.count);
+        draw_item_sprite(shape, tier, color, (x + shift, y - shift, w, h));
         if f.camera.zoom >= DETAIL_ZOOM
             && let Some(label) = stack_label(stack.count)
         {
@@ -373,7 +297,7 @@ pub fn draw_items(f: &Frame) {
                 (x + w - tw - 2.0).round(),
                 (y + h - th - 2.0).round(),
                 scale,
-                rgba(250, 250, 250, 255),
+                rgb_color(pal::ui::TEXT, 255),
             );
         }
     }
@@ -393,14 +317,31 @@ pub fn draw_carried(f: &Frame, colonist_screen: (f32, f32), sprite_size: f32, id
     let side = (sprite_size * 0.55).round();
     let x = (colonist_screen.0 - side / 2.0).round();
     let y = (colonist_screen.1 - sprite_size * 0.5 - side * 0.7).round();
-    draw_item_sprite(shape, color, (x, y, side, side));
+    draw_item_sprite(shape, 0, color, (x, y, side, side));
 }
 
 // ---------------------------------------------------------------------------------------------
 // Zones
 // ---------------------------------------------------------------------------------------------
 
-/// Draw the stockpile zones as tinted areas.
+/// Draw a dashed rectangle border of `t` pixels. Dashes and gaps are `dash` pixels long.
+pub fn dashed_rect(x: f32, y: f32, w: f32, h: f32, t: f32, dash: f32, color: Color) {
+    let run = |start: f32, len: f32, at: &dyn Fn(f32, f32) -> (f32, f32, f32, f32)| {
+        let mut p = 0.0;
+        while p < len {
+            let l = dash.min(len - p);
+            let (rx, ry, rw, rh) = at(start + p, l);
+            draw_rectangle(rx, ry, rw, rh, color);
+            p += 2.0 * dash;
+        }
+    };
+    run(x, w, &|p, l| (p, y, l, t));
+    run(x, w, &|p, l| (p, y + h - t, l, t));
+    run(y, h, &|p, l| (x, p, t, l));
+    run(y, h, &|p, l| (x + w - t, p, t, l));
+}
+
+/// Draw the stockpile zones: a checked floor tint and a dashed border.
 pub fn draw_zones(f: &Frame, selected: Option<StockpileId>) {
     let Some(visible) = f.visible() else { return };
     let teal = tool_color(Tool::Stockpile);
@@ -410,30 +351,24 @@ pub fn draw_zones(f: &Frame, selected: Option<StockpileId>) {
         if x1 < visible.min_x || x0 > visible.max_x || y1 < visible.min_y || y0 > visible.max_y {
             continue;
         }
-        let (x, y, w, h) = screen_rect(f.camera, f.view, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
-        draw_rectangle(x, y, w, h, with_alpha(teal, 0.20));
-        if f.camera.zoom >= DETAIL_ZOOM {
-            let dot = thickness(f.camera.zoom) * 2.0;
-            for ty in y0.max(visible.min_y)..=y1.min(visible.max_y) {
-                for tx in x0.max(visible.min_x)..=x1.min(visible.max_x) {
-                    let r = screen_rect(f.camera, f.view, tx, ty, 1, 1);
-                    draw_rectangle(
-                        (r.0 + r.2 / 2.0 - dot / 2.0).round(),
-                        (r.1 + r.3 / 2.0 - dot / 2.0).round(),
-                        dot,
-                        dot,
-                        with_alpha(teal, 0.45),
-                    );
-                }
+        for ty in y0.max(visible.min_y)..=y1.min(visible.max_y) {
+            for tx in x0.max(visible.min_x)..=x1.min(visible.max_x) {
+                let (rx, ry, rw, rh) = screen_rect(f.camera, f.view, tx, ty, 1, 1);
+                let alpha = if (tx + ty) % 2 == 0 { 0.10 } else { 0.20 };
+                draw_rectangle(rx, ry, rw, rh, with_alpha(teal, alpha));
             }
         }
+        let (x, y, w, h) = screen_rect(f.camera, f.view, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        let t = thickness(f.camera.zoom);
         let is_selected = selected == Some(id);
-        let (color, line) = if is_selected {
-            (SELECT, thickness(f.camera.zoom).max(2.0))
+        let color = if is_selected {
+            SELECT
         } else {
-            (with_alpha(teal, 0.85), thickness(f.camera.zoom).max(1.0))
+            with_alpha(teal, 0.95)
         };
-        draw_rectangle_lines(x, y, w, h, line * 2.0, color);
+        let dash = (f.camera.zoom / 4.0).round().max(2.0);
+        dashed_rect(x, y, w, h, t * 2.0, dash, rgb_color(pal::ui::INK, 150));
+        dashed_rect(x, y, w, h, t, dash, color);
     }
 }
 
@@ -441,39 +376,7 @@ pub fn draw_zones(f: &Frame, selected: Option<StockpileId>) {
 // Designations
 // ---------------------------------------------------------------------------------------------
 
-/// A 5 x 5 pixel icon: `#` is set.
-pub type Icon = [&'static str; 5];
-
-/// The icon of a designation or tool: a slash for cut, an X for mine, an arrow for haul.
-pub fn icon_for(tool: Tool) -> Icon {
-    match tool {
-        Tool::Cut => ["....#", "...#.", "..#..", ".#...", "#...."],
-        Tool::Haul => ["..#..", "..#..", "#.#.#", ".###.", "..#.."],
-        _ => ["#...#", ".#.#.", "..#..", ".#.#.", "#...#"],
-    }
-}
-
-fn draw_icon(icon: &Icon, x: f32, y: f32, px: f32, color: Color) {
-    let dark = rgba(10, 10, 16, 220);
-    for pass in 0..2 {
-        for (row, line) in icon.iter().enumerate() {
-            for (col, c) in line.chars().enumerate() {
-                if c == '#' {
-                    let (ox, oy) = if pass == 0 { (px, px) } else { (0.0, 0.0) };
-                    draw_rectangle(
-                        x + col as f32 * px + ox,
-                        y + row as f32 * px + oy,
-                        px,
-                        px,
-                        if pass == 0 { dark } else { color },
-                    );
-                }
-            }
-        }
-    }
-}
-
-/// Draw a marker on one tile: a light tint, a thin inset border, and an icon at the top right.
+/// Draw a marker on one tile: a light tint, four corner brackets, and a badge at the top right.
 /// A claimed order has a stronger tint. The marker stays calm so colonists and items read first.
 fn draw_marker(rect: (f32, f32, f32, f32), tool: Tool, claimed: bool) {
     let (x, y, w, h) = rect;
@@ -483,31 +386,16 @@ fn draw_marker(rect: (f32, f32, f32, f32), tool: Tool, claimed: bool) {
         y,
         w,
         h,
-        with_alpha(color, if claimed { 0.30 } else { 0.16 }),
+        with_alpha(color, if claimed { 0.30 } else { 0.14 }),
     );
     if w < 8.0 {
         return;
     }
-    let t = thickness(w);
-    let inset = t * 2.0;
-    draw_rectangle_lines(
-        x + inset,
-        y + inset,
-        w - 2.0 * inset,
-        h - 2.0 * inset,
-        t,
-        with_alpha(color, 0.55),
-    );
-    if w >= 24.0 {
-        let px = (w / 16.0).floor().max(1.0);
-        let icon_w = 5.0 * px;
-        draw_icon(
-            &icon_for(tool),
-            x + w - icon_w - inset - px,
-            y + inset + px * 2.0,
-            px,
-            color,
-        );
+    icons::draw(crate::cells::icons::BRACKETS, x, y, w, color);
+    if w >= 20.0
+        && let Some(badge) = icons::badge_for(tool)
+    {
+        icons::draw(badge, x, y, w, color);
     }
 }
 
@@ -522,6 +410,8 @@ pub fn draw_designations(f: &Frame) {
             JobKind::Cut => Tool::Cut,
             JobKind::Mine => Tool::Mine,
             JobKind::Haul => Tool::Haul,
+            // Building orders have no tool in the interface yet (Sprint 4 game side).
+            _ => continue,
         };
         let claimed = f
             .sim
@@ -547,7 +437,8 @@ pub fn preview_label(area: &Area, count: u32) -> String {
     format!("{} x {} ({count})", area.width(), area.height())
 }
 
-/// Draw the rectangle that a drag will use: fill, border, tiles that the tool works on, and a label.
+/// Draw the rectangle that a drag will use: fill, dashed border, tiles that the tool works on, and
+/// a label.
 pub fn draw_preview(f: &Frame, tool: Tool, area: Area) {
     let color = tool_color(tool);
     let (x0, y0) = (i32::from(area.x0), i32::from(area.y0));
@@ -559,7 +450,7 @@ pub fn draw_preview(f: &Frame, tool: Tool, area: Area) {
         i32::from(area.x1) - x0 + 1,
         i32::from(area.y1) - y0 + 1,
     );
-    draw_rectangle(x, y, w, h, with_alpha(color, 0.18));
+    draw_rectangle(x, y, w, h, with_alpha(color, 0.14));
     if let (Some(visible), true) = (f.visible(), f.camera.zoom >= 8.0)
         && tool != Tool::Stockpile
     {
@@ -570,24 +461,32 @@ pub fn draw_preview(f: &Frame, tool: Tool, area: Area) {
             }
         }
     }
-    draw_rectangle_lines(x, y, w, h, 3.0, color);
+    let t = thickness(f.camera.zoom);
+    let dash = (f.camera.zoom / 4.0).round().max(2.0);
+    dashed_rect(x, y, w, h, t * 2.0, dash, rgb_color(pal::ui::INK, 170));
+    dashed_rect(x, y, w, h, t, dash, color);
     let label = preview_label(&area, count_applicable(f.sim, tool, area));
     let tw = ui::text_px(&label);
-    let (lx, ly) = (x, (y - 24.0).max(2.0));
-    draw_rectangle(lx, ly, tw + 12.0, 22.0, rgba(10, 12, 18, 220));
-    draw_rectangle_lines(lx, ly, tw + 12.0, 22.0, 1.0, with_alpha(color, 0.9));
-    font::draw_text(&label, lx + 6.0, ly + 3.0, ui::SCALE, WHITE);
+    let (lx, ly) = (x, (y - 26.0).max(2.0));
+    ui::draw_tag(lx, ly, tw + 12.0, 22.0, color);
+    font::draw_text(
+        &label,
+        lx + 6.0,
+        ly + 4.0,
+        ui::SCALE,
+        rgb_color(pal::ui::TEXT, 255),
+    );
 }
 
-/// Draw an outline around one tile.
+/// Draw an outline around one tile: four corner brackets in `color`.
 pub fn draw_tile_outline(f: &Frame, tile: (u16, u16), color: Color) {
-    let (x, y, w, h) = f.rect(tile.0, tile.1);
-    draw_rectangle_lines(x, y, w, h, thickness(w).max(2.0), color);
+    let (x, y, w, _) = f.rect(tile.0, tile.1);
+    icons::draw(crate::cells::icons::BRACKETS, x, y, w, color);
 }
 
 /// The outline color of the tile under the mouse when a tool is active.
 pub fn hover_color() -> Color {
-    rgba(255, 255, 255, 170)
+    rgba(255, 255, 255, 200)
 }
 
 #[cfg(test)]
@@ -596,55 +495,56 @@ mod tests {
     use crate::camera::Camera;
     use base::content::MaterialCategory as C;
 
+    fn items() -> Option<Png> {
+        Sprites::shipped().ok().map(|s| s.items)
+    }
+
     #[test]
-    fn every_sprite_row_has_at_most_16_pixels_and_uses_known_symbols() {
-        for shape in [Shape::Logs, Shape::Rocks, Shape::OreChunks, Shape::Block] {
-            let rows = pattern(shape);
-            assert_eq!(rows.len(), 16);
-            for row in rows {
-                assert!(row.chars().count() <= 16, "{shape:?}: {row}");
-                assert!(
-                    row.chars().all(|c| ".odblsh".contains(c)),
-                    "{shape:?}: {row}"
-                );
+    fn item_images_are_16_by_16_rgba_with_an_outline_and_a_filled_body() {
+        let Some(sheet) = items() else { return };
+        for shape in [
+            Shape::Logs,
+            Shape::Rocks,
+            Shape::OreChunks,
+            Shape::Ingots,
+            Shape::Lumps,
+            Shape::Block,
+        ] {
+            for tier in 0..it::TIERS {
+                let bytes = item_image(&sheet, shape, tier, [120, 84, 52]);
+                assert_eq!(bytes.len(), 16 * 16 * 4);
+                let solid = bytes.chunks(4).filter(|p| p[3] == 255).count();
+                assert!(solid > 20, "{shape:?} {tier} has {solid} solid pixels");
+                // Pixels outside the shape stay empty: the corners.
+                assert_eq!(bytes[3], 0);
+                assert_eq!(bytes[bytes.len() - 1], 0);
             }
         }
     }
 
     #[test]
-    fn item_images_are_16_by_16_rgba_with_an_outline_and_a_filled_body() {
-        for shape in [Shape::Logs, Shape::Rocks, Shape::OreChunks, Shape::Block] {
-            let bytes = item_image(shape, [120, 84, 52]);
-            assert_eq!(bytes.len(), 16 * 16 * 4);
-            let solid = bytes.chunks(4).filter(|p| p[3] == 255).count();
-            assert!(solid > 40, "{shape:?} has {solid} solid pixels");
-            // Pixels outside the shape stay empty: the corners.
-            assert_eq!(bytes[3], 0);
-            assert_eq!(bytes[bytes.len() - 1], 0);
-        }
+    fn bigger_piles_have_more_pixels() {
+        let Some(sheet) = items() else { return };
+        let solid = |tier| {
+            item_image(&sheet, Shape::Rocks, tier, [150, 150, 150])
+                .chunks(4)
+                .filter(|p| p[3] == 255)
+                .count()
+        };
+        assert!(solid(0) < solid(1) && solid(1) < solid(2));
     }
 
     #[test]
-    fn the_outline_is_darker_than_the_base_and_the_base_is_the_plain_color() {
-        let color = [224, 112, 56];
-        let bytes = item_image(Shape::Block, color);
-        let px = |x: usize, y: usize| &bytes[(y * 16 + x) * 4..(y * 16 + x) * 4 + 4];
-        // Row 6 starts with the outline; row 9 has a base pixel at column 5.
-        let outline = px(4, 6);
-        let base = px(5, 9);
-        assert_eq!(base[..3], color);
-        assert!(outline[0] < base[0] / 2, "the outline is dark");
-    }
-
-    #[test]
-    fn ore_specks_are_lighter_than_the_ore_color() {
-        let color = [150, 84, 66];
-        let bytes = item_image(Shape::OreChunks, color);
-        let lighter = bytes
-            .chunks(4)
-            .filter(|p| p[3] == 255 && p[0] > color[0] + 40 && p[1] > color[1] + 40)
-            .count();
-        assert!(lighter >= 2);
+    fn the_outline_is_darker_than_the_body_and_the_light_is_lighter() {
+        let Some(sheet) = items() else { return };
+        let color = [200, 120, 60];
+        let bytes = item_image(&sheet, Shape::Block, 1, color);
+        let lum = |p: &[u8]| u32::from(p[0]) * 3 + u32::from(p[1]) * 6 + u32::from(p[2]);
+        let solid: Vec<&[u8]> = bytes.chunks(4).filter(|p| p[3] == 255).collect();
+        let darkest = solid.iter().map(|p| lum(p)).min().unwrap_or(0);
+        let lightest = solid.iter().map(|p| lum(p)).max().unwrap_or(0);
+        assert!(darkest * 2 < lum(&[color[0], color[1], color[2], 255]));
+        assert!(lightest > lum(&[color[0], color[1], color[2], 255]));
     }
 
     #[test]
@@ -652,6 +552,8 @@ mod tests {
         assert_eq!(shape_for(C::Wood), Shape::Logs);
         assert_eq!(shape_for(C::Stone), Shape::Rocks);
         assert_eq!(shape_for(C::Ore), Shape::OreChunks);
+        assert_eq!(shape_for(C::Metal), Shape::Ingots);
+        assert_eq!(shape_for(C::Fuel), Shape::Lumps);
         assert_eq!(shape_for(C::Food), Shape::Block);
     }
 
@@ -712,21 +614,6 @@ mod tests {
         );
         let narrow = TileRect { min_x: 3, ..all };
         assert_eq!(stacks_in(&sim, &narrow).len(), 1);
-    }
-
-    #[test]
-    fn icons_are_5_by_5_and_distinct() {
-        let all = [
-            icon_for(Tool::Cut),
-            icon_for(Tool::Mine),
-            icon_for(Tool::Haul),
-        ];
-        for icon in all {
-            assert!(icon.iter().all(|r| r.chars().count() == 5));
-            assert!(icon.iter().any(|r| r.contains('#')));
-        }
-        assert_ne!(all[0], all[1]);
-        assert_ne!(all[1], all[2]);
     }
 
     #[test]

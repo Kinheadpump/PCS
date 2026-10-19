@@ -1,0 +1,7 @@
+// Recipes. Integers only (D-014). Work time is in ticks at 100% work speed.
+// workshop: the building (buildings.ron id) that makes the recipe.
+// inputs and outputs: pairs of (material id, units).
+[
+    (id: "plank", name: "Make planks", workshop: "workshop", inputs: [("log", 1)], outputs: [("plank", 2)], work_ticks: 200),
+    (id: "firewood", name: "Make firewood", workshop: "workshop", inputs: [("log", 1)], outputs: [("firewood", 2)], work_ticks: 100),
+]

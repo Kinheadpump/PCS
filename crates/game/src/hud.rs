@@ -3,6 +3,8 @@
 //! the sim (AGENTS.md code rules).
 
 use crate::camera::View;
+use crate::cells;
+use crate::icons;
 use crate::inspector;
 use crate::tools::{self, Tool};
 use crate::ui::{self, Rect, Ui, UiAction};
@@ -13,11 +15,6 @@ use sim::{ColonistId, Command, ItemFilter, JobKind, Sim, Speed, StockpileId};
 const MARGIN: f32 = 8.0;
 /// Widest row of buttons in the filter panel, in pixels.
 const FILTER_WIDTH: f32 = 340.0;
-/// Title color.
-const ACCENT: Color = Color::new(0.62, 0.80, 1.0, 1.0);
-/// Hint color.
-const DIM: Color = Color::new(0.58, 0.64, 0.74, 1.0);
-
 /// Fill of a priority cell: off, then 1 (first) to 4.
 const PRIORITY_FILL: [Color; 5] = [
     Color::new(0.13, 0.14, 0.17, 1.0),
@@ -134,10 +131,10 @@ fn draw_work(ui: &mut Ui, origin: (f32, f32), h: &HudInput) -> Vec<UiAction> {
     let hint = "Click: next   Right click: back";
     let layout = ui::work_layout(origin, &names, hint);
     ui.panel(layout.panel);
-    ui.label_color(layout.title, "Work priorities", ACCENT);
-    ui.label_color(layout.hint, hint, DIM);
+    ui.label_color(layout.title, "Work priorities", ui::accent());
+    ui.label_color(layout.hint, hint, ui::dim());
     for (kind, pos) in JobKind::ALL.iter().zip(&layout.headers) {
-        ui.label(*pos, kind.name());
+        ui.label(*pos, &kind.name().chars().take(3).collect::<String>());
     }
     let mut actions = Vec::new();
     for (row_index, row) in rows.iter().enumerate() {
@@ -174,18 +171,18 @@ fn draw_toolbar(ui: &mut Ui, origin: (f32, f32), h: &HudInput) -> Vec<UiAction> 
     let mut labels: Vec<String> = Tool::ALL.iter().map(|t| tool_label(*t)).collect();
     labels.push(WORK_LABEL.to_owned());
     let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
-    let layout = ui::hud_layout(origin, &[], &refs, &[]);
+    let layout = ui::toolbar_layout(origin, &refs);
     ui.panel(layout.panel);
     let mut actions = Vec::new();
     for (i, rect) in layout.buttons.iter().enumerate() {
         match Tool::ALL.get(i) {
             Some(tool) => {
-                if ui.button(*rect, &labels[i], h.tool == *tool) {
+                if ui.icon_button(*rect, icons::cell_for(*tool), &labels[i], h.tool == *tool) {
                     actions.push(UiAction::SetTool(*tool));
                 }
             }
             None => {
-                if ui.button(*rect, &labels[i], h.show_work) {
+                if ui.icon_button(*rect, cells::icons::WORK, &labels[i], h.show_work) {
                     actions.push(UiAction::ToggleWork);
                 }
             }
@@ -209,7 +206,7 @@ fn draw_filter(
     labels.push("Remove zone".to_owned());
     let layout = ui::grid_layout(origin, "Stockpile accepts", &labels, FILTER_WIDTH);
     ui.panel(layout.panel);
-    ui.label_color(layout.header, "Stockpile accepts", ACCENT);
+    ui.label_color(layout.header, "Stockpile accepts", ui::accent());
     let mut actions = Vec::new();
     let last = labels.len() - 1;
     for (i, (rect, label)) in layout.buttons.iter().zip(&labels).enumerate() {
@@ -249,7 +246,7 @@ pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
     let mut labels: Vec<String> = Tool::ALL.iter().map(|t| tool_label(*t)).collect();
     labels.push(WORK_LABEL.to_owned());
     let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
-    let toolbar_h = ui::hud_layout((0.0, 0.0), &[], &refs, &[]).panel.h;
+    let toolbar_h = ui::toolbar_layout((0.0, 0.0), &refs).panel.h;
     let help_y = h.view.1 - help_h - MARGIN;
     actions.extend(draw_toolbar(ui, (MARGIN, help_y - toolbar_h - 4.0), h));
     ui::text_panel(ui, (MARGIN, help_y), &help);
@@ -332,7 +329,7 @@ mod tests {
         let mut labels: Vec<String> = Tool::ALL.iter().map(|t| tool_label(*t)).collect();
         labels.push(WORK_LABEL.to_owned());
         let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
-        let l = ui::hud_layout((MARGIN, 0.0), &[], &refs, &[]);
+        let l = ui::toolbar_layout((MARGIN, 0.0), &refs);
         assert_eq!(l.buttons.len(), 7);
         assert!(l.panel.x + l.panel.w <= 1000.0, "width {}", l.panel.w);
     }
@@ -372,7 +369,7 @@ mod tests {
     fn work_text_lists_the_priorities_in_job_order() {
         let sim = sim::scenario::sim_from_ascii("c", 1).unwrap();
         let rows = inspector::work_rows(&sim);
-        assert_eq!(work_text(&rows[0]), "Colonist 0 3 3 3");
+        assert_eq!(work_text(&rows[0]), "Colonist 0 3 3 3 3 3 3");
     }
 
     #[test]
