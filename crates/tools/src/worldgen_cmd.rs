@@ -1,7 +1,10 @@
 //! World terrain tools: gen-world and the world layer images of dump-layers.
 
 use super::ppm;
-use worldgen::{Stage, WORLD_SIZE, WorldBiome, WorldData, WorldParams, generate_world};
+use worldgen::{
+    LayerStage, Mineral, Rock, Stage, WORLD_SIZE, WorldBiome, WorldData, WorldParams,
+    generate_world,
+};
 
 const WORLD_USAGE: &str = "usage: tools gen-world --seed <n> [--out <dir>]";
 
@@ -81,6 +84,67 @@ fn river_color(w: &WorldData, x: i32, y: i32) -> [u8; 3] {
     }
 }
 
+fn rock_color(r: Rock) -> [u8; 3] {
+    const COLORS: [[u8; 3]; Rock::COUNT] = [
+        [214, 180, 120],
+        [120, 110, 100],
+        [200, 200, 180],
+        [170, 130, 130],
+        [140, 140, 160],
+        [235, 230, 240],
+        [50, 50, 60],
+        [130, 100, 80],
+    ];
+    COLORS[r as usize]
+}
+
+fn mineral_color(m: Mineral) -> [u8; 3] {
+    const COLORS: [[u8; 3]; Mineral::COUNT] = [
+        [20, 20, 20],
+        [200, 90, 50],
+        [60, 200, 140],
+        [180, 190, 210],
+        [250, 220, 40],
+        [220, 60, 220],
+    ];
+    COLORS[m as usize]
+}
+
+/// Rock image: the top layer of the province, dark on water.
+fn rock_image_color(w: &WorldData, x: i32, y: i32) -> [u8; 3] {
+    if w.height_above_sea(x, y) < 0 {
+        return [20, 40, 90];
+    }
+    match w.geology.rock_at(x, y, 0) {
+        Some(r) => rock_color(r),
+        None => [0, 0, 0],
+    }
+}
+
+/// Deposit image: mineral color scaled by richness on grey land.
+fn deposit_image_color(w: &WorldData, x: i32, y: i32) -> [u8; 3] {
+    if w.height_above_sea(x, y) < 0 {
+        return [20, 40, 90];
+    }
+    match w.deposits.at(x, y) {
+        Some((m, richness)) => {
+            let c = mineral_color(m);
+            let k = 60 + u32::from(richness) * 65;
+            [
+                (u32::from(c[0]) * k / 255) as u8,
+                (u32::from(c[1]) * k / 255) as u8,
+                (u32::from(c[2]) * k / 255) as u8,
+            ]
+        }
+        None => [95, 95, 90],
+    }
+}
+
+fn soil_color(w: &WorldData, x: i32, y: i32) -> [u8; 3] {
+    let d = w.geology.soil.get(x, y).copied().unwrap_or(0);
+    [200 - d * 2, 170 - d, 90]
+}
+
 /// Render one layer: the color function gets the cell coordinates.
 fn image(color: impl Fn(i32, i32) -> [u8; 3]) -> Vec<u8> {
     let size = WORLD_SIZE as i32;
@@ -111,6 +175,12 @@ pub fn layer_files(w: &WorldData) -> Vec<(&'static str, Vec<u8>)> {
             "world_biome.ppm",
             image(|x, y| biome_color(w.biome.as_slice()[cell(x, y)])),
         ),
+        ("world_rock.ppm", image(|x, y| rock_image_color(w, x, y))),
+        (
+            "world_deposit.ppm",
+            image(|x, y| deposit_image_color(w, x, y)),
+        ),
+        ("world_soil.ppm", image(|x, y| soil_color(w, x, y))),
     ]
 }
 
@@ -178,6 +248,10 @@ pub fn gen_world(args: &[String]) -> Result<String, String> {
         let hash = w.stage_hashes[stage as usize];
         lines.push(format!("stage {} {:016x}", stage.name(), hash));
     }
+    for stage in LayerStage::ALL {
+        let hash = w.layer_hashes[stage as usize];
+        lines.push(format!("stage {} {:016x}", stage.name(), hash));
+    }
     lines.push(format!("sea level {}", w.sea_level));
     lines.push(format!("land per mille {}", w.land_per_mille()));
     let mut counts = [0u32; WorldBiome::COUNT];
@@ -193,6 +267,15 @@ pub fn gen_world(args: &[String]) -> Result<String, String> {
     }
     let lakes = w.lake.as_slice().iter().max().copied().unwrap_or(0);
     lines.push(format!("lakes {lakes}"));
+    let mut per = [0u32; Mineral::COUNT];
+    for &m in w.deposits.mineral.as_slice() {
+        if m != 0 {
+            per[usize::from(m) - 1] += 1;
+        }
+    }
+    for m in Mineral::ALL {
+        lines.push(format!("deposit {} {}", m.name(), per[m as usize]));
+    }
     lines.push(format!("generation microseconds {micros}"));
     if let Some(dir) = out {
         write_layers(&w, &dir)?;
@@ -217,10 +300,10 @@ mod tests {
     }
 
     #[test]
-    fn gen_world_prints_nine_stage_hashes() {
+    fn gen_world_prints_eleven_stage_hashes() {
         let args: Vec<String> = vec!["--seed".into(), "2".into()];
         let text = gen_world(&args).unwrap_or_default();
-        assert_eq!(text.lines().filter(|l| l.starts_with("stage ")).count(), 9);
+        assert_eq!(text.lines().filter(|l| l.starts_with("stage ")).count(), 11);
         assert!(gen_world(&[]).is_err());
     }
 }
