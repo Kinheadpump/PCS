@@ -79,6 +79,64 @@ impl Sheet {
     }
 }
 
+/// Cell numbers of the colonist sprites in `actors.png`. They match `tools/src/assetgen_actors.rs`.
+pub mod actor_cell {
+    /// First south-facing frame (stand, step 1, step 2).
+    pub const SOUTH: usize = 0;
+    /// First north-facing frame.
+    pub const NORTH: usize = 3;
+    /// First east-facing frame. West is the east frame flipped.
+    pub const EAST: usize = 6;
+}
+
+/// The colonist sprite sheet: full color RGBA. Gray pixels are the shirt.
+pub struct ActorSheet {
+    width: usize,
+    height: usize,
+    rgba: Vec<u8>,
+}
+
+impl ActorSheet {
+    /// Decode a PNG file. Returns a message if the data is bad.
+    pub fn from_png(bytes: &[u8]) -> Result<Self, String> {
+        let image =
+            Image::from_file_with_format(bytes, None).map_err(|e| format!("actors.png: {e:?}"))?;
+        let (width, height) = (usize::from(image.width), usize::from(image.height));
+        if width != COLUMNS * TILE || height % TILE != 0 {
+            return Err(format!("actors.png has size {width}x{height}"));
+        }
+        Ok(Self {
+            width,
+            height,
+            rgba: image.bytes,
+        })
+    }
+
+    /// The shipped sheet.
+    pub fn shipped() -> Result<Self, String> {
+        Self::from_png(include_bytes!("../../../assets/sprites/actors.png"))
+    }
+
+    /// Size of the sheet in pixels.
+    pub fn size(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+
+    /// RGBA bytes with the gray (shirt) pixels multiplied by `tint`.
+    pub fn tinted(&self, tint: [u8; 3]) -> Vec<u8> {
+        let mut out = self.rgba.clone();
+        for px in out.chunks_mut(4) {
+            if px[3] == 255 && px[0] == px[1] && px[1] == px[2] {
+                let v = u32::from(px[0]);
+                for (c, t) in tint.iter().enumerate() {
+                    px[c] = (u32::from(*t) * v / BASE_LEVEL).min(255) as u8;
+                }
+            }
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +164,24 @@ mod tests {
     #[test]
     fn bad_png_is_an_error() {
         assert!(Sheet::from_png(b"nope").is_err());
+    }
+
+    #[test]
+    fn actor_sheet_decodes_and_tints_only_gray_pixels() {
+        let Ok(sheet) = ActorSheet::shipped() else {
+            panic!("actors.png must decode");
+        };
+        assert_eq!(sheet.size(), (256, 16));
+        let plain = sheet.tinted([224, 224, 224]);
+        let red = sheet.tinted([224, 0, 0]);
+        assert_ne!(plain, red);
+        // Skin and outline pixels are not gray, so they keep their color.
+        let kept = plain
+            .chunks(4)
+            .zip(red.chunks(4))
+            .filter(|(a, b)| a[3] == 255 && a != b)
+            .count();
+        let opaque = plain.chunks(4).filter(|p| p[3] == 255).count();
+        assert!(kept > 0 && kept < opaque);
     }
 }

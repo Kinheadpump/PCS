@@ -136,6 +136,26 @@ fn kind_at(map: &LocalMapData, x: i32, y: i32) -> Kind {
     }
 }
 
+/// Soil ground that shows as bare earth (and not as grass with patches). The patches are
+/// 2 x 2 tiles.
+fn is_bare(map: &LocalMapData, x: i32, y: i32) -> bool {
+    matches!(map.ground.get(x, y), Some(Ground::Soil))
+        && kind_at(map, x, y) == Kind::Open
+        && tile_hash(x / 2, y / 2, 2) % 100 >= 90
+}
+
+/// Rank and color of the surface of an open tile. A higher rank draws over a lower rank.
+fn surface(map: &LocalMapData, palette: &Palette, x: i32, y: i32) -> (u8, Rgb) {
+    match map.ground.get(x, y) {
+        Some(Ground::Stone) => (0, palette.slate),
+        Some(Ground::Sand) => (1, palette.sand),
+        Some(Ground::Clay) => (2, palette.clay),
+        Some(Ground::Soil) if is_bare(map, x, y) => (3, palette.soil),
+        Some(Ground::Soil) => (4, palette.grass),
+        _ => (0, palette.slate),
+    }
+}
+
 fn tile_hash(x: i32, y: i32, salt: u64) -> u64 {
     mix((u64::from(x as u32) << 32 | u64::from(y as u32))
         ^ salt.wrapping_mul(0x9E37_79B9_7F4A_7C15))
@@ -223,7 +243,7 @@ fn draw_tile(
     let kind = kind_at(map, mx, my);
     let near = |dx: i32, dy: i32| kind_at(map, mx + dx, my + dy);
     // A small brightness change per tile hides the repeat of the 4 variants.
-    let bright = ((h >> 8) % 9) as i32 - 4 + (tile_hash(mx / 4, my / 4, 3) % 17) as i32 - 8;
+    let bright = ((h >> 8) % 5) as i32 - 2 + (tile_hash(mx / 4, my / 4, 3) % 9) as i32 - 4;
 
     if kind == Kind::Wall {
         let tint = palette.tile_color(*g, *r, Ore::None);
@@ -260,6 +280,20 @@ fn draw_tile(
         Ground::Stone => (cell::FLOOR, palette.slate),
     };
     buf.sprite(sheet, first + variant, tint, bright);
+    if kind == Kind::Open {
+        // The ground with the higher rank grows a ragged fringe over its lower neighbor.
+        let (rank, _) = surface(map, palette, mx, my);
+        for (dir, (dx, dy)) in DIRS.iter().enumerate() {
+            let n = (mx + dx, my + dy);
+            if kind_at(map, n.0, n.1) != Kind::Open {
+                continue;
+            }
+            let (n_rank, n_color) = surface(map, palette, n.0, n.1);
+            if n_rank > rank {
+                buf.edge(sheet, dir, n_color.map(i32::from), 120);
+            }
+        }
+    }
     if kind == Kind::Water {
         // Foam along the shore.
         for (dir, (dx, dy)) in DIRS.iter().enumerate() {
