@@ -3,6 +3,7 @@
 mod assetgen;
 mod bench;
 mod dumpsave;
+mod worldgen_cmd;
 
 use base::Grid;
 use base::content::load_materials;
@@ -40,7 +41,7 @@ fn parse_seed(args: &[String]) -> Result<u64, String> {
     }
 }
 
-const USAGE: &str = "usage: tools hash --seed <n> | dump-layers <preset> <out_dir> [--seed <n>] | validate-content <file> | assetgen [--seed <n>] [--out <dir>] | dump-save <file> | bench [--ticks <n>]";
+const USAGE: &str = "usage: tools hash --seed <n> | dump-layers <preset> <out_dir> [--seed <n>] | validate-content <file> | assetgen [--seed <n>] [--out <dir>] | gen-world --seed <n> [--out <dir>] | dump-save <file> | bench [--ticks <n>]";
 
 /// Pick a test preset by name.
 fn preset(name: &str) -> Result<EmbarkSummary, String> {
@@ -112,6 +113,9 @@ fn dump_layers(args: &[String]) -> Result<String, String> {
     let [name, dir, rest @ ..] = args else {
         return Err(USAGE.to_owned());
     };
+    if name == "world" {
+        return worldgen_cmd::dump_world_layers(dir, rest);
+    }
     let mut embark = preset(name)?;
     match rest {
         [] => {}
@@ -147,6 +151,7 @@ fn run(args: &[String]) -> Result<String, String> {
     match args.split_first() {
         Some((cmd, rest)) if cmd == "hash" => Ok(format!("{:016x}", grid_hash(parse_seed(rest)?))),
         Some((cmd, rest)) if cmd == "dump-layers" => dump_layers(rest),
+        Some((cmd, rest)) if cmd == "gen-world" => worldgen_cmd::gen_world(rest),
         Some((cmd, rest)) if cmd == "dump-save" => dumpsave::run(rest),
         Some((cmd, rest)) if cmd == "bench" => bench::run(rest),
         Some((cmd, rest)) if cmd == "assetgen" => assetgen::run(rest),
