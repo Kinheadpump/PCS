@@ -141,8 +141,69 @@ pub mod icons {
     pub const BADGE_HAUL: usize = 12;
     /// Four corner brackets, the border of a marked tile.
     pub const BRACKETS: usize = 13;
+    /// Build tool: a hammer.
+    pub const BUILD: usize = 14;
+    /// Remove tool: a crowbar over a broken plank.
+    pub const REMOVE: usize = 15;
     /// Rows of the sheet.
     pub const ROWS: usize = 1;
+}
+
+/// `buildings.png`: gray sprites. The alpha value says how the game colors a pixel:
+/// 255 takes the material color, 254 cloth, 253 fire, 252 metal. A lower alpha is a black
+/// shadow. Walls and roofs have 16 cells each, one for each set of connected sides.
+pub mod buildings {
+    /// Alpha of a pixel that takes the material color.
+    pub const MATERIAL_ALPHA: u8 = 255;
+    /// Alpha of a cloth pixel (blanket).
+    pub const CLOTH_ALPHA: u8 = 254;
+    /// Alpha of a fire pixel (hearth).
+    pub const FIRE_ALPHA: u8 = 253;
+    /// Alpha of a metal pixel (tools).
+    pub const METAL_ALPHA: u8 = 252;
+    /// Connection bit: a neighbor to the north.
+    pub const NORTH: u8 = 1;
+    /// Connection bit: a neighbor to the east.
+    pub const EAST: u8 = 2;
+    /// Connection bit: a neighbor to the south.
+    pub const SOUTH: u8 = 4;
+    /// Connection bit: a neighbor to the west.
+    pub const WEST: u8 = 8;
+    /// First stone wall cell (16 cells, index = connection bits).
+    pub const WALL_STONE: usize = 0;
+    /// First wood wall cell (16 cells, index = connection bits).
+    pub const WALL_WOOD: usize = 16;
+    /// First roof cell (16 cells, index = connection bits).
+    pub const ROOF: usize = 32;
+    /// Door in a wall that runs east to west.
+    pub const DOOR_H: usize = 48;
+    /// Door in a wall that runs north to south.
+    pub const DOOR_V: usize = 49;
+    /// Stone floor.
+    pub const FLOOR_STONE: usize = 50;
+    /// Wood floor.
+    pub const FLOOR_WOOD: usize = 51;
+    /// Bed.
+    pub const BED: usize = 52;
+    /// Hearth, first flame frame.
+    pub const HEARTH: usize = 53;
+    /// Hearth, second flame frame.
+    pub const HEARTH_B: usize = 54;
+    /// Workshop (workbench).
+    pub const WORKSHOP: usize = 55;
+    /// Rows of the sheet.
+    pub const ROWS: usize = 4;
+
+    /// The wall cell for a set of connected sides.
+    pub fn wall_cell(wood: bool, mask: u8) -> usize {
+        let base = if wood { WALL_WOOD } else { WALL_STONE };
+        base + usize::from(mask & 15)
+    }
+
+    /// The roof cell for a set of connected sides.
+    pub fn roof_cell(mask: u8) -> usize {
+        ROOF + usize::from(mask & 15)
+    }
 }
 
 /// `actors.png`: full color colonists. The shirt is gray and the game tints it. Hair and skin
