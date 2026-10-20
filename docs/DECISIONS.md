@@ -87,6 +87,9 @@ Work continues with the recommended choice until the owner answers.
 | D-050 | Sprint 4 room rules: a door is a border tile, so rooms stop at doors. The flood fill is 4-connected. A room has at most 400 tiles and may not touch the map edge. Detection runs in the tick after a structural change. Rooms are a derived cache, recomputed on load. |
 | D-051 | Construction conserves material. Deconstruction returns `floor(units × return_pct / 100)` and the rest is lost by design. A cancelled blueprint returns delivered units. Save format version is 3. Sprint 4 changed the golden hashes `sim_ascii_600_ticks` and `sim_forest_seed1_1000_ticks`. |
 | D-052 | Game keys added in Sprint 4: B build, X remove, O rooms overlay, 1 to 7 pick a building. Developer env hooks: `PCS_BUILD`, `PCS_BLUEPRINT`, `PCS_CHOICE`, `PCS_ROOMS`. |
+| D-053 | History ignores regions with fewer than 24 cells (`min_region_cells` in `history.ron`) for starts, settlements, mines, and roads. The history has its own seed and hash array (`HistoryStage`), so the hashes of steps 1 to 12 do not change. It reads `Regions.deposits` (the repaired deposits), not the raw deposits. |
+| D-054 | The history tables are `history.ron`, `cultures.ron`, and `event_templates.ron`. `worldgen` embeds them with `include_str!` (same rule as D-049). `try_generate_world` checks all embedded tables before it generates a world. `generate_world` keeps its signature. |
+| D-055 | Sprint 10 has no figures (notable persons). No event type uses them. The limit of 2,000 figures stays in `TECHNICAL_DESIGN.md` §8.1 for a later sprint. The biome balance of D-046 is not changed: it does not block the history. |
 
 ## 3. Assumptions
 

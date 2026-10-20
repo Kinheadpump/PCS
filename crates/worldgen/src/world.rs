@@ -331,6 +331,15 @@ fn feed<T: Copy, const N: usize>(h: &mut Fnv1a, items: &[T], bytes: impl Fn(T) -
     }
 }
 
+/// Check the embedded content tables, then generate the world (steps 1 to 12).
+pub fn try_generate_world(
+    seed: u64,
+    params: &WorldParams,
+) -> Result<WorldData, base::content::ContentError> {
+    crate::history::check_content()?;
+    Ok(generate_world(seed, params))
+}
+
 /// Generate the world (steps 1 to 12) for a seed.
 pub fn generate_world(seed: u64, params: &WorldParams) -> WorldData {
     let mut stage_seeds = [0u64; STAGE_COUNT];

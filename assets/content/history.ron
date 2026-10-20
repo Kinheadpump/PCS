@@ -1,0 +1,52 @@
+// History simulation numbers (S10, TECHNICAL_DESIGN 8.1). Integers only (D-014).
+// All "pm" values are per-mille chances for each civilization in each year.
+// worldgen embeds this file with include_str!. It does no file I/O at run time.
+(
+    // Length of the history in years (GAME_DESIGN 9.2).
+    years_default: 3000,
+    years_min: 1000,
+    years_max: 5000,
+    // History ignores regions under this many cells for starts, mines, and roads (D-050).
+    min_region_cells: 24,
+    // Civilizations at year 0, and the homeostasis band (alive civilizations).
+    start_civs: 4,
+    min_alive: 2,
+    max_alive: 8,
+    // A migrant civilization can appear by chance only below this many alive civilizations.
+    spawn_below_alive: 6,
+    new_civ_pm: 6,
+    // Hard limits. At a limit, the history skips rolls of that kind.
+    max_civs: 32,
+    max_settlements: 600,
+    max_artifacts: 300,
+    max_sites: 1500,
+    max_events: 50000,
+    // Heavy updates (drives, prosperity) each this many years.
+    heavy_interval: 10,
+    // Most settlements that one civilization holds at the same time.
+    max_civ_settlements: 14,
+    // Chances (per-mille, scaled by the drives of the civilization).
+    settle_pm: 90,
+    mine_pm: 40,
+    road_pm: 35,
+    battle_pm: 250,
+    seal_pm: 8,
+    // Chance of an artifact after a battle, a raze, or a seal.
+    artifact_pm: 160,
+    // Base chance that a civilization collapses. Poor civilizations collapse sooner.
+    collapse_pm: 3,
+    collapse_poor_pm: 6,
+    collapse_crowd_pm: 25,
+    // Base chance that an attacker wins a battle, plus the drive difference.
+    attack_win_pm: 550,
+    // Mine life in years: base, for each richness step, and random range.
+    mine_life_base: 60,
+    mine_life_per_richness: 40,
+    mine_life_jitter: 60,
+    // Radius (in cells) of the map results.
+    depletion_radius: 2,
+    battle_radius: 2,
+    seal_radius: 3,
+    // Road path search: extra margin around the two ends, in cells.
+    road_margin: 12,
+)
