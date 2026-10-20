@@ -51,11 +51,23 @@ const ZOOM_STEP: f32 = 1.25;
 /// Zoom at start, in screen pixels per tile.
 const START_ZOOM: f32 = 16.0;
 
+/// The window size. Developer aid: `PCS_WINDOW=<w>x<h>` sets it, for screenshots.
+fn window_size() -> (i32, i32) {
+    std::env::var("PCS_WINDOW")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.split_once('x')?;
+            Some((w.parse().ok()?, h.parse().ok()?))
+        })
+        .unwrap_or((1280, 720))
+}
+
 fn window_conf() -> Conf {
+    let (window_width, window_height) = window_size();
     Conf {
         window_title: "Ruinstead".to_owned(),
-        window_width: 1280,
-        window_height: 720,
+        window_width,
+        window_height,
         ..Default::default()
     }
 }
@@ -103,6 +115,8 @@ struct App {
     drag_start: Option<(u16, u16)>,
     /// The selected tile, shown in the tile panel.
     selected_tile: Option<(u16, u16)>,
+    /// The folds that are open and the debug switch of the display.
+    ui_state: hud::UiState,
     /// True if the work panel is open.
     show_work: bool,
     /// True if the rooms overlay is on.
@@ -144,6 +158,7 @@ impl App {
             tool: Tool::Select,
             drag_start: None,
             selected_tile: None,
+            ui_state: hud::UiState::default(),
             show_work: false,
             show_rooms: false,
             build,
@@ -325,6 +340,7 @@ impl App {
                 Action::SetSpeed(speed) => self.clock.set_speed(speed),
                 Action::LeftClick(..) | Action::LeftRelease(..) | Action::RightClick(..) => {}
                 Action::ToggleGrid => self.grid = !self.grid,
+                Action::ToggleDebug => self.ui_state.debug = !self.ui_state.debug,
                 Action::Preset(_) => {}
                 Action::Close => return false,
             }
@@ -606,6 +622,7 @@ impl App {
             selected: self.selected,
             selected_tile: self.selected_tile,
             hover_tile,
+            state: &self.ui_state,
             speed: self.clock.speed(),
             fps: render::fps(),
             zoom: self.camera.zoom,
@@ -630,6 +647,9 @@ impl App {
                     self.selected = Some(id);
                     self.selected_tile = None;
                 }
+                UiAction::ToggleFold(fold) => self.ui_state.toggle(fold),
+                UiAction::CloseColonist => self.selected = None,
+                UiAction::CloseTile => self.selected_tile = None,
                 UiAction::Command(command) => self.pending.push(command),
             }
         }

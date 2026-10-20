@@ -4,9 +4,11 @@ use sim::Speed;
 use sim::time::ticks_for_frame;
 
 /// Speeds in button order.
+#[cfg(test)]
 pub const SPEEDS: [Speed; 4] = [Speed::Paused, Speed::X1, Speed::X3, Speed::X6];
 
 /// Button label of a speed.
+#[cfg(test)]
 pub fn speed_label(speed: Speed) -> &'static str {
     match speed {
         Speed::Paused => "Pause",

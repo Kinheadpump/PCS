@@ -244,6 +244,7 @@ A sprint is done when all of its tasks are done and its deliverable works.
 6. Write mood, mood modifiers, and mood effects (R-014, R-015). Add room beauty as a modifier. (Depends on 1, 2, 4.)
 7. Write the MVP traits (`GAME_DESIGN.md` §7.2). (Depends on 6.)
 8. Add the alerts for hunger, hypothermia, low mood, and death. Add the why chains for mood and health. (Depends on 5, 6.)
+9. Proposed (Q-018): write the sound engine in `game` (play, volume, mixer for effects, ambience, and music). Make the first sound set with `tools assetgen` (`sound-designer` subagent): alert sounds, UI click, footsteps, tools at work. Each alert plays its sound. (Depends on 8.)
 
 **Acceptance criteria:**
 
@@ -300,7 +301,7 @@ These sprints have less detail. Add the full detail at the start of each phase. 
 | S8 World terrain | Generate the world terrain. | `tools gen-world` and `tools dump-layers` write height, temperature, moisture, river, and biome images. | Rules 1 to 7. Status: done on `main` (PR #5). P-05 for steps 1 to 9 is about 40 ms against 300 ms. Biome balance needs tuning: temperate forest is 1 to 3% and taiga is 22% of land (D-046). P-05 for steps 1 to 9. Plates are a stretch task. Ridged noise is the fallback. |
 | S9 Geology, deposits, regions, world view | Complete the world data and show it. | `game` shows the world map with overlays. The seed widget accepts numbers. | Each land region has a minimum of 1 deposit type. Each region is one connected area. P-05. Status: world steps 10 and 11 are done on `main` (PR #9). Step 12 (regions, region graph, deposit repair) is done on `main` (PR #11). The rock and mineral tables are in `rocks.ron` and `deposits.ron`, embedded in `worldgen` (D-049). P-05 for steps 1 to 12 is about 61 ms against 300 ms. The world map view, seed widget, and cell inspector in `game` wait for the graphics pass and Sprint 4. Golden files: `golden_world_s9.txt`, `golden_world_s9_regions.txt`. |
 | S10 History | Simulate the history. | `tools gen-world --history` prints a chronicle summary and statistics. | Rule 8. P-06. Approximately 10 event types. Each event type writes a map result (R-040, test). Status: step 13 is in `worldgen::history` (D-053 to D-055). `tools gen-world --seed <n> --history [--years <n>]` prints the chronicle summary and statistics. P-06 is below 20 ms in release against 1 s. Golden file: `golden_history_s10.txt`. |
-| S11 Embark and site stamping | Make the local map from the world. | The player selects a world cell. The local map has ruins, roads, old tunnels, and depleted deposits. Sites contain structure and salvage. | Rule 9. R-041. A ruin of age 1,500 years has 2 times or more the rubble of a ruin of age 200 years. Depletion decreases ore (test). The history overlay works. Milestone M2. Status: the `worldgen` part is done (D-061, D-062). `embark_from_world` makes the `EmbarkSummary` and the `EmbarkSites` of a world cell. `generate_local_with_sites` stamps them. Rule 9 holds on 20 of 20 seeds (the lowest coverage is 31%). Not done: the cell selection in `game`, and the salvage items and the legends (R-042, R-043) in `sim`. They wait for the HUD rework and Sprint 5. M2 playtests wait for them. Tests: `embark_s11.rs`. |
+| S11 Embark and site stamping | Make the local map from the world. | The player selects a world cell. The local map has ruins, roads, old tunnels, and depleted deposits. Sites contain structure and salvage. | Rule 9. R-041. A ruin of age 1,500 years has 2 times or more the rubble of a ruin of age 200 years. Depletion decreases ore (test). The history overlay works. Milestone M2. Status: the `worldgen` part is done (D-063, D-064). `embark_from_world` makes the `EmbarkSummary` and the `EmbarkSites` of a world cell. `generate_local_with_sites` stamps them. Rule 9 holds on 20 of 20 seeds (the lowest coverage is 31%). Not done: the cell selection in `game`, and the salvage items and the legends (R-042, R-043) in `sim`. They wait for the HUD rework and Sprint 5. M2 playtests wait for them. Tests: `embark_s11.rs`. |
 
 Risks: civilizations that grow or die without limit, local maps that are not different enough, generation time.
 
@@ -311,11 +312,11 @@ Risks: civilizations that grow or die without limit, local maps that are not dif
 | S12 Production and knowledge | Add the production chains and knowledge. | Tool requirement and wear, tool crafting, charcoal, bricks, smoked food, smelting, iron tools. Lore fragment items, the excavate designation, and reading. Proposed (Q-014): job choice by colony need (§7.2) and a small injury chance at risky jobs. | R-008, R-042, R-043. Each chain in `GAME_DESIGN.md` §11.3 works in a scenario test. A locked recipe cannot be ordered. |
 | S13 Creatures and combat | Add creatures and melee combat. | Game animals, hunting, meat and leather, beasts, drafting, melee, the condition "wounded". | R-032. A drafted colonist obeys a move order in the same tick. Creatures use the path budget (P-04). |
 | S14 Notice, legends, and sealed sites | Make history dangerous and useful. | Notice and its overlay, beast spawns, lair beasts, dormant threats, legends with site markers. | R-030, R-031, R-044. Notice equals the sum of its contributions. Opening a sealed site wakes its threat. |
-| S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save. Proposed (Q-014): migrants with a short background line, and bonds (§7.1). | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. |
-| S16 Drought and wildfire | Make dry summers a crisis. | Dry-day counter in the ledger, drought effects, irrigation ditches, dry-soil crops, lightning. | R-025, R-026. A crop on an irrigated tile grows at normal speed in a drought. A ditch that does not touch water does not irrigate. Fire does not cross a firebreak of 2 soil tiles. |
+| S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save, one music loop for each season, day and night lighting. Proposed (Q-014): migrants with a short background line, and bonds (§7.1). | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. |
+| S16 Drought and wildfire | Make dry summers a crisis. | Dry-day counter in the ledger, drought effects, irrigation ditches, dry-soil crops, lightning, weather ambience (rain, wind). | R-025, R-026. A crop on an irrigated tile grows at normal speed in a drought. A ditch that does not touch water does not irrigate. Fire does not cross a firebreak of 2 soil tiles. |
 | S17 Disease and medicine | Make sickness a crisis that the player can manage. | Food poisoning, wound infection, winter fever, the medicine skill, herbal medicine, the doctor job, sick rooms, disease alerts. | R-060 to R-064. Winter fever does not spread between colonists in different rooms. Treatment decreases severity by the content value. |
 | S18 Rival colonies and raids | Add attacks by other colonies. | Rival colonies from history, hostility, scouts, raids, door and wall breaking, item theft, the tribute choice. | R-070 to R-072. A scout comes 1 game day before each raid. Paying the tribute removes goods of the correct value and the raiders leave. |
-| S19 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. An in-game tutorial that holds the explanations removed from the HUD (the HUD rework strips the long text). Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. Second controls review (Q-017). A new player can finish the tutorial and see every explanation again from a help menu. |
+| S19 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. A sound mix pass. An in-game tutorial that holds the explanations removed from the HUD (the HUD rework strips the long text). Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. Second controls review (Q-017). A new player can finish the tutorial and see every explanation again from a help menu. |
 
 Risks: balance, scope pressure, playtest capacity.
 
@@ -394,6 +395,25 @@ Each step needs a rule ID, a content file, and a test before it goes into a spri
 - **S11a Infinite world spike (Q-016):** a design spike, not a feature. It comes right after M2 (S11) and before S12, because an infinite world changes world generation, zoom, the world map, and embark. Output: a written design and a small prototype in `tools` that makes world chunks on demand from the seed. It answers how the zoom levels, the world map, history, and the embark choice work without a fixed world edge, and what changes in the golden hashes and in P-05. The owner decides after the spike if the infinite world goes into the MVP. Worldgen steps 5 to 12 are not changed before then.
 - **Controls and game feel review (Q-017):** the `controls-reviewer` subagent checks how the controls feel and fit the gameplay. First review at M1 (S7 is the first sprint with real gameplay). Second review in S19, with the playtests. The review lists problems with camera, zoom, selection, and build input. The lead agent turns them into tasks.
 
+### 7.4 Weather, seasons, sound, and music (proposal, Q-018)
+
+| Request | Where | Status |
+|---|---|---|
+| Seasons, the season curve, daily weather, rain, the 3-day forecast, freeze and thaw | S5 | Already planned. Not changed. |
+| Cold periods and heat waves | S5 (weather offset) | Already planned. |
+| Day and night in the simulation (hour of day, daily temperature curve, sleep at night) | S2 (time), S5 (daily curve), S6 (sleep) | Already planned. |
+| Yearly cycle (4 seasons of 10 days) | S2 (calendar), S5 (season curve), D-017 | Already planned. |
+| Day and night in the picture: daylight tint by hour and season, dark nights, light around hearths | S15 | New. Display only. It does not change the simulation. |
+| Drought and wildfire | S16 (R-025, R-026) | Already planned. |
+| Snow cover that slows movement | S27 | Moved from the backlog. |
+| Floods (snow melt raises the river in spring) and storms | S27 Floods and weather events | New. A river level model, a flood forecast, dikes, and storm damage to roofs. Phase 4, after S11a shows how the world model changes. |
+| Sound engine and first sounds | S6 | New task 9. |
+| Weather ambience | S16 | New. Rain, wind, and fire loops. |
+| Music | S15 | New. One loop for each season, made by `tools assetgen`. |
+| Sound mix and volume settings | S19 | New. Part of the balance pass. |
+
+The `sound-designer` subagent writes the synthesizers in `tools assetgen` and makes the `.wav` files. The sound engine in `game` plays them. Generated files are committed (D-034). No new crate: use the `macroquad` audio feature (`TECHNICAL_DESIGN.md` §13). Sprint 5 scope does not change.
+
 ## 8. Main project risks
 
 | Risk | Effect | Control |
@@ -422,13 +442,13 @@ These ideas are not in a sprint. Each item needs a reason and a phase before it 
 | Livestock and animal handling | 4 | A food source that cold periods and beasts can threaten. |
 | Carts for faster hauling | 4 | Only if hauling time is a playtest problem. |
 | Fishing and a water need for colonists | 4 | Uses the existing water tiles. |
-| Snow cover that slows movement | 4 | Uses the existing climate model. |
+| Snow cover that slows movement | 4 (S27) | Uses the existing climate model. |
 | More legend reliability levels | 4 | The MVP has "certain" and "rumor" only (R-044). |
 | Salt and salted food | 5 | A longer food chain. |
 | Cave-ins | 5 | Moved from the MVP to control scope. |
-| Seasonal river floods | 5 | Needs a flood model. |
+| Seasonal river floods | 4 | Moved to the Phase 4 sprint S27 (§7.4). |
 | History continues slowly after embark | 4 | Necessary for civilizations that change during play. |
-| Sound effects | 3 or later | The `macroquad` audio feature. |
+| Sound effects | 3 | Moved to S6 (sound engine), S16 (weather ambience), and S15 (music) (§7.4). |
 | Key rebinding UI | 3 or later | The binding table exists from S1. |
 | Free text input (save names, seed words) | 4 | D-027. |
 | Modding support beyond content files | 6 | Content files are already data. |

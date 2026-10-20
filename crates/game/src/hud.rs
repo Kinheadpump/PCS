@@ -1,6 +1,9 @@
-//! The heads-up display: status panel, work panel, toolbar, help, build panel, inspectors,
-//! the stockpile filter panel, and the workshop panel. It reads `&Sim` and returns `UiAction`
-//! values. It never changes the sim (AGENTS.md code rules).
+//! The heads-up display: top bar, toolbar, work panel, build panel, inspectors, the stockpile
+//! filter panel, and the workshop panel. It reads `&Sim` and returns `UiAction` values. It never
+//! changes the sim (AGENTS.md code rules).
+//!
+//! The display shows no help text. Short tooltips show on hover. The explanations go to the
+//! tutorial (later sprint).
 //!
 //! `Content::new` makes the text of every panel. `Content::sizes` gives the panel sizes to
 //! `layout::place`, which gives the rectangles. A test checks that no two panels overlap.
@@ -8,29 +11,56 @@
 use crate::build_ui::{self, BuildState};
 use crate::camera::View;
 use crate::cells;
-use crate::clock::{SPEEDS, speed_label};
 use crate::icons;
 use crate::inspector::{self, RecipeInfo};
 use crate::layout::{self, Placed, Size, Sizes};
+use crate::palette::ui as pal;
+use crate::render::color as rgb_color;
 use crate::tools::{self, Tool};
-use crate::ui::{self, Row, Ui, UiAction};
+use crate::ui::{self, Fold, Row, Ui, UiAction};
 use macroquad::prelude::Color;
 use sim::{ColonistId, Command, ItemFilter, JobKind, Sim, Speed, StockpileId};
+use std::collections::BTreeSet;
 
-/// Widest row of buttons in the filter panel, in pixels.
+/// Widest row of chips in the filter panel, in pixels.
 const FILTER_WIDTH: f32 = 340.0;
-/// Widest row of buttons in the build panel, in pixels.
-const BUILD_WIDTH: f32 = 400.0;
+/// Widest row of chips in the build panel, in pixels.
+const BUILD_WIDTH: f32 = 420.0;
+/// Longest text in an inspector panel, in characters.
+const CLIP_CHARS: usize = 30;
 /// Fill of a priority cell: off, then 1 (first) to 4.
 const PRIORITY_FILL: [Color; 5] = [
-    Color::new(0.13, 0.14, 0.17, 1.0),
+    Color::new(0.13, 0.14, 0.19, 1.0),
     Color::new(0.16, 0.50, 0.32, 1.0),
     Color::new(0.16, 0.40, 0.32, 1.0),
     Color::new(0.17, 0.30, 0.30, 1.0),
     Color::new(0.20, 0.24, 0.28, 1.0),
 ];
-/// Text of the hint line of the work panel.
-const WORK_HINT: &str = "Click: next   Right click: back";
+/// Speed buttons: speed, icon, tooltip.
+const SPEED_BUTTONS: [(Speed, usize, &str); 4] = [
+    (Speed::Paused, cells::icons::PAUSE, "Pause (Space)"),
+    (Speed::X1, cells::icons::PLAY, "Speed 1x (Q)"),
+    (Speed::X3, cells::icons::FAST, "Speed 3x (E)"),
+    (Speed::X6, cells::icons::FASTEST, "Speed 6x (R)"),
+];
+
+/// What the player has opened or closed in the display. It lives in the app, not in the sim.
+#[derive(Clone, Debug, Default)]
+pub struct UiState {
+    /// The folds that are open.
+    pub open: BTreeSet<Fold>,
+    /// True if the debug lines show (tick, hash, FPS, map).
+    pub debug: bool,
+}
+
+impl UiState {
+    /// Open the fold if it is closed, close it if it is open.
+    pub fn toggle(&mut self, fold: Fold) {
+        if !self.open.remove(&fold) {
+            self.open.insert(fold);
+        }
+    }
+}
 
 /// What the display needs to know for one frame.
 pub struct HudInput<'a> {
@@ -50,23 +80,21 @@ pub struct HudInput<'a> {
     pub selected: Option<ColonistId>,
     /// The selected tile.
     pub selected_tile: Option<(u16, u16)>,
-    /// The tile under the mouse, if the mouse is over the map.
+    /// The tile under the mouse, if the mouse is over the map. Only the debug lines show it.
     pub hover_tile: Option<(u16, u16)>,
     /// The game speed.
     pub speed: Speed,
-    /// Frames per second.
+    /// Frames per second. Only the debug lines show it.
     pub fps: i32,
-    /// Zoom in screen pixels per tile.
+    /// Zoom in screen pixels per tile. Only the debug lines show it.
     pub zoom: f32,
-    /// Name of the map preset.
+    /// Name of the map preset. Only the debug lines show it.
     pub map_name: &'a str,
     /// Text of the last event.
     pub last_event: &'a str,
+    /// The folds and the debug switch.
+    pub state: &'a UiState,
 }
-
-/// Longest line of the status panel, in characters. It keeps the status panel narrow, so that
-/// the tile panel fits beside it in a 1280 pixel window.
-const STATUS_CHARS: usize = 35;
 
 /// `text`, cut to `max` characters with ".." at the end if it is longer.
 fn shorten(text: &str, max: usize) -> String {
@@ -77,45 +105,15 @@ fn shorten(text: &str, max: usize) -> String {
     format!("{head}..")
 }
 
-/// The lines of the help panel. The lines are short, so that the help panel stays left of the
-/// colonist panel in a 1280 pixel window.
-pub fn help_lines() -> Vec<String> {
-    vec![
-        "WASD/arrows, middle drag: pan   Wheel, +/-: zoom".to_owned(),
-        "G: grid   Esc: quit   Space: pause".to_owned(),
-        "Q/E/R: 1x/3x/6x speed   F1-F3: map".to_owned(),
-        "Tools: V select  T cut  M mine  H haul".to_owned(),
-        "Z zone  C cancel  B build  X remove".to_owned(),
-        "P: work panel   O: rooms overlay".to_owned(),
-        "1-7: choose the building (Build tool)".to_owned(),
-        "Drag a rectangle on the map. Right click: cancel".to_owned(),
-        "Select: click picks, right click moves (debug)".to_owned(),
-    ]
-}
-
-/// The label of a toolbar button, for example `Cut (T)`.
+/// The tooltip of a toolbar button, for example `Cut (T)`.
 pub fn tool_label(tool: Tool) -> String {
     format!("{} ({})", tool.name(), tool.key_label())
 }
 
-/// The label of the work panel button.
+/// The tooltip of the work panel button.
 pub const WORK_LABEL: &str = "Work (P)";
-/// The label of the rooms overlay button.
+/// The tooltip of the rooms overlay button.
 pub const ROOMS_LABEL: &str = "Rooms (O)";
-
-/// The hint line of a tool.
-pub fn tool_hint(tool: Tool) -> &'static str {
-    match tool {
-        Tool::Select => "Select: click a colonist or a tile",
-        Tool::Cut => "Cut: drag over trees",
-        Tool::Mine => "Mine: drag over rock",
-        Tool::Haul => "Haul: drag over items on the ground",
-        Tool::Stockpile => "Zone: drag to make a stockpile zone",
-        Tool::Cancel => "Cancel: drag over orders",
-        Tool::Build => "Build: pick, then drag on the map",
-        Tool::Deconstruct => "Remove: drag over buildings",
-    }
-}
 
 /// The command for a click on a priority cell.
 pub fn priority_command(id: ColonistId, kind: JobKind, current: u8, backward: bool) -> Command {
@@ -151,6 +149,104 @@ pub fn recipe_command(x: u16, y: u16, recipe: u16, button: usize) -> Command {
     }
 }
 
+/// The rows of the colonist panel: name, job, walking target, and what the colonist carries.
+/// The skills and the work speeds (why chains) are folds.
+fn colonist_panel_rows(rows: Vec<Row>, state: &UiState) -> (Vec<Row>, Vec<Fold>) {
+    let mut out = Vec::new();
+    let mut folds = Vec::new();
+    // `Some(open)` while the rows of a fold go by.
+    let mut inside: Option<bool> = None;
+    for row in rows {
+        match row {
+            Row::Section(name) => {
+                let fold = match name.as_str() {
+                    "Skills" => Some(Fold::Skills),
+                    "Work speed" => Some(Fold::WorkSpeed),
+                    _ => None,
+                };
+                match fold {
+                    Some(f) => {
+                        let open = state.open.contains(&f);
+                        out.push(Row::Fold(name, open));
+                        folds.push(f);
+                        inside = Some(open);
+                    }
+                    None => {
+                        out.push(Row::Section(name));
+                        inside = None;
+                    }
+                }
+            }
+            Row::Pair(key, _)
+                if inside.is_none()
+                    && matches!(key.as_str(), "Position" | "Step" | "Priorities" | "") => {}
+            other => {
+                if inside != Some(false) {
+                    out.push(other);
+                }
+            }
+        }
+    }
+    (out, folds)
+}
+
+/// The rows of the tile panel: only the values that say something. The named parts of the room
+/// values (why chains) are a fold.
+fn tile_panel_rows(rows: Vec<Row>, state: &UiState) -> (Vec<Row>, Vec<Fold>) {
+    let mut out = Vec::new();
+    let mut parts = Vec::new();
+    let mut in_room = false;
+    for row in rows {
+        match row {
+            Row::Pair(_, ref v) if v == "-" => {}
+            Row::Section(ref name) if name == "Room" => {
+                in_room = true;
+                out.push(row);
+            }
+            Row::Section(_) => {
+                in_room = false;
+                out.push(row);
+            }
+            Row::Line(ref l) if in_room && l.starts_with("  ") => parts.push(row),
+            other => out.push(other),
+        }
+    }
+    let mut folds = Vec::new();
+    if !parts.is_empty() {
+        let open = state.open.contains(&Fold::Details);
+        out.push(Row::Fold("Details".to_owned(), open));
+        folds.push(Fold::Details);
+        if open {
+            out.extend(parts);
+        }
+    }
+    (out, folds)
+}
+
+/// Cut long texts, and cut rows from the end so that the panel is not taller than `max_h`.
+fn fit_rows(mut rows: Vec<Row>, max_h: f32) -> Vec<Row> {
+    for row in &mut rows {
+        match row {
+            Row::Pair(k, v) => {
+                *k = shorten(k, CLIP_CHARS);
+                *v = shorten(v, CLIP_CHARS);
+            }
+            Row::Line(t) | Row::Section(t) | Row::Fold(t, _) | Row::Title(t) => {
+                *t = shorten(t, CLIP_CHARS + 6);
+            }
+        }
+    }
+    let mut cut = false;
+    while rows.len() > 2 && ui::rows_layout((0.0, 0.0), &rows, true).panel.h > max_h {
+        rows.pop();
+        cut = true;
+    }
+    if cut && let Some(last) = rows.last_mut() {
+        *last = Row::Line("...".to_owned());
+    }
+    rows
+}
+
 /// Text of the build panel.
 struct BuildPanel {
     title: String,
@@ -158,6 +254,7 @@ struct BuildPanel {
     active_building: usize,
     materials: Vec<String>,
     material_ids: Vec<u16>,
+    material_colors: Vec<Color>,
     active_material: Option<u16>,
     lines: Vec<String>,
 }
@@ -168,33 +265,35 @@ impl BuildPanel {
         let building = h.build.building();
         let name = |b: u16| rules.building(b).map_or("?", |d| d.name.as_str());
         let buildings = (0..rules.buildings.len())
-            .map(|i| format!("{} ({})", name(u16::try_from(i).unwrap_or(0)), i + 1))
+            .map(|i| name(u16::try_from(i).unwrap_or(0)).to_owned())
             .collect();
         let material_ids = build_ui::fitting_materials(rules, building);
         let materials = material_ids
             .iter()
             .map(|&m| inspector::material_name(h.sim, m))
             .collect();
+        let material_colors = material_ids
+            .iter()
+            .map(|&m| {
+                rules
+                    .materials
+                    .get(usize::from(m))
+                    .map_or(rgb_color(pal::DIM, 255), |d| rgb_color(d.color, 255))
+            })
+            .collect();
         let active_material = h.build.material(h.sim);
         let mut lines = Vec::new();
-        if let Some(def) = rules.building(building) {
-            let hint = build_ui::shape_hint(build_ui::shape_of(def.kind));
+        if rules.building(building).is_some() {
             match active_material {
                 Some(m) => {
-                    lines.push(format!(
-                        "{hint}: {}",
-                        build_ui::cost_text(rules, building, m)
-                    ));
+                    lines.push(build_ui::cost_text(rules, building, m));
                     lines.push(format!(
                         "In stock: {} {}",
                         h.sim.items().total_units(m),
                         inspector::material_name(h.sim, m)
                     ));
                 }
-                None => lines.push(format!("{hint}. No material fits")),
-            }
-            if def.kind == base::content::BuildingKind::Roof {
-                lines.push("A roof needs a wall within 6 tiles".to_owned());
+                None => lines.push("No material fits".to_owned()),
             }
         }
         Self {
@@ -203,6 +302,7 @@ impl BuildPanel {
             active_building: usize::from(building),
             materials,
             material_ids,
+            material_colors,
             active_material,
             lines,
         }
@@ -213,7 +313,6 @@ impl BuildPanel {
             origin,
             &self.title,
             &self.buildings,
-            "Material",
             &self.materials,
             &self.lines,
             BUILD_WIDTH,
@@ -238,11 +337,19 @@ impl WorkshopPanel {
         } else {
             lines.remove(0)
         };
+        for line in &mut lines {
+            *line = shorten(line, CLIP_CHARS + 6);
+        }
+        let mut recipes = inspector::workshop_recipes(sim, tile.0, tile.1);
+        for r in &mut recipes {
+            r.label = shorten(&r.label, CLIP_CHARS + 6);
+            r.detail = shorten(&r.detail, CLIP_CHARS + 6);
+        }
         Some(Self {
             tile,
             title,
             lines,
-            recipes: inspector::workshop_recipes(sim, tile.0, tile.1),
+            recipes,
         })
     }
 
@@ -260,15 +367,16 @@ impl WorkshopPanel {
 struct FilterPanel {
     id: StockpileId,
     labels: Vec<String>,
+    colors: Vec<Option<Color>>,
 }
 
 impl FilterPanel {
     fn layout(&self, origin: (f32, f32)) -> ui::GridLayout {
-        ui::grid_layout(origin, "Stockpile accepts", &self.labels, FILTER_WIDTH)
+        ui::grid_layout(origin, "Stockpile", &self.labels, FILTER_WIDTH)
     }
 }
 
-/// The side panel under the tile panel.
+/// The side panel near the tile panel.
 enum Side {
     Filter(FilterPanel),
     Workshop(WorkshopPanel),
@@ -276,100 +384,100 @@ enum Side {
 
 /// The text and data of every panel of one frame.
 struct Content {
-    status_before: Vec<String>,
-    status_after: Vec<String>,
-    help: Vec<String>,
-    toolbar_labels: Vec<String>,
+    clock: String,
+    date: String,
+    count: String,
     work_names: Vec<String>,
     build: Option<BuildPanel>,
     colonist: Vec<Row>,
+    colonist_folds: Vec<Fold>,
     tile: Option<Vec<Row>>,
+    tile_folds: Vec<Fold>,
     side: Option<Side>,
     materials: Vec<u16>,
 }
 
 impl Content {
     fn new(h: &HudInput) -> Self {
-        let status_before = vec![
-            ui::format_time(&h.sim.time()),
-            format!("Tick {}   {}", h.sim.tick(), h.map_name),
-            format!("State hash {:016x}", h.sim.state_hash()),
-        ];
-        let mut status_after = vec![
-            format!("FPS {}  {:.1} px/tile", h.fps, h.zoom),
-            tool_hint(h.tool).to_owned(),
-        ];
-        if !h.last_event.is_empty() {
-            status_after.push(shorten(h.last_event, STATUS_CHARS));
-        }
-        let mut toolbar_labels: Vec<String> = Tool::ALL.iter().map(|t| tool_label(*t)).collect();
-        toolbar_labels.push(WORK_LABEL.to_owned());
-        toolbar_labels.push(ROOMS_LABEL.to_owned());
-        let colonist = h
-            .selected
-            .map(|id| inspector::colonist_rows(h.sim, id))
-            .unwrap_or_default();
+        let time = h.sim.time();
+        let max_h = layout::panel_height(h.view, Tool::ALL.len() + 2);
+        let (colonist, colonist_folds) = match h.selected {
+            Some(id) => {
+                let (rows, folds) =
+                    colonist_panel_rows(inspector::colonist_rows(h.sim, id), h.state);
+                (fit_rows(rows, max_h), folds)
+            }
+            None => (Vec::new(), Vec::new()),
+        };
         let materials = tools::haulable_materials(h.sim.rules());
-        let tile = h
-            .selected_tile
-            .or(h.hover_tile)
-            .map(|(x, y)| inspector::tile_rows(h.sim, x, y, &materials));
+        let (tile, tile_folds) = match h.selected_tile {
+            Some((x, y)) => {
+                let (rows, folds) =
+                    tile_panel_rows(inspector::tile_rows(h.sim, x, y, &materials), h.state);
+                (Some(fit_rows(rows, max_h)), folds)
+            }
+            None => (None, Vec::new()),
+        };
         let side = h.selected_tile.and_then(|tile| {
             if let Some(panel) = WorkshopPanel::new(h.sim, tile) {
                 return Some(Side::Workshop(panel));
             }
             let id = inspector::zone_at(h.sim, tile.0, tile.1)?;
             let mut labels = vec!["All".to_owned()];
-            labels.extend(
-                materials
-                    .iter()
-                    .map(|&m| inspector::material_name(h.sim, m)),
-            );
+            let mut colors = vec![None];
+            for &m in &materials {
+                labels.push(inspector::material_name(h.sim, m));
+                colors.push(
+                    h.sim
+                        .rules()
+                        .materials
+                        .get(usize::from(m))
+                        .map(|d| rgb_color(d.color, 255)),
+                );
+            }
             labels.push("Remove zone".to_owned());
-            Some(Side::Filter(FilterPanel { id, labels }))
+            colors.push(None);
+            Some(Side::Filter(FilterPanel { id, labels, colors }))
         });
         Self {
-            status_before,
-            status_after,
-            help: help_lines(),
-            toolbar_labels,
+            clock: ui::clock_text(&time),
+            date: ui::date_text(&time),
+            count: h.sim.colonists().iter().count().to_string(),
             work_names: inspector::work_rows(h.sim)
                 .iter()
                 .map(|r| r.name.clone())
                 .collect(),
             build: (h.tool == Tool::Build).then(|| BuildPanel::new(h)),
             colonist,
+            colonist_folds,
             tile,
+            tile_folds,
             side,
             materials,
         }
     }
 
-    fn toolbar_refs(&self) -> Vec<&str> {
-        self.toolbar_labels.iter().map(String::as_str).collect()
+    fn count_w(&self) -> f32 {
+        ui::ICON_PX + 6.0 + ui::text_px(&self.count)
     }
 
     fn sizes(&self, h: &HudInput) -> Sizes {
         let size = |r: ui::Rect| Size::new(r.w, r.h);
         let origin = (0.0, 0.0);
-        let labels: Vec<&str> = SPEEDS.iter().map(|s| speed_label(*s)).collect();
         Sizes {
-            status: size(
-                ui::hud_layout(origin, &self.status_before, &labels, &self.status_after).panel,
-            ),
-            toolbar: size(ui::column_layout(origin, &self.toolbar_refs()).panel),
-            help: size(ui::hud_layout(origin, &self.help, &[], &[]).panel),
+            clock_w: ui::text_px(&self.clock).max(ui::text_px(&self.date)),
+            count_w: self.count_w(),
+            toolbar_buttons: (Tool::ALL.len() + 2, Tool::ALL.len()),
             work: h
                 .show_work
-                .then(|| size(ui::work_layout(origin, &self.work_names, WORK_HINT).panel)),
+                .then(|| size(ui::work_layout(origin, &self.work_names).panel)),
             build: self.build.as_ref().map(|b| size(b.layout(origin).panel)),
             colonist: (!self.colonist.is_empty())
-                .then(|| size(ui::rows_layout(origin, &self.colonist).panel)),
+                .then(|| size(ui::rows_layout(origin, &self.colonist, true).panel)),
             tile: self
                 .tile
                 .as_ref()
-                .map(|rows| size(ui::rows_layout(origin, rows).panel)),
-            tile_is_hover: h.selected_tile.is_none(),
+                .map(|rows| size(ui::rows_layout(origin, rows, true).panel)),
             side: self.side.as_ref().map(|s| match s {
                 Side::Filter(f) => size(f.layout(origin).panel),
                 Side::Workshop(w) => size(w.layout(origin).panel),
@@ -385,16 +493,111 @@ fn plan(h: &HudInput) -> (Content, Placed) {
     (content, placed)
 }
 
+fn draw_top(ui: &mut Ui, placed: &Placed, content: &Content, h: &HudInput) -> Vec<UiAction> {
+    ui.bar(placed.top);
+    ui.label((placed.clock.0, placed.clock.1), &content.clock);
+    ui.label_color(
+        (placed.clock.0, placed.clock.1 + ui::LINE_H),
+        &content.date,
+        ui::dim(),
+    );
+    let mut actions = Vec::new();
+    for (rect, (speed, icon, tip)) in placed.speeds.iter().zip(SPEED_BUTTONS) {
+        if ui.icon_button(*rect, icon, h.speed == speed, tip) {
+            actions.push(UiAction::SetSpeed(speed));
+        }
+    }
+    let c = placed.count;
+    ui.icon(
+        cells::icons::PERSON,
+        (c.x, c.y + (c.h - ui::ICON_PX) / 2.0),
+        ui::ICON_PX,
+        rgb_color(pal::KEY, 255),
+    );
+    ui.label(
+        (c.x + ui::ICON_PX + 6.0, c.y + (c.h - 16.0) / 2.0),
+        &content.count,
+    );
+    ui.tip(c, "Colonists");
+    actions
+}
+
+fn draw_toolbar(ui: &mut Ui, placed: &Placed, h: &HudInput) -> Vec<UiAction> {
+    ui.panel(placed.toolbar);
+    let mut actions = Vec::new();
+    for (i, rect) in placed.toolbar_buttons.iter().enumerate() {
+        match Tool::ALL.get(i) {
+            Some(tool) => {
+                if ui.icon_button(
+                    *rect,
+                    icons::cell_for(*tool),
+                    h.tool == *tool,
+                    &tool_label(*tool),
+                ) {
+                    actions.push(UiAction::SetTool(*tool));
+                }
+            }
+            None if i == Tool::ALL.len() => {
+                if ui.icon_button(*rect, cells::icons::WORK, h.show_work, WORK_LABEL) {
+                    actions.push(UiAction::ToggleWork);
+                }
+            }
+            None => {
+                if ui.icon_button(*rect, cells::icons::BRACKETS, h.show_rooms, ROOMS_LABEL) {
+                    actions.push(UiAction::ToggleRooms);
+                }
+            }
+        }
+    }
+    actions
+}
+
+fn draw_toast(ui: &Ui, placed: &Placed, h: &HudInput) {
+    let Some(r) = placed.toast else { return };
+    if h.last_event.is_empty() {
+        return;
+    }
+    let chars = ((r.w - 2.0 * ui::PAD) / (6.0 * ui::SCALE as f32)) as usize;
+    let text = shorten(h.last_event, chars);
+    ui.label_color((r.x + ui::PAD, r.y + (r.h - 16.0) / 2.0), &text, ui::dim());
+}
+
+fn draw_debug(ui: &Ui, placed: &Placed, h: &HudInput) {
+    if !h.state.debug {
+        return;
+    }
+    let hover = h
+        .hover_tile
+        .map_or_else(|| "-".to_owned(), |(x, y)| format!("({x}, {y})"));
+    let lines = [
+        format!("Tick {}  {}", h.sim.tick(), h.map_name),
+        format!("Hash {:016x}", h.sim.state_hash()),
+        format!("FPS {}  {:.1} px/tile  hover {hover}", h.fps, h.zoom),
+    ];
+    let mut y = placed.toolbar.y - ui::LINE_H * lines.len() as f32 - 4.0;
+    if let Some(b) = placed.build {
+        y = y.min(b.y - ui::LINE_H * lines.len() as f32 - 4.0);
+    }
+    for line in &lines {
+        ui.label_color((layout::MARGIN, y), line, ui::dim());
+        y += ui::LINE_H;
+    }
+}
+
 fn draw_work(ui: &mut Ui, origin: (f32, f32), content: &Content, h: &HudInput) -> Vec<UiAction> {
     let rows = inspector::work_rows(h.sim);
-    let layout = ui::work_layout(origin, &content.work_names, WORK_HINT);
-    ui.panel(layout.panel);
-    ui.label_color(layout.title, "Work priorities", ui::accent());
-    ui.label_color(layout.hint, WORK_HINT, ui::dim());
-    for (kind, pos) in JobKind::ALL.iter().zip(&layout.headers) {
-        ui.label(*pos, &kind.name().chars().take(3).collect::<String>());
-    }
+    let layout = ui::work_layout(origin, &content.work_names);
     let mut actions = Vec::new();
+    if ui.titled_panel(layout.panel, "Work priorities", Some(layout.close)) {
+        actions.push(UiAction::ToggleWork);
+    }
+    for (kind, pos) in JobKind::ALL.iter().zip(&layout.headers) {
+        ui.label_color(
+            *pos,
+            &kind.name().chars().take(3).collect::<String>(),
+            ui::dim(),
+        );
+    }
     for (row_index, row) in rows.iter().enumerate() {
         if ui.button(
             layout.names[row_index],
@@ -425,69 +628,63 @@ fn draw_work(ui: &mut Ui, origin: (f32, f32), content: &Content, h: &HudInput) -
     actions
 }
 
-fn draw_toolbar(ui: &mut Ui, origin: (f32, f32), content: &Content, h: &HudInput) -> Vec<UiAction> {
-    let layout = ui::column_layout(origin, &content.toolbar_refs());
-    ui.panel(layout.panel);
-    let mut actions = Vec::new();
-    for (i, rect) in layout.buttons.iter().enumerate() {
-        let label = &content.toolbar_labels[i];
-        match Tool::ALL.get(i) {
-            Some(tool) => {
-                if ui.icon_button(*rect, icons::cell_for(*tool), label, h.tool == *tool) {
-                    actions.push(UiAction::SetTool(*tool));
-                }
-            }
-            None if i == Tool::ALL.len() => {
-                if ui.icon_button(*rect, cells::icons::WORK, label, h.show_work) {
-                    actions.push(UiAction::ToggleWork);
-                }
-            }
-            None => {
-                if ui.icon_button(*rect, cells::icons::BRACKETS, label, h.show_rooms) {
-                    actions.push(UiAction::ToggleRooms);
-                }
-            }
-        }
-    }
-    actions
-}
-
 fn draw_build(ui: &mut Ui, origin: (f32, f32), panel: &BuildPanel) -> Vec<UiAction> {
     let layout = panel.layout(origin);
-    ui.panel(layout.panel);
-    ui.label_color(layout.title, &panel.title, ui::accent());
     let mut actions = Vec::new();
+    if ui.titled_panel(layout.panel, &panel.title, Some(layout.close)) {
+        actions.push(UiAction::SetTool(Tool::Select));
+    }
     for (i, (rect, label)) in layout.buildings.iter().zip(&panel.buildings).enumerate() {
-        if ui.button(*rect, label, i == panel.active_building) {
+        if ui.chip(*rect, label, None, i == panel.active_building) {
             actions.push(UiAction::PickBuilding(i));
         }
     }
-    ui.label_color(layout.material_header, "Material", ui::dim());
-    for ((rect, label), id) in layout
+    ui.rule(
+        layout.panel.x + ui::PAD,
+        layout.rule_y,
+        layout.panel.w - 2.0 * ui::PAD,
+    );
+    for (((rect, label), id), color) in layout
         .materials
         .iter()
         .zip(&panel.materials)
         .zip(&panel.material_ids)
+        .zip(&panel.material_colors)
     {
-        if ui.button(*rect, label, panel.active_material == Some(*id)) {
+        if ui.chip(
+            *rect,
+            label,
+            Some(*color),
+            panel.active_material == Some(*id),
+        ) {
             actions.push(UiAction::PickMaterial(*id));
         }
     }
-    for (pos, line) in layout.lines.iter().zip(&panel.lines) {
-        ui.label(*pos, line);
+    for (i, (pos, line)) in layout.lines.iter().zip(&panel.lines).enumerate() {
+        if i == 0 {
+            ui.label(*pos, line);
+        } else {
+            ui.label_color(*pos, line, ui::dim());
+        }
     }
     actions
 }
 
 fn draw_workshop(ui: &mut Ui, origin: (f32, f32), panel: &WorkshopPanel) -> Vec<UiAction> {
     let layout = panel.layout(origin);
-    ui.panel(layout.panel);
-    ui.label_color(layout.title, &panel.title, ui::accent());
-    for (pos, line) in layout.lines.iter().zip(&panel.lines) {
-        ui.label(*pos, line);
-    }
     let mut actions = Vec::new();
+    if ui.titled_panel(layout.panel, &panel.title, Some(layout.close)) {
+        actions.push(UiAction::CloseTile);
+    }
+    for (pos, line) in layout.lines.iter().zip(&panel.lines) {
+        ui.label_color(*pos, line, ui::dim());
+    }
     for (row, recipe) in layout.recipes.iter().zip(&panel.recipes) {
+        ui.rule(
+            layout.panel.x + ui::PAD,
+            row.rule_y,
+            layout.panel.w - 2.0 * ui::PAD,
+        );
         ui.label(row.label, &recipe.label);
         ui.label_color(row.detail, &recipe.detail, ui::dim());
         for (i, (rect, text)) in row.buttons.iter().zip(ui::RECIPE_BUTTONS).enumerate() {
@@ -516,9 +713,10 @@ fn draw_filter(
     };
     let id = panel.id;
     let layout = panel.layout(origin);
-    ui.panel(layout.panel);
-    ui.label_color(layout.header, "Stockpile accepts", ui::accent());
     let mut actions = Vec::new();
+    if ui.titled_panel(layout.panel, "Stockpile", Some(layout.close)) {
+        actions.push(UiAction::CloseTile);
+    }
     let last = panel.labels.len() - 1;
     for (i, (rect, label)) in layout.buttons.iter().zip(&panel.labels).enumerate() {
         let active = match i {
@@ -528,7 +726,8 @@ fn draw_filter(
                 .get(n - 1)
                 .is_some_and(|&m| zone.filter.accepts(m)),
         };
-        if ui.button(*rect, label, active) {
+        let swatch = panel.colors.get(i).copied().flatten();
+        if ui.chip(*rect, label, swatch, active) {
             actions.push(UiAction::Command(if i == last {
                 Command::RemoveStockpile { id }
             } else {
@@ -542,26 +741,34 @@ fn draw_filter(
     actions
 }
 
+/// Draw an inspector panel and turn its clicks into actions. `folds` lists the fold of each
+/// fold row, in order. `close` is the action of the close button.
+fn draw_inspector(
+    ui: &mut Ui,
+    origin: (f32, f32),
+    rows: &[Row],
+    folds: &[Fold],
+    close: UiAction,
+) -> Vec<UiAction> {
+    let (_, hit) = ui::rows_panel(ui, origin, rows, true);
+    let mut actions = Vec::new();
+    if let Some(fold) = hit.fold.and_then(|i| folds.get(i)) {
+        actions.push(UiAction::ToggleFold(*fold));
+    }
+    if hit.closed {
+        actions.push(close);
+    }
+    actions
+}
+
 /// Draw the whole display. Returns what the player asked for.
 pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
     let (content, placed) = plan(h);
     let mut actions = Vec::new();
-    actions.extend(ui::status_panel(
-        ui,
-        (placed.status.x, placed.status.y),
-        &content.status_before,
-        h.speed,
-        &content.status_after,
-    ));
-    actions.extend(draw_toolbar(
-        ui,
-        (placed.toolbar.x, placed.toolbar.y),
-        &content,
-        h,
-    ));
-    if let Some(help) = placed.help {
-        ui::text_panel(ui, (help.x, help.y), &content.help);
-    }
+    actions.extend(draw_top(ui, &placed, &content, h));
+    actions.extend(draw_toolbar(ui, &placed, h));
+    draw_toast(ui, &placed, h);
+    draw_debug(ui, &placed, h);
     if let (Some(r), Some(panel)) = (placed.build, &content.build) {
         actions.extend(draw_build(ui, (r.x, r.y), panel));
     }
@@ -569,10 +776,22 @@ pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
         actions.extend(draw_work(ui, (r.x, r.y), &content, h));
     }
     if let Some(r) = placed.colonist {
-        ui::rows_panel(ui, (r.x, r.y), &content.colonist);
+        actions.extend(draw_inspector(
+            ui,
+            (r.x, r.y),
+            &content.colonist,
+            &content.colonist_folds,
+            UiAction::CloseColonist,
+        ));
     }
     if let (Some(r), Some(rows)) = (placed.tile, &content.tile) {
-        ui::rows_panel(ui, (r.x, r.y), rows);
+        actions.extend(draw_inspector(
+            ui,
+            (r.x, r.y),
+            rows,
+            &content.tile_folds,
+            UiAction::CloseTile,
+        ));
     }
     if let (Some(r), Some(side)) = (placed.side, &content.side) {
         match side {
@@ -582,6 +801,7 @@ pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
             Side::Workshop(w) => actions.extend(draw_workshop(ui, (r.x, r.y), w)),
         }
     }
+    ui.finish(h.view);
     actions
 }
 
@@ -606,34 +826,19 @@ mod tests {
     }
 
     #[test]
-    fn help_names_every_tool_key_and_fits_the_window() {
-        let help = help_lines().join("\n");
-        for tool in Tool::ALL {
-            let key = tool.key_label();
-            assert!(
-                help.contains(&format!("{key} ")),
-                "help does not mention key {key}"
-            );
-        }
-        assert!(help.contains("P: work panel"));
-        assert!(help.contains("O: rooms overlay"));
-        assert!(help.contains("1-7"));
-        for line in help_lines() {
-            assert!(
-                ui::text_px(&line) + 2.0 * ui::PAD <= 1280.0 - 2.0 * MARGIN,
-                "{line}"
-            );
-        }
-    }
-
-    #[test]
-    fn toolbar_labels_show_the_key_of_each_tool() {
+    fn tooltips_show_the_key_of_each_tool() {
         assert_eq!(tool_label(Tool::Cut), "Cut (T)");
         assert_eq!(tool_label(Tool::Stockpile), "Zone (Z)");
         assert_eq!(tool_label(Tool::Build), "Build (B)");
         assert_eq!(tool_label(Tool::Deconstruct), "Remove (X)");
         assert_eq!(WORK_LABEL, "Work (P)");
         assert_eq!(ROOMS_LABEL, "Rooms (O)");
+    }
+
+    #[test]
+    fn every_speed_has_a_button() {
+        let speeds: Vec<Speed> = SPEED_BUTTONS.iter().map(|b| b.0).collect();
+        assert_eq!(speeds, vec![Speed::Paused, Speed::X1, Speed::X3, Speed::X6]);
     }
 
     #[test]
@@ -702,11 +907,12 @@ mod tests {
     }
 
     #[test]
-    fn every_tool_has_a_hint() {
-        for tool in Tool::ALL {
-            assert!(tool_hint(tool).starts_with(tool.name()));
-            assert!(tool_hint(tool).chars().count() <= STATUS_CHARS);
-        }
+    fn ui_state_toggles_a_fold() {
+        let mut state = UiState::default();
+        state.toggle(Fold::Skills);
+        assert!(state.open.contains(&Fold::Skills));
+        state.toggle(Fold::Skills);
+        assert!(state.open.is_empty());
     }
 
     /// A colony with seven colonists, a roofed room, and a workshop.
@@ -741,10 +947,10 @@ mod tests {
     fn input<'a>(
         sim: &'a Sim,
         build: &'a BuildState,
+        state: &'a UiState,
         view: View,
         tool: Tool,
         tile: Option<(u16, u16)>,
-        hover: Option<(u16, u16)>,
     ) -> HudInput<'a> {
         HudInput {
             sim,
@@ -755,38 +961,55 @@ mod tests {
             show_rooms: true,
             selected: sim.colonists().iter().next().map(|(id, _)| id),
             selected_tile: tile,
-            hover_tile: hover,
+            hover_tile: None,
             speed: Speed::X1,
             fps: 60,
             zoom: 16.0,
             map_name: "temperate forest",
             last_event: "Colonist 0 stopped Cut: no path",
+            state,
         }
     }
 
+    fn all_folds_open() -> UiState {
+        UiState {
+            open: [Fold::Skills, Fold::WorkSpeed, Fold::Details]
+                .into_iter()
+                .collect(),
+            debug: false,
+        }
+    }
+
+    const VIEWS: [(f32, f32); 4] = [
+        (1280.0, 720.0),
+        (1920.0, 1080.0),
+        (1024.0, 768.0),
+        (800.0, 600.0),
+    ];
+
     #[test]
-    fn panels_do_not_overlap_at_1280_and_1920() {
+    fn panels_do_not_overlap_and_stay_inside_the_window() {
         let sim = busy_sim();
         let build = BuildState::new(sim.rules());
-        for view in [(1280.0, 720.0), (1920.0, 1080.0)] {
-            for tool in [Tool::Select, Tool::Build, Tool::Deconstruct] {
-                // A room tile, a workshop tile, an empty tile, a hover tile, nothing.
-                for (tile, hover) in [
-                    (Some((5, 3)), None),
-                    (Some((6, 4)), None),
-                    (Some((0, 0)), None),
-                    (None, Some((5, 3))),
-                    (None, None),
-                ] {
-                    let h = input(&sim, &build, view, tool, tile, hover);
-                    let (_, placed) = plan(&h);
-                    assert_eq!(
-                        layout::first_overlap(&placed),
-                        None,
-                        "view {view:?}, tool {tool:?}, tile {tile:?}, hover {hover:?}"
-                    );
-                    for (name, r) in placed.all() {
-                        assert!(r.x >= 0.0 && r.y >= 0.0, "{name} starts outside the window");
+        for state in [UiState::default(), all_folds_open()] {
+            for view in VIEWS {
+                for tool in [Tool::Select, Tool::Build, Tool::Deconstruct] {
+                    // A room tile, a workshop tile, an empty tile, nothing.
+                    for tile in [Some((5, 3)), Some((6, 4)), Some((0, 0)), None] {
+                        let h = input(&sim, &build, &state, view, tool, tile);
+                        let (_, placed) = plan(&h);
+                        assert_eq!(
+                            layout::first_overlap(&placed),
+                            None,
+                            "view {view:?}, tool {tool:?}, tile {tile:?}"
+                        );
+                        for (name, r) in placed.all() {
+                            assert!(r.x >= 0.0 && r.y >= 0.0, "{name} starts outside");
+                            assert!(
+                                r.right() <= view.0 && r.bottom() <= view.1,
+                                "{name} {r:?} ends outside {view:?}"
+                            );
+                        }
                     }
                 }
             }
@@ -794,58 +1017,155 @@ mod tests {
     }
 
     #[test]
-    fn the_colonist_panel_does_not_cover_the_toolbar_at_1280() {
+    fn the_important_panels_show_at_1280_and_1920() {
         let sim = busy_sim();
         let build = BuildState::new(sim.rules());
-        let h = input(
-            &sim,
-            &build,
-            (1280.0, 720.0),
-            Tool::Select,
-            Some((5, 3)),
-            None,
+        let state = UiState::default();
+        for view in [(1280.0, 720.0), (1920.0, 1080.0)] {
+            // The build tool shows the build panel and the colonist panel (work panel closed).
+            let mut h = input(&sim, &build, &state, view, Tool::Build, None);
+            h.show_work = false;
+            let (_, placed) = plan(&h);
+            assert!(placed.build.is_some(), "the build panel must show");
+            assert!(placed.colonist.is_some(), "the colonist panel must show");
+            // The select tool on a workshop shows the tile panel and the workshop panel.
+            let mut h = input(&sim, &build, &state, view, Tool::Select, Some((6, 4)));
+            h.show_work = false;
+            let (_, placed) = plan(&h);
+            assert!(placed.colonist.is_some());
+            assert!(placed.tile.is_some());
+            assert!(placed.side.is_some(), "the workshop panel must show");
+        }
+    }
+
+    #[test]
+    fn the_work_panel_shows_at_1280_without_the_right_panels() {
+        let sim = busy_sim();
+        let build = BuildState::new(sim.rules());
+        let state = UiState::default();
+        let mut h = input(&sim, &build, &state, (1280.0, 720.0), Tool::Select, None);
+        h.selected = None;
+        let (_, placed) = plan(&h);
+        assert!(placed.work.is_some());
+    }
+
+    #[test]
+    fn the_reserved_slots_stay_free() {
+        let sim = busy_sim();
+        let build = BuildState::new(sim.rules());
+        let state = all_folds_open();
+        for view in VIEWS {
+            let h = input(&sim, &build, &state, view, Tool::Build, Some((5, 3)));
+            let (_, placed) = plan(&h);
+            for (name, r) in placed.all() {
+                if name != "top" {
+                    assert!(!r.intersects(&placed.alerts_slot), "{name} covers alerts");
+                }
+            }
+            if view.0 >= 1024.0 {
+                for s in &placed.speeds {
+                    assert!(!s.intersects(&placed.temp_slot));
+                }
+                assert!(!placed.count.intersects(&placed.temp_slot));
+            }
+        }
+    }
+
+    #[test]
+    fn the_toolbar_has_a_button_for_every_tool_and_the_two_panel_buttons() {
+        let sim = busy_sim();
+        let build = BuildState::new(sim.rules());
+        let state = UiState::default();
+        for view in VIEWS {
+            let h = input(&sim, &build, &state, view, Tool::Select, None);
+            let (_, placed) = plan(&h);
+            assert_eq!(placed.toolbar_buttons.len(), Tool::ALL.len() + 2);
+            assert_eq!(placed.speeds.len(), 4);
+            for b in &placed.toolbar_buttons {
+                assert!(b.right() <= view.0 && b.bottom() <= view.1);
+            }
+        }
+    }
+
+    #[test]
+    fn the_colonist_panel_hides_the_details_until_a_fold_opens() {
+        let sim = busy_sim();
+        let (id, _) = sim.colonists().iter().next().unwrap();
+        let rows = inspector::colonist_rows(&sim, id);
+        let closed = UiState::default();
+        let (short, folds) = colonist_panel_rows(rows.clone(), &closed);
+        assert_eq!(folds, vec![Fold::Skills, Fold::WorkSpeed]);
+        assert!(
+            !short
+                .iter()
+                .any(|r| matches!(r, Row::Pair(k, _) if k == "Position" || k == "Step"))
         );
-        let (_, placed) = plan(&h);
-        let colonist = placed.colonist.unwrap();
-        assert!(!colonist.intersects(&placed.toolbar));
-        let help = placed.help.unwrap();
-        assert!(!colonist.intersects(&help));
-        assert!(placed.toolbar.bottom() <= help.y);
+        assert!(!short.iter().any(|r| matches!(r, Row::Line(_))));
+        assert!(
+            short
+                .iter()
+                .any(|r| matches!(r, Row::Pair(k, _) if k == "Job"))
+        );
+        let (long, _) = colonist_panel_rows(rows, &all_folds_open());
+        assert!(long.len() > short.len() + 9);
+        assert!(long.iter().any(|r| matches!(r, Row::Line(_))));
     }
 
     #[test]
-    fn the_important_panels_stay_inside_the_window() {
+    fn the_tile_panel_drops_empty_values_and_folds_the_room_details() {
         let sim = busy_sim();
-        let build = BuildState::new(sim.rules());
-        let view = (1280.0, 720.0);
-        // The build tool keeps no selected tile, so the build panel has room.
-        let h = input(&sim, &build, view, Tool::Build, None, None);
-        let (_, placed) = plan(&h);
-        assert!(placed.build.is_some(), "the build panel must show");
-        assert!(placed.colonist.is_some());
-        for (name, r) in placed.all() {
-            assert!(r.right() <= view.0 && r.bottom() <= view.1, "{name} {r:?}");
-        }
-        // The select tool on a workshop shows the tile and the workshop panel.
-        let h = input(&sim, &build, view, Tool::Select, Some((6, 4)), None);
-        let (_, placed) = plan(&h);
-        assert!(placed.colonist.is_some());
-        assert!(placed.tile.is_some());
-        assert!(placed.side.is_some(), "the workshop panel must show");
-        for (name, r) in placed.all() {
-            assert!(r.right() <= view.0 && r.bottom() <= view.1, "{name} {r:?}");
-        }
+        let materials = tools::haulable_materials(sim.rules());
+        let rows = inspector::tile_rows(&sim, 5, 3, &materials);
+        let (short, folds) = tile_panel_rows(rows.clone(), &UiState::default());
+        assert!(
+            !short
+                .iter()
+                .any(|r| matches!(r, Row::Pair(_, v) if v == "-"))
+        );
+        assert_eq!(folds, vec![Fold::Details]);
+        assert!(
+            !short
+                .iter()
+                .any(|r| matches!(r, Row::Line(l) if l.starts_with("  ")))
+        );
+        assert!(
+            short
+                .iter()
+                .any(|r| matches!(r, Row::Pair(k, _) if k == "Insulation"))
+        );
+        let (long, _) = tile_panel_rows(rows, &all_folds_open());
+        assert!(long.len() > short.len());
     }
 
     #[test]
-    fn the_toolbar_is_one_column_of_all_tools_the_work_button_and_the_rooms_button() {
+    fn long_inspector_panels_are_cut_to_the_free_height() {
+        let sim = busy_sim();
+        let (id, _) = sim.colonists().iter().next().unwrap();
+        let (rows, _) = colonist_panel_rows(inspector::colonist_rows(&sim, id), &all_folds_open());
+        let fitted = fit_rows(rows, 300.0);
+        assert!(ui::rows_layout((0.0, 0.0), &fitted, true).panel.h <= 300.0);
+        assert_eq!(fitted.last(), Some(&Row::Line("...".to_owned())));
+    }
+
+    #[test]
+    fn the_build_panel_has_no_hint_lines() {
         let sim = busy_sim();
         let build = BuildState::new(sim.rules());
-        let h = input(&sim, &build, (1280.0, 720.0), Tool::Select, None, None);
-        let content = Content::new(&h);
-        let l = ui::column_layout((MARGIN, 0.0), &content.toolbar_refs());
-        assert_eq!(l.buttons.len(), Tool::ALL.len() + 2);
-        let x = l.buttons[0].x;
-        assert!(l.buttons.iter().all(|b| b.x == x));
+        let state = UiState::default();
+        let h = input(&sim, &build, &state, (1280.0, 720.0), Tool::Build, None);
+        let panel = BuildPanel::new(&h);
+        assert!(panel.lines.len() <= 2);
+        assert!(panel.buildings.iter().all(|b| !b.contains('(')));
+    }
+
+    #[test]
+    fn the_top_bar_keeps_its_margin_to_the_window_edge() {
+        let sim = busy_sim();
+        let build = BuildState::new(sim.rules());
+        let state = UiState::default();
+        let h = input(&sim, &build, &state, (1280.0, 720.0), Tool::Select, None);
+        let (_, placed) = plan(&h);
+        assert!(placed.count.right() <= 1280.0 - MARGIN);
+        assert!(placed.clock.0 >= MARGIN);
     }
 }

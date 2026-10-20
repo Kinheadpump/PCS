@@ -38,6 +38,8 @@ pub enum Action {
     Preset(usize),
     /// Show or hide the tile grid.
     ToggleGrid,
+    /// Show or hide the debug lines (tick, hash, FPS, map).
+    ToggleDebug,
     /// Pause, or return to the speed before the pause.
     TogglePause,
     /// Set the game speed.
@@ -87,6 +89,7 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
     (Trigger::Pressed(KeyCode::F2), Action::Preset(1)),
     (Trigger::Pressed(KeyCode::F3), Action::Preset(2)),
     (Trigger::Pressed(KeyCode::G), Action::ToggleGrid),
+    (Trigger::Pressed(KeyCode::F4), Action::ToggleDebug),
     (Trigger::Pressed(KeyCode::Space), Action::TogglePause),
     (Trigger::Pressed(KeyCode::Q), Action::SetSpeed(Speed::X1)),
     (Trigger::Pressed(KeyCode::E), Action::SetSpeed(Speed::X3)),
@@ -204,6 +207,7 @@ mod tests {
             Action::Preset(0),
             Action::Preset(1),
             Action::Preset(2),
+            Action::ToggleDebug,
             Action::TogglePause,
             Action::SetSpeed(Speed::X1),
             Action::SetSpeed(Speed::X3),
