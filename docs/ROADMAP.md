@@ -358,16 +358,16 @@ The owner wants colonists with their own goals, who form relationships, start fa
 
 | Step | Phase | Content | Depends on |
 |---|---|---|---|
-| MVP slice A | S6 (no new task) | Keep the mood modifier list open for social sources. Colonist age and sex stay in the data. | S6 mood |
+| MVP slice A | S6 (no new task) | Keep the mood modifier list open for social sources. Colonist age, sex, and race stay in the data (all colonists have the same race in the MVP). | S6 mood |
 | MVP slice B | S15 | Migrants have a short background line. Colonists who work or sleep near each other get a bond. The modifier "friend died" scales with the bond. This makes the example in `GAME_DESIGN.md` §15 true. | S6, S15 |
 | L1 Wants and personality (S20) | Phase 4 | Each colonist has 1 life goal and a few short wants. Social trait: introvert or extrovert. An extrovert wants company. An introvert wants time alone. A met want adds a mood modifier. An unmet want adds a negative one. | MVP slice B |
 | L2 Relationships (S21) | Phase 4 | Opinion between two colonists. Friend, rival, enemy, and partner states. Each change is a named contribution (why chain). | L1 |
 | L3 Families, ages, and homes (S22) | Phase 4 | Partners, pregnancy, birth, children, growth to adult, aging and death by age. Children do not work. Colonists and families live in assigned houses (rooms with beds). | L2, beds and food from S6 |
 | L4 Colony growth (S23) | Phase 4 | The colony grows from inside and by migrants. Mood and bonds change the migrant chance (R-017). Colonists leave if the colony fails their goals. | L3 |
 | L5 People of other colonies (S24) | Phase 4 | Friendship, partners, and enmity between colonists and people of rival colonies. Marriage and trade contacts across colonies. Old grudges after raids. | L2, S18, diplomacy (Phase 5) |
-| L6 Races (S25) | Phase 4 | Other peoples as colonists and migrants (see Q-015). Each race is a set of content values: age span, trait chances, comfort band. | L3, content files |
+| L6 Races (S25) | Phase 4 | A few other peoples (3 or 4) as colonists and migrants (Q-015). Each race is a set of content values: age span, trait chances, comfort band, who can be a partner, and who can have offspring together and which race the child gets. Races have no spells. | L3, content files |
 
-The S20 to S25 numbers are proposed. S26 (infinite world spike) is proposed in §7.3. They follow M3 and do not change S0 to S19.
+The S20 to S25 numbers are proposed. The infinite world spike S11a is in §7.3. They follow M3 and do not change S0 to S19.
 
 ### 7.2 Where each owner request goes
 
@@ -385,13 +385,13 @@ The S20 to S25 numbers are proposed. S26 (infinite world spike) is proposed in �
 | Death from accident | New task in S12 (MVP slice D) | A small chance of injury at risky jobs (mining, tree felling). It uses the condition "wounded". |
 | Death from war | S13 (melee), S18 (raids) | Already planned. |
 | Death by age | L3 | |
-| Mystical races | L6 | Needs the owner answer to Q-015. |
+| Mystical races (a few, with rules for love and offspring) | MVP slice A (race field in the data), L6 | Q-015: no spells unless the owner says so. |
 
 Each step needs a rule ID, a content file, and a test before it goes into a sprint. Do not start a step before M3. The MVP slices C and D are small tasks in S12.
 
 ### 7.3 Infinite world and controls review (proposal)
 
-- **S26 Infinite world spike (Phase 4, Q-016):** a design spike, not a feature. Output: a written design and a small prototype in `tools` that makes world chunks on demand from the seed. It answers how the zoom levels, the world map, history, and the embark choice work without a fixed world edge. It starts only after the owner answers Q-016. Worldgen steps 5 to 12 are not changed before then.
+- **S11a Infinite world spike (Q-016):** a design spike, not a feature. It comes right after M2 (S11) and before S12, because an infinite world changes world generation, zoom, the world map, and embark. Output: a written design and a small prototype in `tools` that makes world chunks on demand from the seed. It answers how the zoom levels, the world map, history, and the embark choice work without a fixed world edge, and what changes in the golden hashes and in P-05. The owner decides after the spike if the infinite world goes into the MVP. Worldgen steps 5 to 12 are not changed before then.
 - **Controls and game feel review (Q-017):** the `controls-reviewer` subagent checks how the controls feel and fit the gameplay. First review at M1 (S7 is the first sprint with real gameplay). Second review in S19, with the playtests. The review lists problems with camera, zoom, selection, and build input. The lead agent turns them into tasks.
 
 ## 8. Main project risks

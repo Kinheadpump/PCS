@@ -287,7 +287,7 @@ This section is a plan. It has no rule IDs until the owner approves it. The MVP 
 - **Colony growth:** The colony can grow from inside. Good mood and strong bonds increase the migrant chance (R-017). A colonist whose goals fail for a long time can leave.
 - **Personality:** A colonist is an introvert or an extrovert. An extrovert gets a mood modifier from time with others. An introvert gets one from time alone or in a private room.
 - **Jobs:** Each colonist wants work. A colonist picks the job by colony need and by how many colonists already do it. Without work, the colonist gets a negative mood modifier.
-- **Other colonies and races:** Colonists can have friends and enemies in rival colonies. Other races differ in content values only (Q-015).
+- **Other colonies and races:** Colonists can have friends and enemies in rival colonies. A few other races (3 or 4) differ in content values only: age span, traits, and comfort band. Each race pair has a rule for attraction and for offspring (Q-015).
 - **Limits:** No family trees for historical figures (§16.3). No new crate. All numbers go in content files.
 
 ## 8. Environment
