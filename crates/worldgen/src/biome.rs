@@ -215,13 +215,13 @@ pub fn make_biomes(inputs: &BiomeInputs, params: &WorldParams) -> Grid<WorldBiom
                 B::Lake
             } else if temperature <= i32::from(params.glacier_max_temp) {
                 B::Glacier
-            } else if rel >= i32::from(params.mountain_min) {
-                B::HighMountain
             } else if inputs.volcanic.as_slice()[i] {
                 B::Volcanic
+            } else if rel >= i32::from(params.mountain_min) {
+                B::HighMountain
             } else if touches_ocean && rel < COAST_MAX_HEIGHT {
                 B::Coast
-            } else if inputs.river.as_slice()[i] >= 2 && rel < i32::from(params.floodplain_max) {
+            } else if inputs.river.as_slice()[i] >= 1 && rel < i32::from(params.floodplain_max) {
                 B::Floodplain
             } else {
                 table_biome(temperature, moisture)

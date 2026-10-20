@@ -219,7 +219,7 @@ impl Default for WorldParams {
         Self {
             ridge_height: 2600,
             ridge_cell: 40,
-            volcano_per_mille: 40,
+            volcano_per_mille: 80,
             height_amp: 3200,
             height_cell: 72,
             edge_width: 22,
@@ -233,7 +233,7 @@ impl Default for WorldParams {
             river_large: 1800,
             glacier_max_temp: -14,
             mountain_min: 1800,
-            floodplain_max: 300,
+            floodplain_max: 600,
             province_cell: 16,
             rock_mountain_min: 1200,
             prov_volcanic_pm: 150,
