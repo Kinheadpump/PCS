@@ -38,7 +38,7 @@ pub fn make_uplift(seed: u64, params: &WorldParams) -> (Grid<i16>, Grid<bool>) {
             let up = shape * i64::from(params.ridge_height) / 65536;
             uplift.push(up.clamp(0, i64::from(i16::MAX)) as i16);
             let rolled = i64::from(lattice(volcano_seed, x, y)) < roll_limit;
-            volcanic.push(shape >= 60000 && rolled);
+            volcanic.push(shape >= 20000 && rolled);
         }
     }
     (world_grid(uplift, 0), world_grid(volcanic, false))
