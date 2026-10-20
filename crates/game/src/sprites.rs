@@ -84,6 +84,8 @@ pub struct Sprites {
     pub icons: Png,
     /// Full color colonists (`actors.png`).
     pub actors: Png,
+    /// Gray buildings with an alpha code for the color class (`buildings.png`).
+    pub buildings: Png,
 }
 
 impl Sprites {
@@ -122,6 +124,11 @@ impl Sprites {
                 include_bytes!("../../../assets/sprites/actors.png"),
                 wide,
             )?,
+            buildings: sheet(
+                "buildings.png",
+                include_bytes!("../../../assets/sprites/buildings.png"),
+                wide,
+            )?,
         })
     }
 
@@ -139,7 +146,7 @@ impl Sprites {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cells::{actors, icons, items, objects, tiles};
+    use crate::cells::{actors, buildings, icons, items, objects, tiles};
 
     #[test]
     fn shipped_sheets_decode_with_the_sizes_in_cells_rs() {
@@ -153,6 +160,7 @@ mod tests {
         assert_eq!(s.items.size().1, TILE * items::ROWS);
         assert_eq!(s.icons.size().1, TILE * icons::ROWS);
         assert_eq!(s.actors.size().1, TILE * actors::ROWS);
+        assert_eq!(s.buildings.size().1, TILE * buildings::ROWS);
     }
 
     #[test]

@@ -3,7 +3,7 @@
 //! The history runs on the region graph in 1-year steps. It makes civilizations, settlements,
 //! sites, artifacts, and events, and four cell overlays: owner, road, depletion, and sanctity.
 //! It has its own seed and hash array, so the world hashes of steps 1 to 12 never change
-//! (D-047). It reads `Regions.deposits` (the repaired overlay), not the raw deposits (D-050).
+//! (D-047). It reads `Regions.deposits` (the repaired overlay), not the raw deposits (D-053).
 //! Its numbers are in `history.ron`, `cultures.ron`, and `event_templates.ron`. They are
 //! embedded with `include_str!` and parsed once.
 
@@ -28,7 +28,7 @@ pub const NO_EVENT: u32 = u32::MAX;
 /// Value of a year that means "never".
 pub const NEVER: u16 = u16::MAX;
 
-/// Number of history hashes. They have their own array (D-047, D-050).
+/// Number of history hashes. They have their own array (D-047, D-053).
 pub const HISTORY_STAGE_COUNT: usize = 2;
 
 /// A part of the history output with its own hash.

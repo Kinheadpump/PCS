@@ -13,6 +13,8 @@ pub mod palette;
 
 #[path = "assetgen_actors.rs"]
 pub mod actors;
+#[path = "assetgen_buildings.rs"]
+pub mod buildings;
 #[path = "assetgen_items.rs"]
 pub mod items;
 #[path = "assetgen_objects.rs"]
@@ -134,6 +136,7 @@ pub fn make_all(seed: u64) -> Vec<Output> {
         out("tiles.png", terrain::make_tiles(seed)),
         out("objects.png", objects::make(seed)),
         out("items.png", items::make_items(seed)),
+        out("buildings.png", buildings::make_buildings()),
         out("icons.png", items::make_icons()),
         out("actors.png", actors::make_sheet()),
         out("palette.png", preview::palette_sheet()),
@@ -301,6 +304,10 @@ mod tests {
         assert_eq!(get("tiles.png"), Some((256, 16 * cells::tiles::ROWS)));
         assert_eq!(get("objects.png"), Some((256, 16 * cells::objects::ROWS)));
         assert_eq!(get("items.png"), Some((256, 16 * cells::items::ROWS)));
+        assert_eq!(
+            get("buildings.png"),
+            Some((256, 16 * cells::buildings::ROWS))
+        );
         assert_eq!(get("icons.png"), Some((256, 16 * cells::icons::ROWS)));
         assert_eq!(get("actors.png"), Some((256, 16 * cells::actors::ROWS)));
     }
@@ -354,6 +361,7 @@ mod tests {
         for img in [
             items::make_items(1),
             items::make_icons(),
+            buildings::make_buildings(),
             terrain::make_tiles(1),
         ] {
             for p in img.rgba.chunks(4) {

@@ -242,7 +242,7 @@ fn check_rule_8(seed: u64) {
         let e = h.events.get(a.event as usize).expect("artifact event");
         assert!(matches!(e.kind, EventKind::ArtifactLost), "seed {seed}");
     }
-    // Small regions are ignored (D-050) and every site lies inside its region.
+    // Small regions are ignored (D-053) and every site lies inside its region.
     for s in &h.sites {
         let region = w
             .regions

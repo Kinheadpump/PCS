@@ -533,6 +533,44 @@ fn brackets(img: &mut Image) {
     }
 }
 
+const BUILD: [&str; 16] = [
+    "................",
+    "......oooooo....",
+    ".....owwwwwmo...",
+    "....owwwwwwmdo..",
+    "....owwwwwwmdo..",
+    "....owwwwwmddo..",
+    ".....ooooommo...",
+    "........owmdo...",
+    "........owmdo...",
+    "........owmdo...",
+    "........owmdo...",
+    "........owmdo...",
+    "........owmdo...",
+    "........owmdo...",
+    ".........ooo....",
+    "................",
+];
+
+const REMOVE: [&str; 16] = [
+    "................",
+    "...oo......oo...",
+    "..owwo....owwo..",
+    "..owmwo..owmwo..",
+    "...owmwooowmo...",
+    "....owwwwwmo....",
+    ".....owwwwo.....",
+    ".....owwwwo.....",
+    "....owwmmwmo....",
+    "...owmwoowmdo...",
+    "..owmwo..owmdo..",
+    "..owwo....owdo..",
+    "...oo......oo...",
+    "................",
+    "................",
+    "................",
+];
+
 /// Make `icons.png`.
 pub fn make_icons() -> Image {
     let mut img = Image::cell_sheet(ic::ROWS);
@@ -540,6 +578,8 @@ pub fn make_icons() -> Image {
     rows(&mut img, ic::CUT, &CUT);
     rows(&mut img, ic::MINE, &MINE);
     rows(&mut img, ic::HAUL, &HAUL);
+    rows(&mut img, ic::BUILD, &BUILD);
+    rows(&mut img, ic::REMOVE, &REMOVE);
     zone_icon(&mut img, ic::ZONE);
     cancel_icon(&mut img, ic::CANCEL);
     work_icon(&mut img, ic::WORK);

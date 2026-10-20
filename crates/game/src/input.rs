@@ -52,6 +52,10 @@ pub enum Action {
     SelectTool(Tool),
     /// Show or hide the work panel.
     ToggleWork,
+    /// Show or hide the rooms overlay.
+    ToggleRooms,
+    /// Choose the building of the build tool by its number (0-based, `buildings.ron` order).
+    PickBuilding(usize),
     /// Close the game.
     Close,
 }
@@ -102,6 +106,22 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
         Trigger::Pressed(KeyCode::C),
         Action::SelectTool(Tool::Cancel),
     ),
+    (
+        Trigger::Pressed(KeyCode::B),
+        Action::SelectTool(Tool::Build),
+    ),
+    (
+        Trigger::Pressed(KeyCode::X),
+        Action::SelectTool(Tool::Deconstruct),
+    ),
+    (Trigger::Pressed(KeyCode::O), Action::ToggleRooms),
+    (Trigger::Pressed(KeyCode::Key1), Action::PickBuilding(0)),
+    (Trigger::Pressed(KeyCode::Key2), Action::PickBuilding(1)),
+    (Trigger::Pressed(KeyCode::Key3), Action::PickBuilding(2)),
+    (Trigger::Pressed(KeyCode::Key4), Action::PickBuilding(3)),
+    (Trigger::Pressed(KeyCode::Key5), Action::PickBuilding(4)),
+    (Trigger::Pressed(KeyCode::Key6), Action::PickBuilding(5)),
+    (Trigger::Pressed(KeyCode::Key7), Action::PickBuilding(6)),
     (Trigger::Pressed(KeyCode::P), Action::ToggleWork),
     (Trigger::Pressed(KeyCode::Escape), Action::Close),
 ];
@@ -196,6 +216,11 @@ mod tests {
             Action::SelectTool(Tool::Haul),
             Action::SelectTool(Tool::Stockpile),
             Action::SelectTool(Tool::Cancel),
+            Action::SelectTool(Tool::Build),
+            Action::SelectTool(Tool::Deconstruct),
+            Action::ToggleRooms,
+            Action::PickBuilding(0),
+            Action::PickBuilding(6),
         ] {
             assert!(has(a), "missing binding for {a:?}");
         }
@@ -235,6 +260,8 @@ mod tests {
             KeyCode::H => Some('H'),
             KeyCode::Z => Some('Z'),
             KeyCode::C => Some('C'),
+            KeyCode::B => Some('B'),
+            KeyCode::X => Some('X'),
             _ => None,
         }
     }
@@ -257,7 +284,10 @@ mod tests {
     fn tool_keys_do_not_collide_with_pan_or_speed_keys() {
         // WASD pans and Q/E/R set the speed, so no tool uses these keys.
         for (trigger, action) in KEY_BINDINGS {
-            if matches!(action, Action::SelectTool(_) | Action::ToggleWork) {
+            if matches!(
+                action,
+                Action::SelectTool(_) | Action::ToggleWork | Action::ToggleRooms
+            ) {
                 let (Trigger::Pressed(k) | Trigger::Held(k)) = trigger;
                 for pan in [
                     KeyCode::W,
