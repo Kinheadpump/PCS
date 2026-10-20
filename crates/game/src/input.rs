@@ -3,7 +3,7 @@
 
 use crate::tools::Tool;
 use macroquad::prelude::{
-    KeyCode, MouseButton, is_key_down, is_key_pressed, is_mouse_button_down,
+    KeyCode, MouseButton, get_char_pressed, is_key_down, is_key_pressed, is_mouse_button_down,
     is_mouse_button_pressed, is_mouse_button_released, mouse_position, mouse_wheel,
 };
 use sim::Speed;
@@ -60,6 +60,8 @@ pub enum Action {
     ToggleTemp,
     /// Choose the building of the build tool by its number (0-based, `buildings.ron` order).
     PickBuilding(usize),
+    /// Open or close the world map.
+    ToggleWorld,
     /// Close the game.
     Close,
 }
@@ -129,6 +131,7 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
     (Trigger::Pressed(KeyCode::Key6), Action::PickBuilding(5)),
     (Trigger::Pressed(KeyCode::Key7), Action::PickBuilding(6)),
     (Trigger::Pressed(KeyCode::P), Action::ToggleWork),
+    (Trigger::Pressed(KeyCode::Tab), Action::ToggleWorld),
     (Trigger::Pressed(KeyCode::Escape), Action::Close),
 ];
 
@@ -184,6 +187,31 @@ impl InputState {
     }
 }
 
+/// Text keys of one frame, for text boxes.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Typed {
+    /// The characters typed in this frame.
+    pub chars: Vec<char>,
+    /// True if Backspace was pressed.
+    pub backspace: bool,
+    /// True if Enter was pressed.
+    pub enter: bool,
+}
+
+/// Read the text keys of this frame. Call it every frame, so that old characters do not wait in
+/// the queue.
+pub fn typed() -> Typed {
+    let mut chars = Vec::new();
+    while let Some(c) = get_char_pressed() {
+        chars.push(c);
+    }
+    Typed {
+        chars,
+        backspace: is_key_pressed(KeyCode::Backspace),
+        enter: is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::KpEnter),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,6 +254,7 @@ mod tests {
             Action::SelectTool(Tool::Build),
             Action::SelectTool(Tool::Deconstruct),
             Action::ToggleRooms,
+            Action::ToggleWorld,
             Action::PickBuilding(0),
             Action::PickBuilding(6),
         ] {
