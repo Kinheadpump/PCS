@@ -1,0 +1,22 @@
+// Rock set and the rock pool of each geological setting. Integers only (D-014).
+// The order of the rocks and the settings is stable: it feeds world hashes.
+// worldgen embeds this file with include_str! and checks it against its Rock and Setting types.
+(
+    rocks: [
+        (id: "sandstone"), // sedimentary, sand grains
+        (id: "shale"),     // sedimentary, clay
+        (id: "limestone"), // sedimentary, calcium
+        (id: "granite"),   // igneous, deep
+        (id: "gneiss"),    // metamorphic, banded
+        (id: "marble"),    // metamorphic limestone
+        (id: "basalt"),    // igneous, surface lava
+        (id: "tuff"),      // compressed volcanic ash
+    ],
+    // Each pool holds 4 different rocks. The order feeds the layer draw.
+    settings: [
+        (id: "plain", pool: ["sandstone", "shale", "limestone", "granite"]),
+        (id: "mountain", pool: ["granite", "gneiss", "marble", "limestone"]),
+        (id: "volcanic", pool: ["basalt", "tuff", "granite", "gneiss"]),
+        (id: "coast", pool: ["limestone", "sandstone", "shale", "marble"]),
+    ],
+)
