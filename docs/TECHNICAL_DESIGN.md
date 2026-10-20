@@ -252,6 +252,14 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 - Roads: paved tiles between the edges given by the summary.
 - Legends: local generation makes the legends with the local RNG stream (R-044).
 - Sites: small prefab templates stamped at the site location. The culture selects the materials. The age controls decay: rubble, overgrowth, rotted items. Sites older than 1,000 years are partly buried.
+- Implementation (Sprint 11, `worldgen` part): `embark_from_world(&WorldData, &History, x, y)` returns the `EmbarkSummary` and the `EmbarkSites` of a habitable world cell. It returns `None` for ocean, lake, glacier, or a cell outside the world. The embark area is the 3 by 3 cells around the cell. `EmbarkSites` holds the nearest sites (at most `max_map_sites`), the road exits, and the largest depletion. `generate_local_with_sites(&EmbarkSummary, &EmbarkSites)` makes the map with `generate_local` and then stamps the history in `stamp.rs`. The new layers are `site` (`SiteTile`), `road`, `placed`, and `salvage`. `LocalMapData::hash()` does not change. `site_hash()` covers the new layers.
+- Stamping rules (numbers in `embark.ron`, D-063):
+  - Depletion: each ore tile is lost with the chance depletion / 255.
+  - Settlement and ruin: a building with walls, floor, and a door. A ruin wall is rubble with the chance age / (age + `decay_k`). A floor is rubble with half of that chance. From `overgrow_age`, open tiles can have trees. A ruin has max(1, `salvage_base` - age / `salvage_age_div`) salvage tiles.
+  - Mine: an entrance at the nearest rock tile and a tunnel. Sealed site: a stone ring and a short tunnel. Battlefield: debris, fewer with age.
+  - Road: a path from each exit to the center. Two neighbor cells use the same exit tile on their shared edge.
+  - R-041: if the area has no site, local generation adds a ruin of age `fallback_age`.
+- The seed of the local map is `mix(world seed ^ tag ^ cell)`. A site position is a hash of the map seed and the site ID. All sites of the area are on the one local map (D-063).
 
 ## 9. Save and load (D-013)
 
@@ -270,7 +278,7 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 ## 10. Content data (D-014)
 
 - RON files in `assets/content/`: materials, rocks, deposits, items, buildings, recipes, crops, wild plants, creatures, site templates, legend templates, chronicle templates.
-- `worldgen` also embeds `history.ron`, `cultures.ron`, and `event_templates.ron` (D-054). `history.ron` holds all history numbers. `cultures.ron` holds the culture drives. `event_templates.ron` holds one template for each event type, in `EventKind` order.
+- `worldgen` also embeds `history.ron`, `cultures.ron`, and `event_templates.ron` (D-054). `history.ron` holds all history numbers. `cultures.ron` holds the culture drives. `event_templates.ron` holds one template for each event type, in `EventKind` order. `worldgen` also embeds `embark.ron` (D-063). It holds the biome rows of the embark summary and all stamping numbers.
 - `worldgen` does no file I/O. It embeds `rocks.ron` and `deposits.ron` with `include_str!` and parses them once with `base::content` (`load_rocks`, `load_minerals`). The file order feeds the hashes and must match the `Rock`, `Setting`, and `Mineral` enums. `rocks.ron` has `rocks` and `settings` (each with a `pool`). `deposits.ron` has `minerals` (each with an `affinity` list).
 - All numbers in content are integers: tenths of °C, per-mille (‰), or whole units. The loader refuses float literals.
 - Load into `Raw*` structs with `serde`. Then validate and link into `Content`:
