@@ -275,7 +275,17 @@ Food poisoning starts at severity 40 and decreases by 20 each game day. Work spe
 
 **R-017 Migrants:** Once each game day, the simulation checks for migrants. Migrants can arrive only when food days remaining are 10 or more and a minimum of 1 bed is free. The chance is 5% plus 1% for each 1,000 wealth, to a maximum of 20%. A group has 1 or 2 migrants. The game pauses and asks the player to accept or refuse. Migrants that the player refuses leave the map.
 
-Births are not in the MVP. They come with relationships in a later phase.
+Births are not in the MVP. They come with relationships in a later phase (§7.8).
+
+### 7.8 Colonist life (later phase, Q-014)
+
+This section is a plan. It has no rule IDs until the owner approves it. The MVP has only needs, mood, traits, and migrants. The MVP slice is bonds and a background line for migrants (`ROADMAP.md` §7.1).
+
+- **Wants:** Each colonist has 1 life goal, for example "own a room" or "become a master cook", and a few short wants. A met want adds a named mood modifier. An unmet want adds a negative one.
+- **Relationships:** Two colonists have an opinion of each other. Work, sleep, meals, and shared danger raise it. Theft and neglect lower it. States: friend, rival, partner. The inspector shows each contribution.
+- **Families:** Partners can have children. A child grows to an adult and then ages. Children eat and sleep but do not work. The death of a partner, a child, or a parent gives a large mood modifier.
+- **Colony growth:** The colony can grow from inside. Good mood and strong bonds increase the migrant chance (R-017). A colonist whose goals fail for a long time can leave.
+- **Limits:** No family trees for historical figures (§16.3). No new crate. All numbers go in content files.
 
 ## 8. Environment
 
@@ -613,7 +623,7 @@ The phase of each later system is in `ROADMAP.md` §7. Each later system connect
 
 | System | Connection to the core loop |
 |---|---|
-| Relationships and births | Deaths have more effect. The colony can grow from inside. |
+| Relationships and births | Deaths have more effect. The colony can grow from inside. Plan in §7.8. |
 | Larger wars with rival civilizations | Rival colonies grow, make alliances, and attack with armies. Uses the raid system. |
 | Ranged combat | Raiders and colonists with bows. Walls and towers become more important. |
 | Trade caravans | A solution for depleted local resources. |
