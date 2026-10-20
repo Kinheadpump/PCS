@@ -311,7 +311,7 @@ Risks: civilizations that grow or die without limit, local maps that are not dif
 | S12 Production and knowledge | Add the production chains and knowledge. | Tool requirement and wear, tool crafting, charcoal, bricks, smoked food, smelting, iron tools. Lore fragment items, the excavate designation, and reading. | R-008, R-042, R-043. Each chain in `GAME_DESIGN.md` §11.3 works in a scenario test. A locked recipe cannot be ordered. |
 | S13 Creatures and combat | Add creatures and melee combat. | Game animals, hunting, meat and leather, beasts, drafting, melee, the condition "wounded". | R-032. A drafted colonist obeys a move order in the same tick. Creatures use the path budget (P-04). |
 | S14 Notice, legends, and sealed sites | Make history dangerous and useful. | Notice and its overlay, beast spawns, lair beasts, dormant threats, legends with site markers. | R-030, R-031, R-044. Notice equals the sum of its contributions. Opening a sealed site wakes its threat. |
-| S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save. | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. |
+| S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save. Proposed (Q-014): migrants with a short background line, and bonds (§7.1). | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. |
 | S16 Drought and wildfire | Make dry summers a crisis. | Dry-day counter in the ledger, drought effects, irrigation ditches, dry-soil crops, lightning. | R-025, R-026. A crop on an irrigated tile grows at normal speed in a drought. A ditch that does not touch water does not irrigate. Fire does not cross a firebreak of 2 soil tiles. |
 | S17 Disease and medicine | Make sickness a crisis that the player can manage. | Food poisoning, wound infection, winter fever, the medicine skill, herbal medicine, the doctor job, sick rooms, disease alerts. | R-060 to R-064. Winter fever does not spread between colonists in different rooms. Treatment decreases severity by the content value. |
 | S18 Rival colonies and raids | Add attacks by other colonies. | Rival colonies from history, hostility, scouts, raids, door and wall breaking, item theft, the tribute choice. | R-070 to R-072. A scout comes 1 game day before each raid. Paying the tribute removes goods of the correct value and the raiders leave. |
@@ -348,9 +348,24 @@ Get a minimum of 1 tester who is not the developer for each milestone.
 
 Plan these phases in detail only after M3. The connection of each system to the core loop is in `GAME_DESIGN.md` §16.2.
 
-- **Phase 4, External threats:** relationships and births, larger wars with rival civilizations, ranged combat, trade caravans, world map expeditions, legacy worlds (Q-005), more traits.
+- **Phase 4, Colonist life and external threats:** colonist life (§7.1), larger wars with rival civilizations, ranged combat, trade caravans, world map expeditions, legacy worlds (Q-005), more traits.
 - **Phase 5, Society:** religion from sites, social conflict and colony rules, diplomacy and allies, raids on other settlements, more metals and longer chains, cave-ins, floods, plague, crop blight, thieves.
 - **Phase 6, Scale and variety:** 300 colonists (`GAME_DESIGN.md` §7.1), 512² maps, social classes, playable races, a deep underground layer (Q-002).
+
+### 7.1 Colonist life (proposal, Q-014)
+
+The owner wants colonists with their own goals, who form relationships, start families, and make the colony grow. Today the plan has only needs, mood, traits, and migrants (S6, S15), and one line for "relationships and births" in Phase 4. The table shows the proposed steps. The design is in `GAME_DESIGN.md` §7.8.
+
+| Step | Phase | Content | Depends on |
+|---|---|---|---|
+| MVP slice A | S6 (no new task) | Keep the mood modifier list open for social sources. Colonist age and sex stay in the data. | S6 mood |
+| MVP slice B | S15 | Migrants have a short background line. Colonists who work or sleep near each other get a bond. The modifier "friend died" scales with the bond. This makes the example in `GAME_DESIGN.md` §15 true. | S6, S15 |
+| L1 Wants | Phase 4 | Each colonist has 1 life goal and a few short wants. A met want adds a mood modifier. An unmet want adds a negative one. | MVP slice B |
+| L2 Relationships | Phase 4 | Opinion between two colonists. Friend, rival, and partner states. Each change is a named contribution (why chain). | L1 |
+| L3 Families | Phase 4 | Partners, pregnancy, birth, children, growth to adult, aging and death by age. Children do not work. | L2, beds and food from S6 |
+| L4 Colony growth | Phase 4 | The colony grows from inside and by migrants. Mood and bonds change the migrant chance (R-017). Colonists leave if the colony fails their goals. | L3 |
+
+Each step needs a rule ID, a content file, and a test before it goes into a sprint. Do not start a step before M3.
 
 ## 8. Main project risks
 
@@ -375,6 +390,7 @@ These ideas are not in a sprint. Each item needs a reason and a phase before it 
 | Idea | Possible phase | Note |
 |---|---|---|
 | Embark goals ("survive 10 winters") | 3 or 4 | Small. Good for long-term interest. |
+| Colony size goal ("reach 20 colonists") | 4 | Uses the colonist life steps L1 to L4 (§7.1). |
 | Chronicle export to a text file | 4 | Small. Uses the chronicle core from S7. |
 | Livestock and animal handling | 4 | A food source that cold periods and beasts can threaten. |
 | Carts for faster hauling | 4 | Only if hauling time is a playtest problem. |

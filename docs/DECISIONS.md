@@ -17,6 +17,7 @@ Work continues with the recommended choice until the owner answers.
 
 | ID | Question | Recommended | Alternatives | Why it matters | Blocks |
 |---|---|---|---|---|---|
+| Q-014 | Do we plan colonist life (own goals, relationships, families, children, growth from inside)? | Yes. A small MVP slice in S15 (bonds, background line). The full system in Phase 4 after M3 (`ROADMAP.md` §7.1). | Only bonds in the MVP and the rest in the backlog. The full system in the MVP. | The owner wants colonists with their own lives. The MVP scope and the S15 size change. | S15 scope |
 | Q-001 | What is the working title? | **Answered 2026-10-19:** keep "Ruinstead" as the working title only. | — | — | — |
 | Q-002 | Do we add an underground layer? | **Answered 2026-10-19:** no underground layer now (D-003 is Confirmed). Phase 6 can look at it again. | — | — | — |
 | Q-003 | Which save mode is the default? | **Answered 2026-10-19:** ironman (D-032). | — | — | — |
