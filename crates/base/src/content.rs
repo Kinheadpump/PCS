@@ -968,6 +968,268 @@ pub fn load_minerals(
     finish(file_name, out, issues)
 }
 
+/// Numbers of the history simulation (`history.ron`). Chances are per-mille per year.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HistoryRules {
+    /// Default history length in years.
+    pub years_default: u32,
+    /// Shortest history in years.
+    pub years_min: u32,
+    /// Longest history in years.
+    pub years_max: u32,
+    /// Regions with fewer cells are ignored for starts, mines, and roads.
+    pub min_region_cells: u32,
+    /// Civilizations at year 0.
+    pub start_civs: u32,
+    /// Minimum alive civilizations (homeostasis).
+    pub min_alive: u32,
+    /// Maximum alive civilizations (homeostasis).
+    pub max_alive: u32,
+    /// Migrants appear by chance only below this many alive civilizations.
+    pub spawn_below_alive: u32,
+    /// Chance of a migrant civilization.
+    pub new_civ_pm: u32,
+    /// Limit of civilizations.
+    pub max_civs: u32,
+    /// Limit of settlements.
+    pub max_settlements: u32,
+    /// Limit of artifacts.
+    pub max_artifacts: u32,
+    /// Limit of sites.
+    pub max_sites: u32,
+    /// Limit of events.
+    pub max_events: u32,
+    /// Years between heavy updates.
+    pub heavy_interval: u32,
+    /// Most settlements of one civilization at the same time.
+    pub max_civ_settlements: u32,
+    /// Chance of a new settlement.
+    pub settle_pm: u32,
+    /// Chance of a new mine.
+    pub mine_pm: u32,
+    /// Chance of a new road.
+    pub road_pm: u32,
+    /// Chance of a battle.
+    pub battle_pm: u32,
+    /// Chance of a seal.
+    pub seal_pm: u32,
+    /// Chance of an artifact after a battle, a raze, or a seal.
+    pub artifact_pm: u32,
+    /// Base chance of a collapse.
+    pub collapse_pm: u32,
+    /// Extra collapse chance at zero prosperity.
+    pub collapse_poor_pm: u32,
+    /// Extra collapse chance above the maximum alive civilizations.
+    pub collapse_crowd_pm: u32,
+    /// Base chance that an attacker wins.
+    pub attack_win_pm: u32,
+    /// Base mine life in years.
+    pub mine_life_base: u32,
+    /// Extra mine life for each richness step.
+    pub mine_life_per_richness: u32,
+    /// Range of the random mine life term.
+    pub mine_life_jitter: u32,
+    /// Radius of the depletion overlay.
+    pub depletion_radius: u32,
+    /// Radius of the battlefield sanctity.
+    pub battle_radius: u32,
+    /// Radius of the seal sanctity.
+    pub seal_radius: u32,
+    /// Margin of the road search box.
+    pub road_margin: u32,
+}
+
+/// Load and validate the history numbers.
+pub fn load_history_rules(file_name: &str, text: &str) -> Result<HistoryRules, ContentError> {
+    let r: HistoryRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    let mut check = |ok: bool, field: &str, message: &str| {
+        if !ok {
+            issues.push(issue(field, message));
+        }
+    };
+    check(
+        1 <= r.years_min && r.years_min <= r.years_default && r.years_default <= r.years_max,
+        "years_default",
+        "must satisfy 1 <= years_min <= years_default <= years_max",
+    );
+    check(r.years_max <= 60_000, "years_max", "must be 60000 or less");
+    check(
+        r.min_region_cells >= 1,
+        "min_region_cells",
+        "must be 1 or more",
+    );
+    check(
+        1 <= r.min_alive && r.min_alive <= r.start_civs && r.start_civs <= r.max_alive,
+        "start_civs",
+        "must satisfy 1 <= min_alive <= start_civs <= max_alive",
+    );
+    check(
+        r.min_alive < r.spawn_below_alive && r.spawn_below_alive <= r.max_alive,
+        "spawn_below_alive",
+        "must satisfy min_alive < spawn_below_alive <= max_alive",
+    );
+    check(
+        r.max_alive <= r.max_civs && r.max_civs <= 60_000,
+        "max_civs",
+        "must satisfy max_alive <= max_civs <= 60000",
+    );
+    check(
+        (1..=60_000).contains(&r.max_settlements),
+        "max_settlements",
+        "must be from 1 to 60000",
+    );
+    check(
+        r.max_artifacts <= 60_000,
+        "max_artifacts",
+        "must be 60000 or less",
+    );
+    check(
+        (1..=60_000).contains(&r.max_sites),
+        "max_sites",
+        "must be from 1 to 60000",
+    );
+    check(
+        (1..=1_000_000).contains(&r.max_events),
+        "max_events",
+        "must be from 1 to 1000000",
+    );
+    check(r.heavy_interval >= 1, "heavy_interval", "must be 1 or more");
+    check(
+        r.max_civ_settlements >= 1,
+        "max_civ_settlements",
+        "must be 1 or more",
+    );
+    for (value, name) in [
+        (r.new_civ_pm, "new_civ_pm"),
+        (r.settle_pm, "settle_pm"),
+        (r.mine_pm, "mine_pm"),
+        (r.road_pm, "road_pm"),
+        (r.battle_pm, "battle_pm"),
+        (r.seal_pm, "seal_pm"),
+        (r.artifact_pm, "artifact_pm"),
+        (r.collapse_pm, "collapse_pm"),
+        (r.collapse_poor_pm, "collapse_poor_pm"),
+        (r.collapse_crowd_pm, "collapse_crowd_pm"),
+        (r.attack_win_pm, "attack_win_pm"),
+    ] {
+        check(value <= 1000, name, "must be from 0 to 1000");
+    }
+    check(r.mine_life_base >= 1, "mine_life_base", "must be 1 or more");
+    for (value, name) in [
+        (r.depletion_radius, "depletion_radius"),
+        (r.battle_radius, "battle_radius"),
+        (r.seal_radius, "seal_radius"),
+        (r.road_margin, "road_margin"),
+    ] {
+        check(value <= 32, name, "must be 32 or less");
+    }
+    finish(file_name, r, issues)
+}
+
+/// A culture (`cultures.ron`). Drives are 0 to 100.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CultureDef {
+    /// String ID from the file.
+    pub id: String,
+    /// Display name.
+    pub name: String,
+    /// Base expansion drive.
+    pub expansion: u8,
+    /// Base aggression drive.
+    pub aggression: u8,
+    /// Base prosperity.
+    pub prosperity: u8,
+    /// Preference for mines.
+    pub mining: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawCultureFile {
+    cultures: Vec<CultureDef>,
+}
+
+/// Load and validate the cultures. The list holds 1 to 255 cultures.
+pub fn load_cultures(file_name: &str, text: &str) -> Result<Vec<CultureDef>, ContentError> {
+    let raw: RawCultureFile = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    if raw.cultures.is_empty() || raw.cultures.len() > 255 {
+        issues.push(issue("cultures", "must hold 1 to 255 cultures"));
+    }
+    let mut seen: BTreeMap<&str, ()> = BTreeMap::new();
+    for c in &raw.cultures {
+        if seen.insert(c.id.as_str(), ()).is_some() {
+            issues.push(issue(&c.id, "duplicate ID"));
+        }
+        if c.name.is_empty() {
+            issues.push(issue(&c.id, "name must not be empty"));
+        }
+        let drives = [
+            (c.expansion, "expansion"),
+            (c.aggression, "aggression"),
+            (c.prosperity, "prosperity"),
+            (c.mining, "mining"),
+        ];
+        for (v, n) in drives {
+            if v > 100 {
+                issues.push(issue(&c.id, format!("{n} must be from 0 to 100")));
+            }
+        }
+    }
+    finish(file_name, raw.cultures, issues)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTemplate {
+    kind: String,
+    text: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTemplateFile {
+    templates: Vec<RawTemplate>,
+}
+
+/// Names that a history event template can use in braces.
+pub const TEMPLATE_NAMES: [&str; 7] = ["year", "civ", "culture", "civ2", "site", "region", "extra"];
+
+/// Load the event templates. `kinds` lists the event type names in order. Each type needs
+/// exactly one template, in the same order. Returns the texts in that order.
+pub fn load_event_templates(
+    file_name: &str,
+    text: &str,
+    kinds: &[&str],
+) -> Result<Vec<String>, ContentError> {
+    let raw: RawTemplateFile = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    let found = raw.templates.iter().map(|t| t.kind.as_str());
+    if !found.eq(kinds.iter().copied()) {
+        issues.push(issue(
+            "templates",
+            "must hold one template for each event type, in the order of the EventKind type",
+        ));
+    }
+    for t in &raw.templates {
+        let mut rest = t.text.as_str();
+        while let Some((_, after)) = rest.split_once('{') {
+            match after.split_once('}') {
+                Some((name, tail)) if TEMPLATE_NAMES.contains(&name) => rest = tail,
+                _ => {
+                    issues.push(issue(&t.kind, "text has a bad or unknown name in braces"));
+                    break;
+                }
+            }
+        }
+    }
+    let texts = raw.templates.into_iter().map(|t| t.text).collect();
+    finish(file_name, texts, issues)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1258,5 +1520,37 @@ mod tests {
         assert!(mineral_error(MIN_DUP).contains("duplicate ID"));
         assert!(mineral_error(MIN_FLOAT).contains("float literal"));
         assert!(mineral_error(MIN_RANGE).contains("above 100"));
+    }
+
+    fn history_text(years_default: &str) -> String {
+        std::fs::read_to_string("../../assets/content/history.ron")
+            .unwrap_or_default()
+            .replace("years_default: 3000", years_default)
+    }
+
+    #[test]
+    fn history_rules_load_and_bad_values_are_refused() {
+        let ok = history_text("years_default: 3000");
+        assert!(load_history_rules("history.ron", &ok).is_ok());
+        let bad = history_text("years_default: 99999");
+        let err = load_history_rules("history.ron", &bad).map_err(|e| e.to_string());
+        assert!(err.is_err_and(|e| e.contains("years_default")));
+        let float = history_text("years_default: 3000.5");
+        assert!(load_history_rules("history.ron", &float).is_err());
+    }
+
+    #[test]
+    fn cultures_and_templates_are_checked() {
+        let one = "(cultures: [(id: \"a\", name: \"A\", expansion: 50, aggression: 50, prosperity: 50, mining: 50)])";
+        assert!(load_cultures("c.ron", one).is_ok());
+        let high = one.replace("mining: 50", "mining: 101");
+        assert!(load_cultures("c.ron", &high).is_err());
+        let dup = "(cultures: [(id: \"a\", name: \"A\", expansion: 1, aggression: 1, prosperity: 1, mining: 1), (id: \"a\", name: \"B\", expansion: 1, aggression: 1, prosperity: 1, mining: 1)])";
+        assert!(load_cultures("c.ron", dup).is_err());
+        let t = "(templates: [(kind: \"X\", text: \"{year} {civ}\")])";
+        assert!(load_event_templates("t.ron", t, &["X"]).is_ok());
+        assert!(load_event_templates("t.ron", t, &["Y"]).is_err());
+        let bad = "(templates: [(kind: \"X\", text: \"{nope}\")])";
+        assert!(load_event_templates("t.ron", bad, &["X"]).is_err());
     }
 }

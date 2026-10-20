@@ -84,6 +84,9 @@ Work continues with the recommended choice until the owner answers.
 | D-047 | World steps 10 to 12 have their own seed and hash arrays (`LayerStage`, `RegionStage`). The hashes of steps 1 to 9 do not change when a step is added. The region repair writes a separate overlay and does not change the step 11 output. Game and UI code reads deposits from `Regions.deposits` to get at least 1 deposit type in each region. |
 | D-048 | A world cell holds at most one deposit. The mineral with the largest margin of probability over the roll wins. Ties go to the lowest mineral index. |
 | D-049 | The rock and mineral tables are in `assets/content/rocks.ron` and `deposits.ron`. `worldgen` embeds them with `include_str!` and parses them at the start of world generation. It does no file I/O at run time (owner decision). |
+| D-050 | History ignores regions with fewer than 24 cells (`min_region_cells` in `history.ron`) for starts, settlements, mines, and roads. The history has its own seed and hash array (`HistoryStage`), so the hashes of steps 1 to 12 do not change. It reads `Regions.deposits` (the repaired deposits), not the raw deposits. |
+| D-051 | The history tables are `history.ron`, `cultures.ron`, and `event_templates.ron`. `worldgen` embeds them with `include_str!` (same rule as D-049). `try_generate_world` checks all embedded tables before it generates a world. `generate_world` keeps its signature. |
+| D-052 | Sprint 10 has no figures (notable persons). No event type uses them. The limit of 2,000 figures stays in `TECHNICAL_DESIGN.md` §8.1 for a later sprint. The biome balance of D-046 is not changed: it does not block the history. |
 
 ## 3. Assumptions
 
