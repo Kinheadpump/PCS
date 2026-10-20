@@ -6,6 +6,7 @@
 //! of `buildings.ron` and `recipes.ron`.
 
 use crate::climate::{ClimateRules, FuelDef, load_climate_rules};
+use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
 use base::content::{
     BuildingDef, BuildingKind, ContentError, ContentIssue, JobRules, MaterialDef, RecipeDef,
     RoomRules, load_buildings, load_job_rules, load_materials, load_recipes, load_room_rules,
@@ -19,6 +20,8 @@ const BUILDINGS_TEXT: &str = include_str!("../../../assets/content/buildings.ron
 const RECIPES_TEXT: &str = include_str!("../../../assets/content/recipes.ron");
 const ROOMS_TEXT: &str = include_str!("../../../assets/content/rooms.ron");
 const CLIMATE_TEXT: &str = include_str!("../../../assets/content/climate.ron");
+const NEEDS_TEXT: &str = include_str!("../../../assets/content/needs.ron");
+const TRAITS_TEXT: &str = include_str!("../../../assets/content/traits.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
@@ -39,6 +42,10 @@ pub struct ContentTexts {
     pub rooms: &'static str,
     /// `climate.ron`.
     pub climate: &'static str,
+    /// `needs.ron`.
+    pub needs: &'static str,
+    /// `traits.ron`.
+    pub traits: &'static str,
 }
 
 /// The content texts of the repository.
@@ -49,6 +56,8 @@ pub const BUILTIN_TEXTS: ContentTexts = ContentTexts {
     recipes: RECIPES_TEXT,
     rooms: ROOMS_TEXT,
     climate: CLIMATE_TEXT,
+    needs: NEEDS_TEXT,
+    traits: TRAITS_TEXT,
 };
 
 /// Linked content for the sim systems.
@@ -66,6 +75,10 @@ pub struct SimRules {
     pub rooms: RoomRules,
     /// Climate, weather, water, hearth, and alert numbers.
     pub climate: ClimateRules,
+    /// Needs, comfort, warmth, health, and mood numbers.
+    pub needs: NeedRules,
+    /// Traits, in file order.
+    pub traits: Vec<TraitDef>,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Material of a log.
@@ -93,6 +106,8 @@ impl Default for SimRules {
                 bare_wall_material: String::new(),
             },
             climate: ClimateRules::empty(),
+            needs: NeedRules::empty(),
+            traits: Vec::new(),
             fuel: Vec::new(),
             log: NO_MATERIAL,
             bare_wall: NO_MATERIAL,
@@ -129,13 +144,33 @@ impl SimRules {
 
     /// Link the rules from a set of file texts.
     pub fn load_all(texts: &ContentTexts) -> Result<Self, ContentError> {
-        Self::load_texts_climate(
+        Self::load_full(texts)
+    }
+
+    /// Link the rules from the repository files, but with other needs and traits files.
+    pub fn load_with_needs(needs_text: &str, traits_text: &str) -> Result<Self, ContentError> {
+        Self::load_full_with(
+            BUILTIN_TEXTS.materials,
+            BUILTIN_TEXTS.jobs,
+            BUILTIN_TEXTS.buildings,
+            BUILTIN_TEXTS.recipes,
+            BUILTIN_TEXTS.rooms,
+            BUILTIN_TEXTS.climate,
+            needs_text,
+            traits_text,
+        )
+    }
+
+    fn load_full(texts: &ContentTexts) -> Result<Self, ContentError> {
+        Self::load_full_with(
             texts.materials,
             texts.jobs,
             texts.buildings,
             texts.recipes,
             texts.rooms,
             texts.climate,
+            texts.needs,
+            texts.traits,
         )
     }
 
@@ -167,10 +202,36 @@ impl SimRules {
         rooms_text: &str,
         climate_text: &str,
     ) -> Result<Self, ContentError> {
+        Self::load_full_with(
+            materials_text,
+            jobs_text,
+            buildings_text,
+            recipes_text,
+            rooms_text,
+            climate_text,
+            NEEDS_TEXT,
+            TRAITS_TEXT,
+        )
+    }
+
+    /// Link the rules from the text of all eight content files.
+    #[allow(clippy::too_many_arguments)]
+    pub fn load_full_with(
+        materials_text: &str,
+        jobs_text: &str,
+        buildings_text: &str,
+        recipes_text: &str,
+        rooms_text: &str,
+        climate_text: &str,
+        needs_text: &str,
+        traits_text: &str,
+    ) -> Result<Self, ContentError> {
         let materials = load_materials("materials.ron", materials_text)?;
         let jobs = load_job_rules("jobs.ron", jobs_text)?;
         let rooms = load_room_rules("rooms.ron", rooms_text)?;
         let climate = load_climate_rules("climate.ron", climate_text)?;
+        let needs = load_need_rules("needs.ron", needs_text, &materials)?;
+        let traits = load_traits("traits.ron", traits_text)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -221,6 +282,8 @@ impl SimRules {
             recipes,
             rooms,
             climate,
+            needs,
+            traits,
             fuel,
             log,
             bare_wall,

@@ -520,6 +520,7 @@ fn construction_trains_the_construction_skill() {
 #[test]
 fn priority_off_stops_construction() {
     let mut sim = open_map(6, 1, &[(0, 0)]);
+    sim.debug_set_needs_enabled(false);
     let id = ids(&sim)[0];
     let granite = mat(&sim, "granite");
     sim.debug_spawn_item(granite, 1, 1, 0);
@@ -734,7 +735,7 @@ fn buildings_blueprints_and_bins_are_in_the_hash_and_the_save() {
         sim.state_hash(),
         "same run after a load"
     );
-    assert_eq!(save::FORMAT_VERSION, 4);
+    assert_eq!(save::FORMAT_VERSION, 5);
 }
 
 #[test]
