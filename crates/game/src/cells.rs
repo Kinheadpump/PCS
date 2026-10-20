@@ -145,8 +145,18 @@ pub mod icons {
     pub const BUILD: usize = 14;
     /// Remove tool: a crowbar over a broken plank.
     pub const REMOVE: usize = 15;
+    /// A person (head and shoulders): the colonist count.
+    pub const PERSON: usize = 16;
+    /// A cross: close a panel.
+    pub const CLOSE: usize = 17;
+    /// A chevron that points down: an open fold.
+    pub const CHEVRON_DOWN: usize = 18;
+    /// A chevron that points right: a closed fold.
+    pub const CHEVRON_RIGHT: usize = 19;
+    /// Three triangles: the fastest speed.
+    pub const FASTEST: usize = 20;
     /// Rows of the sheet.
-    pub const ROWS: usize = 1;
+    pub const ROWS: usize = 2;
 }
 
 /// `buildings.png`: gray sprites. The alpha value says how the game colors a pixel:
