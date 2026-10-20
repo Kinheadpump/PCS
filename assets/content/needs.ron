@@ -1,0 +1,86 @@
+// Needs, comfort, warmth, health, and mood. Integers only (D-014).
+// Need values: whole units from 0 to 100 (the sim keeps thousandths inside).
+// Temperatures are in tenths of a degree Celsius (100 = 10.0 C).
+// Times are in ticks (100 ticks = 1 game hour) or game hours, as the name says.
+(
+    // R-011 hunger.
+    hunger_start: 100,
+    hunger_max: 100,
+    hunger_per_day: 50,
+    hunger_eat_at: 30,
+    eat_ticks: 50,
+    starving_health_loss: 2,
+    // R-012 rest.
+    rest_start: 100,
+    rest_max: 100,
+    rest_per_awake_hour: 6,
+    rest_sleep_at: 25,
+    sleep_per_hour_bed: 12,
+    sleep_per_hour_ground: 8,
+    exhausted_speed_pct: -50,
+    // How long a colonist waits before it looks again for food or a bed (ticks).
+    need_retry_ticks: 50,
+    // R-001 comfort band.
+    comfort_low: 100,
+    comfort_high: 260,
+    start_clothes: "simple_clothes",
+    // Clothes: (material, insulation in tenths of a degree that the lower limit drops).
+    clothes: [("simple_clothes", 50), ("winter_coat", 120)],
+    // R-013 warmth.
+    hazard_margin: 100,
+    hazard_step: 10,
+    hazard_recovery: 20,
+    hazard_max: 100,
+    hazard_limit: 50,
+    hazard_health_loss: 5,
+    // R-016 health.
+    health_max: 100,
+    heal_in_bed: 2,
+    heal_elsewhere: 1,
+    wounded_health_loss: 1,
+    wounded_bed_hours: 8,
+    // Foods, best first: (material, nutrition, mood memory key).
+    foods: [("meal", 50, "ate_meal"), ("berries", 25, "ate_raw")],
+    // Food that a new colony gets: (material, units).
+    start_food: [("meal", 40), ("berries", 40)],
+    // R-014 mood.
+    mood_base: 50,
+    mood_min: 0,
+    mood_max: 100,
+    mood_hungry: -5,
+    mood_starving: -20,
+    mood_tired: -5,
+    mood_exhausted: -15,
+    mood_cold: -5,
+    mood_hot: -5,
+    mood_wounded: -10,
+    // Room beauty: the beauty of a room tile divided by this gives mood points, limited.
+    beauty_divisor: 2,
+    beauty_mood_max: 8,
+    // Mood memories, timed modifiers: (key, name, mood value, hours, danger).
+    memories: [
+        (key: "ate_meal", name: "Ate a meal", value: 2, hours: 12, danger: false),
+        (key: "ate_raw", name: "Ate raw food", value: -3, hours: 12, danger: false),
+        (key: "slept_bed", name: "Slept in a bed", value: 3, hours: 12, danger: false),
+        (key: "slept_ground", name: "Slept on the ground", value: -4, hours: 12, danger: false),
+        (key: "colonist_died", name: "A colonist died", value: -10, hours: 48, danger: false),
+        (key: "saw_danger", name: "Saw danger", value: -8, hours: 12, danger: true),
+    ],
+    // R-015 mood effects.
+    mood_high_from: 70,
+    mood_high_speed_pct: 10,
+    mood_low_below: 30,
+    mood_low_speed_pct: -20,
+    wander_chance_pct: 10,
+    wander_hours: 1,
+    wander_radius: 4,
+    mood_break_below: 15,
+    break_hours: 4,
+    leave_after_hours: 120,
+    // Alerts.
+    alert_death_hours: 24,
+    // Newcomers: age range and the number of graves that the sim keeps.
+    age_min: 18,
+    age_max: 45,
+    graveyard_max: 1000,
+)

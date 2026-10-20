@@ -514,6 +514,7 @@ fn r004_deep_water_does_not_freeze() {
 #[test]
 fn r004_a_colonist_on_the_ice_is_moved_to_land_when_it_thaws() {
     let mut sim = flat_sim("c...\n.~~.\n....", -50, 0, 0);
+    sim.debug_set_needs_enabled(false);
     let id = sim.colonists().iter().next().unwrap().0;
     run(&mut sim, 3 * DAY);
     assert!(sim.ice());

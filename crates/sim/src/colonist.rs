@@ -19,6 +19,52 @@ pub const STEP_PROGRESS_STRAIGHT: u16 = 1000;
 /// Progress units a walking colonist gains each tick (a straight step takes 10 ticks).
 pub const WALK_PROGRESS_PER_TICK: u16 = 100;
 
+/// The sex of a colonist (GAME_DESIGN 7.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Sex {
+    /// Female.
+    Female,
+    /// Male.
+    Male,
+}
+
+/// A mood memory: a timed mood modifier from `needs.ron` that ends at a tick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Memory {
+    /// Index in the memory list of `needs.ron`.
+    pub key: u8,
+    /// The memory ends at this tick.
+    pub until: u64,
+}
+
+/// The action that a need gives to a colonist. It replaces work until it ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NeedAct {
+    /// Walk to a food stack, then eat one unit (R-011).
+    Eat {
+        /// The reserved food stack.
+        item: ItemId,
+        /// The tile of the stack.
+        stand: (u16, u16),
+        /// Eating time so far in ticks. `None` while the colonist walks.
+        progress: Option<u32>,
+    },
+    /// Walk to a clothes item, then wear it (R-001).
+    Wear {
+        /// The reserved clothes stack.
+        item: ItemId,
+        /// The tile of the stack.
+        stand: (u16, u16),
+    },
+    /// Walk to a bed, then sleep until rest is full (R-012).
+    Sleep {
+        /// The reserved bed tile. `None`: the colonist sleeps where it is.
+        bed: Option<(u16, u16)>,
+        /// True when the colonist sleeps.
+        asleep: bool,
+    },
+}
+
 /// A colonist.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Colonist {
@@ -44,6 +90,40 @@ pub struct Colonist {
     pub carrying: Option<ItemId>,
     /// The colonist looks for a new job from this tick on.
     pub next_search: u64,
+    /// Age in years (GAME_DESIGN 7.2).
+    pub age: u8,
+    /// Sex.
+    pub sex: Sex,
+    /// Race index. All colonists have race 0 in the MVP (ROADMAP 7.1, slice A).
+    pub race: u8,
+    /// Trait indices (`traits.ron` order). One trait in the MVP.
+    pub traits: Vec<u8>,
+    /// Hunger in thousandths of a unit (R-011). 100 000 is full.
+    pub hunger: i32,
+    /// Rest in thousandths of a unit (R-012). 100 000 is full.
+    pub rest: i32,
+    /// Health in whole units (R-016). The colonist dies at 0.
+    pub health: i32,
+    /// Hypothermia value (R-013).
+    pub hypothermia: i32,
+    /// Heatstroke value (R-013).
+    pub heatstroke: i32,
+    /// True while the colonist has a wound (R-016).
+    pub wounded: bool,
+    /// Hours of sleep in a bed since the wound began.
+    pub wound_bed_hours: u32,
+    /// Material index of the worn clothes.
+    pub clothes: Option<u16>,
+    /// The need action now.
+    pub act: Option<NeedAct>,
+    /// The colonist looks for food or a bed again from this tick on.
+    pub need_next: u64,
+    /// Timed mood modifiers (R-014).
+    pub memories: Vec<Memory>,
+    /// The colonist does no work before this tick (breakdown or walk-around, R-015).
+    pub break_until: u64,
+    /// Hours in a row with a breakdown mood (R-015).
+    pub low_mood_hours: u32,
 }
 
 impl Colonist {
@@ -60,6 +140,23 @@ impl Colonist {
             job: None,
             carrying: None,
             next_search: 0,
+            age: 30,
+            sex: Sex::Female,
+            race: 0,
+            traits: Vec::new(),
+            hunger: 0,
+            rest: 0,
+            health: 0,
+            hypothermia: 0,
+            heatstroke: 0,
+            wounded: false,
+            wound_bed_hours: 0,
+            clothes: None,
+            act: None,
+            need_next: 0,
+            memories: Vec::new(),
+            break_until: 0,
+            low_mood_hours: 0,
         }
     }
 

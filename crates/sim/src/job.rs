@@ -10,7 +10,7 @@
 //! connectivity region of the colonist is never given. A claim reserves the target: the
 //! item, the destination tile, or the designated tile. Nobody else can reserve these.
 
-use crate::colonist::ColonistId;
+use crate::colonist::{ColonistId, NeedAct};
 use crate::item::{ItemId, ItemLoc};
 use crate::skill::{self, Skill, WorkSpeed};
 use crate::{Command, PathRequest, Sim};
@@ -334,7 +334,7 @@ pub(crate) fn octile(a: (u16, u16), b: (u16, u16)) -> u32 {
 /// The four neighbors of a tile, in a fixed order.
 pub(crate) const NEIGHBORS: [(i32, i32); 4] = [(0, -1), (-1, 0), (1, 0), (0, 1)];
 
-enum Leg {
+pub(crate) enum Leg {
     Arrived,
     Walking,
     Failed,
@@ -780,10 +780,12 @@ impl Sim {
                 break;
             }
             let id = ids[(start + k) % n];
-            let idle = self
-                .colonists
-                .get(id)
-                .is_some_and(|c| c.job.is_none() && c.next_search <= self.tick);
+            let idle = self.colonists.get(id).is_some_and(|c| {
+                c.job.is_none()
+                    && c.act.is_none()
+                    && c.break_until <= self.tick
+                    && c.next_search <= self.tick
+            });
             if !idle {
                 continue;
             }
@@ -893,7 +895,7 @@ impl Sim {
             .push_back(PathRequest { colonist: id, goal });
     }
 
-    fn leg_state(&self, id: ColonistId, goal: (u16, u16)) -> Leg {
+    pub(crate) fn leg_state(&self, id: ColonistId, goal: (u16, u16)) -> Leg {
         match self.colonists.get(id) {
             Some(c) if c.tile() == goal && c.target.is_none() && c.path.is_empty() => Leg::Arrived,
             Some(c) if c.target.is_some() => Leg::Walking,
@@ -986,7 +988,7 @@ impl Sim {
             return;
         }
         let pct = self
-            .work_speed(id, job.kind)
+            .effective_work_speed(id, job.kind)
             .map_or(0, |s| u32::try_from(s.total_pct).unwrap_or(0));
         let progress = progress.saturating_add(pct);
         if u64::from(progress) < u64::from(self.work_ticks(&job)) * 100 {
@@ -1236,6 +1238,20 @@ impl Sim {
                             cid.index()
                         ));
                     }
+                }
+            }
+            if let Some(NeedAct::Eat { item, .. } | NeedAct::Wear { item, .. }) = c.act {
+                reserved_items.push(item);
+                if c.job.is_some()
+                    || self
+                        .items
+                        .get(item)
+                        .is_none_or(|i| i.reserved_by != Some(cid))
+                {
+                    return Err(format!(
+                        "need action of colonist {} has no reserved item",
+                        cid.index()
+                    ));
                 }
             }
             if let Some(item) = c.carrying

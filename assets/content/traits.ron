@@ -1,0 +1,13 @@
+// Traits (GAME_DESIGN 7.2). Integers only (D-014). A field that is left out is neutral.
+// comfort_low_delta: tenths of a degree added to the lower limit of the comfort band.
+// hunger_rate_pct: hunger loss in percent of normal (100).
+// danger_mood_pct: size of the danger mood modifiers in percent of normal (100).
+// work_speed_pct: percent points added to the work speed.
+// carry_pct: carry capacity in percent of normal (100).
+[
+    (id: "hardy", name: "Hardy", comfort_low_delta: -50),
+    (id: "glutton", name: "Glutton", hunger_rate_pct: 150),
+    (id: "bold", name: "Bold", danger_mood_pct: 50),
+    (id: "lazy", name: "Lazy", work_speed_pct: -15),
+    (id: "strong", name: "Strong", carry_pct: 150),
+]
