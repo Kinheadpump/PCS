@@ -1230,6 +1230,175 @@ pub fn load_event_templates(
     finish(file_name, texts, issues)
 }
 
+/// One row of the embark biome table (`embark.ron`).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmbarkBiomeRow {
+    /// Name of the world biome. The row order follows the world biome type.
+    pub biome: String,
+    /// Local map biome: `TemperateForest`, `ColdHills`, or `DryPlain`.
+    pub local: String,
+    /// Share of tiles with trees, in per-mille.
+    pub tree_density: u32,
+    /// Share of water tiles, in per-mille.
+    pub water: u32,
+    /// Share of rock tiles, in per-mille.
+    pub mountain: u32,
+    /// Share of sand, in per-mille.
+    pub sand: u32,
+    /// Share of clay, in per-mille.
+    pub clay: u32,
+}
+
+/// Numbers of the embark summary and the site stamping (`embark.ron`).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmbarkRules {
+    /// Biome rows.
+    pub biomes: Vec<EmbarkBiomeRow>,
+    /// Height above sea level where extra mountain starts.
+    pub mountain_h0: u32,
+    /// Extra mountain per-mille for each height unit above `mountain_h0`.
+    pub mountain_per_height: u32,
+    /// Cap of the mountain share.
+    pub mountain_cap: u32,
+    /// Extra water per-mille for each river size.
+    pub river_water: u32,
+    /// Extra water per-mille on a lake cell.
+    pub lake_water: u32,
+    /// Extra water per-mille on a coast cell.
+    pub coast_water: u32,
+    /// Distance between a site center and the map edge.
+    pub site_margin: u32,
+    /// Most sites placed on one local map.
+    pub max_map_sites: u32,
+    /// Smallest building width.
+    pub ruin_w_min: u32,
+    /// Largest building width.
+    pub ruin_w_max: u32,
+    /// Smallest building height.
+    pub ruin_h_min: u32,
+    /// Largest building height.
+    pub ruin_h_max: u32,
+    /// Decay constant of walls.
+    pub decay_k: u32,
+    /// Floor tiles decay this many times slower than walls.
+    pub floor_rubble_div: u32,
+    /// Age where trees grow in ruins.
+    pub overgrow_age: u32,
+    /// Chance of a tree on an open ruin tile, in per-mille.
+    pub overgrow_pm: u32,
+    /// Salvage spots of a new ruin.
+    pub salvage_base: u32,
+    /// Years that remove one salvage spot.
+    pub salvage_age_div: u32,
+    /// Age of the small ruin that R-041 adds.
+    pub fallback_age: u32,
+    /// Length of an old tunnel.
+    pub tunnel_len: u32,
+    /// Radius of battlefield debris.
+    pub debris_radius: u32,
+    /// Debris tiles of a new battlefield.
+    pub debris_count: u32,
+    /// Decay constant of battlefield debris.
+    pub debris_decay_k: u32,
+    /// Radius of the ring around a sealed site.
+    pub seal_radius: u32,
+    /// Largest sideways road shift.
+    pub road_jitter: u32,
+}
+
+/// Load and validate the embark numbers. `biome_names` holds the world biome names in order.
+pub fn load_embark_rules(
+    file_name: &str,
+    text: &str,
+    biome_names: &[&str],
+) -> Result<EmbarkRules, ContentError> {
+    let r: EmbarkRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    if r.biomes.len() != biome_names.len() {
+        issues.push(issue("biomes", "must hold one row for each world biome"));
+    }
+    for (i, row) in r.biomes.iter().enumerate() {
+        if biome_names.get(i).is_some_and(|&n| n != row.biome) {
+            issues.push(issue(
+                &row.biome,
+                "row is not in the order of the world biomes",
+            ));
+        }
+        if !["TemperateForest", "ColdHills", "DryPlain"].contains(&row.local.as_str()) {
+            issues.push(issue(
+                &row.biome,
+                "local must be TemperateForest, ColdHills, or DryPlain",
+            ));
+        }
+        let shares = [
+            row.tree_density,
+            row.water,
+            row.mountain,
+            row.sand,
+            row.clay,
+        ];
+        if shares.iter().any(|&v| v > 1000) {
+            issues.push(issue(&row.biome, "shares must be from 0 to 1000"));
+        }
+    }
+    let mut check = |ok: bool, field: &str, message: &str| {
+        if !ok {
+            issues.push(issue(field, message));
+        }
+    };
+    check(
+        r.mountain_cap <= 1000,
+        "mountain_cap",
+        "must be 1000 or less",
+    );
+    check(r.overgrow_pm <= 1000, "overgrow_pm", "must be 1000 or less");
+    check(
+        1 <= r.ruin_w_min && r.ruin_w_min <= r.ruin_w_max && r.ruin_w_max <= 40,
+        "ruin_w_min",
+        "must satisfy 1 <= ruin_w_min <= ruin_w_max <= 40",
+    );
+    check(
+        1 <= r.ruin_h_min && r.ruin_h_min <= r.ruin_h_max && r.ruin_h_max <= 40,
+        "ruin_h_min",
+        "must satisfy 1 <= ruin_h_min <= ruin_h_max <= 40",
+    );
+    check(r.decay_k >= 1, "decay_k", "must be 1 or more");
+    check(r.debris_decay_k >= 1, "debris_decay_k", "must be 1 or more");
+    check(
+        r.floor_rubble_div >= 1,
+        "floor_rubble_div",
+        "must be 1 or more",
+    );
+    check(
+        r.salvage_age_div >= 1,
+        "salvage_age_div",
+        "must be 1 or more",
+    );
+    check(r.salvage_base >= 1, "salvage_base", "must be 1 or more");
+    check(
+        r.fallback_age <= 60_000,
+        "fallback_age",
+        "must be 60000 or less",
+    );
+    check(
+        r.site_margin >= 1 && r.site_margin <= 100,
+        "site_margin",
+        "must be from 1 to 100",
+    );
+    check(
+        r.max_map_sites >= 1 && r.max_map_sites <= 64,
+        "max_map_sites",
+        "must be from 1 to 64",
+    );
+    check(r.tunnel_len <= 200, "tunnel_len", "must be 200 or less");
+    check(r.debris_radius <= 40, "debris_radius", "must be 40 or less");
+    check(r.seal_radius <= 20, "seal_radius", "must be 20 or less");
+    check(r.road_jitter <= 100, "road_jitter", "must be 100 or less");
+    finish(file_name, r, issues)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1537,6 +1706,31 @@ mod tests {
         assert!(err.is_err_and(|e| e.contains("years_default")));
         let float = history_text("years_default: 3000.5");
         assert!(load_history_rules("history.ron", &float).is_err());
+    }
+
+    #[test]
+    fn embark_rules_load_and_bad_rows_are_refused() {
+        let text = std::fs::read_to_string("../../assets/content/embark.ron")
+            .map_err(|e| e.to_string())
+            .unwrap_or_default();
+        let names: Vec<&str> = (0..19).map(|_| "x").collect();
+        // The names do not match, so the order check names a row.
+        let err = load_embark_rules("embark.ron", &text, &names).map_err(|e| e.to_string());
+        assert!(err.is_err_and(|e| e.contains("order")));
+        let real: Vec<String> = load_embark_rules("embark.ron", &text, &names)
+            .err()
+            .map(|e| e.issues.iter().filter_map(|i| i.entry.clone()).collect())
+            .unwrap_or_default();
+        assert_eq!(real.len(), 19);
+        let refs: Vec<&str> = real.iter().map(String::as_str).collect();
+        assert!(load_embark_rules("embark.ron", &text, &refs).is_ok());
+        let short = &refs[..18];
+        assert!(load_embark_rules("embark.ron", &text, short).is_err());
+        let bad = text.replace("decay_k: 400", "decay_k: 0");
+        let err = load_embark_rules("embark.ron", &bad, &refs).map_err(|e| e.to_string());
+        assert!(err.is_err_and(|e| e.contains("decay_k")));
+        let float = text.replace("decay_k: 400", "decay_k: 400.5");
+        assert!(load_embark_rules("embark.ron", &float, &refs).is_err());
     }
 
     #[test]

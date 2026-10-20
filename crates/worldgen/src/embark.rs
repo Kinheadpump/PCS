@@ -100,3 +100,235 @@ impl EmbarkSummary {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// S11: embark summary from the world, and the site records of the embark area.
+// ---------------------------------------------------------------------------------------------
+
+use crate::biome::WorldBiome;
+use crate::history::{History, NEVER, SiteKind};
+use crate::world::{WORLD_SIZE, WorldData};
+use base::content::{ContentError, EmbarkRules, load_embark_rules};
+use base::rng::mix;
+use std::sync::OnceLock;
+
+const EMBARK_RON: &str = include_str!("../../../assets/content/embark.ron");
+const TAG_EMBARK: u64 = 0x454d_4241_524b_5f31;
+const TAG_EDGE: u64 = 0x454d_4241_524b_4544;
+/// Index of the north road exit in `EmbarkSites::road_exits`.
+pub const EXIT_N: usize = 0;
+/// Index of the west road exit.
+pub const EXIT_W: usize = 1;
+/// Index of the east road exit.
+pub const EXIT_E: usize = 2;
+/// Index of the south road exit.
+pub const EXIT_S: usize = 3;
+
+static RULES: OnceLock<Result<EmbarkRules, ContentError>> = OnceLock::new();
+
+/// The embark numbers. Parsed from the embedded file on the first call.
+pub fn embark_rules() -> Result<&'static EmbarkRules, &'static ContentError> {
+    RULES
+        .get_or_init(|| {
+            let names = WorldBiome::ALL.map(WorldBiome::name);
+            load_embark_rules("embark.ron", EMBARK_RON, &names)
+        })
+        .as_ref()
+}
+
+/// Check the embedded embark table.
+pub fn check_content() -> Result<(), ContentError> {
+    embark_rules().map(|_| ()).map_err(Clone::clone)
+}
+
+/// A site record in the embark area, ready for stamping.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EmbarkSite {
+    /// Site ID in the history (0 for a site that has no record).
+    pub id: u32,
+    /// Kind.
+    pub kind: SiteKind,
+    /// Age in years at the end of the history. A living settlement has age 0.
+    pub age: u32,
+    /// Culture of the civilization that made the site.
+    pub culture: u8,
+    /// Mineral index plus 1 of a mine (0 for other sites).
+    pub mineral: u8,
+    /// Richness of a mine, or threat of a sealed site (1 to 3).
+    pub level: u8,
+}
+
+/// The history of the embark area (the 3 by 3 world cells around the selected cell).
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct EmbarkSites {
+    /// Sites, nearest first. At most `max_map_sites`.
+    pub sites: Vec<EmbarkSite>,
+    /// Road exits on the north, west, east, and south edge: the tile offset along the edge.
+    pub road_exits: [Option<u16>; 4],
+    /// True when a road crosses the selected cell.
+    pub road_here: bool,
+    /// True when a road lies in the embark area.
+    pub road_near: bool,
+    /// Largest depletion (0 to 255) in the embark area.
+    pub depletion: u8,
+    /// Number of site records in the embark area before the limit.
+    pub site_count: u32,
+}
+
+impl EmbarkSites {
+    /// True when the area has a site record or a road (Rule 9).
+    pub fn has_history(&self) -> bool {
+        self.site_count > 0 || self.road_near
+    }
+}
+
+/// True when a player can embark on the cell: land that is not ocean, lake, or glacier.
+pub fn is_habitable(world: &WorldData, x: i32, y: i32) -> bool {
+    world.biome.get(x, y).is_some_and(|b| {
+        !matches!(
+            b,
+            WorldBiome::Ocean | WorldBiome::Lake | WorldBiome::Glacier
+        )
+    })
+}
+
+/// Offset of a road exit along the edge between two world cells. Both cells get the same
+/// value, so roads join across a cell border.
+fn edge_offset(world_seed: u64, a: (i32, i32), b: (i32, i32), margin: u32) -> u16 {
+    let key = (u64::from(a.0.min(b.0) as u32) << 40)
+        ^ (u64::from(a.1.min(b.1) as u32) << 20)
+        ^ u64::from((a.0.max(b.0) + a.1.max(b.1)) as u32);
+    let span = LOCAL_SIZE.saturating_sub(2 * margin).max(1);
+    (margin + (mix(world_seed ^ TAG_EDGE ^ key) % u64::from(span)) as u32) as u16
+}
+
+/// Make the embark summary and the site records for a world cell. Returns `None` when the cell
+/// is outside the world, is not habitable, or the embedded tables are not valid.
+pub fn embark_from_world(
+    world: &WorldData,
+    history: &History,
+    wx: i32,
+    wy: i32,
+) -> Option<(EmbarkSummary, EmbarkSites)> {
+    let rules = embark_rules().ok()?;
+    if !is_habitable(world, wx, wy) {
+        return None;
+    }
+    let biome = *world.biome.get(wx, wy)?;
+    let row = rules.biomes.get(biome as usize)?;
+    let local_biome = match row.local.as_str() {
+        "ColdHills" => Biome::ColdHills,
+        "DryPlain" => Biome::DryPlain,
+        _ => Biome::TemperateForest,
+    };
+    let river = u32::from(*world.river.get(wx, wy)?);
+    let mut water = row.water + river * rules.river_water;
+    if world.lake.get(wx, wy).is_some_and(|&l| l != 0) {
+        water += rules.lake_water;
+    }
+    let near_ocean = [(0, -1), (-1, 0), (1, 0), (0, 1)].iter().any(|&(dx, dy)| {
+        world
+            .biome
+            .get(wx + dx, wy + dy)
+            .is_some_and(|b| matches!(b, WorldBiome::Ocean))
+    });
+    if near_ocean {
+        water += rules.coast_water;
+    }
+    let high = world.height_above_sea(wx, wy).max(0) as u32;
+    let mountain = (row.mountain
+        + high.saturating_sub(rules.mountain_h0) * rules.mountain_per_height)
+        .min(rules.mountain_cap);
+
+    let mut richness = 0u8;
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            if let Some(&r) = world.regions.deposits.richness.get(wx + dx, wy + dy) {
+                richness = richness.max(r);
+            }
+        }
+    }
+    let temperature = i16::from(*world.temperature.get(wx, wy)?) * 10;
+    let cell = (u64::from(wx as u32) << 16) | u64::from(wy as u32);
+    let summary = EmbarkSummary {
+        seed: mix(world.seed ^ TAG_EMBARK ^ cell),
+        biome: local_biome,
+        mean_temperature: temperature,
+        tree_density: row.tree_density.min(1000) as u16,
+        water_amount: water.min(1000) as u16,
+        mountain_amount: mountain.min(1000) as u16,
+        sand_amount: row.sand.min(1000) as u16,
+        clay_amount: row.clay.min(1000) as u16,
+        ore_richness: richness.min(3),
+        width: LOCAL_SIZE,
+        height: LOCAL_SIZE,
+    };
+
+    let mut sites = EmbarkSites::default();
+    let mut found: Vec<(i32, u32, EmbarkSite)> = Vec::new();
+    for site in &history.sites {
+        let (dx, dy) = (i32::from(site.x) - wx, i32::from(site.y) - wy);
+        if dx.abs() > 1 || dy.abs() > 1 {
+            continue;
+        }
+        let since = if site.ended != NEVER {
+            u32::from(site.ended)
+        } else {
+            u32::from(site.year)
+        };
+        let age = match site.kind {
+            SiteKind::Settlement => 0,
+            _ => history.years.saturating_sub(since),
+        };
+        let culture = history.civ(site.civ).map_or(0, |c| c.culture);
+        found.push((
+            dx.abs().max(dy.abs()),
+            site.id,
+            EmbarkSite {
+                id: site.id,
+                kind: site.kind,
+                age,
+                culture,
+                mineral: site.mineral,
+                level: site.level,
+            },
+        ));
+    }
+    found.sort_by_key(|&(distance, id, _)| (distance, id));
+    sites.site_count = found.len() as u32;
+    sites.sites = found
+        .into_iter()
+        .take(rules.max_map_sites as usize)
+        .map(|(_, _, s)| s)
+        .collect();
+
+    let road = |x: i32, y: i32| history.road.get(x, y).copied().unwrap_or(0) > 0;
+    sites.road_here = road(wx, wy);
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            if road(wx + dx, wy + dy) {
+                sites.road_near = true;
+            }
+            if let Some(&d) = history.depletion.get(wx + dx, wy + dy) {
+                sites.depletion = sites.depletion.max(d);
+            }
+        }
+    }
+    if sites.road_here {
+        let exits = [(0, -1), (-1, 0), (1, 0), (0, 1)];
+        for (i, (dx, dy)) in exits.into_iter().enumerate() {
+            let (nx, ny) = (wx + dx, wy + dy);
+            let in_world =
+                (0..WORLD_SIZE as i32).contains(&nx) && (0..WORLD_SIZE as i32).contains(&ny);
+            if in_world && road(nx, ny) {
+                sites.road_exits[i] = Some(edge_offset(
+                    world.seed,
+                    (wx, wy),
+                    (nx, ny),
+                    rules.site_margin,
+                ));
+            }
+        }
+    }
+    Some((summary, sites))
+}

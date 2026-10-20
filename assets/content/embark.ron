@@ -1,0 +1,68 @@
+// Embark and site stamping numbers (S11, TECHNICAL_DESIGN 8.2 and 8.3). Integers only (D-014).
+// worldgen embeds this file with include_str!. It does no file I/O at run time.
+// Per-mille values are shares of 1000. Ages are in years.
+(
+    // One row for each world biome, in the order of the WorldBiome type.
+    // "local" is the local map biome: TemperateForest, ColdHills, or DryPlain.
+    biomes: [
+        (biome: "ocean",            local: "TemperateForest", tree_density: 0,   water: 0,   mountain: 0,   sand: 0,   clay: 0),
+        (biome: "lake",             local: "TemperateForest", tree_density: 0,   water: 0,   mountain: 0,   sand: 0,   clay: 0),
+        (biome: "glacier",          local: "ColdHills",       tree_density: 0,   water: 10,  mountain: 400, sand: 0,   clay: 0),
+        (biome: "high mountain",    local: "ColdHills",       tree_density: 20,  water: 20,  mountain: 650, sand: 0,   clay: 0),
+        (biome: "volcanic",         local: "ColdHills",       tree_density: 20,  water: 10,  mountain: 600, sand: 0,   clay: 0),
+        (biome: "coast",            local: "TemperateForest", tree_density: 150, water: 150, mountain: 20,  sand: 400, clay: 40),
+        (biome: "floodplain",       local: "TemperateForest", tree_density: 350, water: 80,  mountain: 20,  sand: 20,  clay: 150),
+        (biome: "tundra",           local: "ColdHills",       tree_density: 20,  water: 60,  mountain: 80,  sand: 0,   clay: 20),
+        (biome: "cold desert",      local: "ColdHills",       tree_density: 10,  water: 20,  mountain: 120, sand: 150, clay: 20),
+        (biome: "taiga",            local: "ColdHills",       tree_density: 500, water: 50,  mountain: 100, sand: 10,  clay: 40),
+        (biome: "steppe",           local: "DryPlain",        tree_density: 40,  water: 20,  mountain: 40,  sand: 100, clay: 50),
+        (biome: "shrubland",        local: "DryPlain",        tree_density: 120, water: 20,  mountain: 60,  sand: 150, clay: 40),
+        (biome: "grassland",        local: "TemperateForest", tree_density: 120, water: 40,  mountain: 40,  sand: 20,  clay: 60),
+        (biome: "temperate forest", local: "TemperateForest", tree_density: 500, water: 50,  mountain: 80,  sand: 20,  clay: 50),
+        (biome: "marsh",            local: "TemperateForest", tree_density: 250, water: 250, mountain: 10,  sand: 10,  clay: 200),
+        (biome: "desert",           local: "DryPlain",        tree_density: 5,   water: 10,  mountain: 60,  sand: 700, clay: 20),
+        (biome: "savanna",          local: "DryPlain",        tree_density: 100, water: 30,  mountain: 50,  sand: 200, clay: 40),
+        (biome: "tropical forest",  local: "TemperateForest", tree_density: 600, water: 60,  mountain: 50,  sand: 10,  clay: 60),
+        (biome: "rainforest",       local: "TemperateForest", tree_density: 750, water: 80,  mountain: 40,  sand: 10,  clay: 60),
+    ],
+    // Height above sea level where extra mountain starts, and the extra per-mille for each
+    // height unit above it. The total mountain share is capped.
+    mountain_h0: 600,
+    mountain_per_height: 1,
+    mountain_cap: 700,
+    // Extra water share for a river cell (for each river size), a lake cell, and a coast cell.
+    river_water: 30,
+    lake_water: 300,
+    coast_water: 120,
+    // Distance in tiles between a site center and the map edge.
+    site_margin: 16,
+    // Most sites placed on one local map. The nearest sites win.
+    max_map_sites: 8,
+    // Size range of a building footprint (walls included).
+    ruin_w_min: 5,
+    ruin_w_max: 11,
+    ruin_h_min: 4,
+    ruin_h_max: 8,
+    // A wall tile is rubble with the chance age * 1000 / (age + decay_k). A floor tile has
+    // that chance divided by floor_rubble_div.
+    decay_k: 400,
+    floor_rubble_div: 2,
+    // Ruins from this age get trees on open tiles, with this per-mille chance.
+    overgrow_age: 300,
+    overgrow_pm: 300,
+    // Salvage spots of a ruin: salvage_base minus (age / salvage_age_div), minimum 1.
+    salvage_base: 6,
+    salvage_age_div: 250,
+    // Age of the small ruin that R-041 adds when the history gives no site.
+    fallback_age: 800,
+    // Length of an old tunnel in tiles.
+    tunnel_len: 24,
+    // Battlefield debris: radius, tile count, and the decay constant of the count.
+    debris_radius: 6,
+    debris_count: 16,
+    debris_decay_k: 600,
+    // Radius of the stone ring around a sealed site.
+    seal_radius: 3,
+    // Largest sideways shift of a road in tiles.
+    road_jitter: 24,
+)

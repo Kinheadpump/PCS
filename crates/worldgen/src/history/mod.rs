@@ -434,10 +434,11 @@ pub fn history_tables() -> Result<&'static HistoryTables, &'static ContentError>
     TABLES.get_or_init(build_tables).as_ref()
 }
 
-/// Check all embedded content tables of `worldgen`: rocks, minerals, and history.
+/// Check all embedded content tables of `worldgen`: rocks, minerals, embark, and history.
 /// Call it at world generation start (`try_generate_world` does it).
 pub fn check_content() -> Result<(), ContentError> {
     crate::geology::check_tables()?;
+    crate::embark::check_content()?;
     history_tables().map(|_| ()).map_err(Clone::clone)
 }
 

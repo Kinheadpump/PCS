@@ -23,12 +23,14 @@
     max_events: 50000,
     // Heavy updates (drives, prosperity) each this many years.
     heavy_interval: 10,
+    // S11 raised settle_pm, mine_pm, road_pm, and max_civ_settlements so Rule 9 holds:
+    // 30% of habitable cells have a site or a road in the embark area on 80% of seeds.
     // Most settlements that one civilization holds at the same time.
-    max_civ_settlements: 14,
+    max_civ_settlements: 24,
     // Chances (per-mille, scaled by the drives of the civilization).
-    settle_pm: 90,
-    mine_pm: 40,
-    road_pm: 35,
+    settle_pm: 200,
+    mine_pm: 70,
+    road_pm: 75,
     battle_pm: 250,
     seal_pm: 8,
     // Chance of an artifact after a battle, a raze, or a seal.

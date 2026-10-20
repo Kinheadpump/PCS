@@ -5,8 +5,9 @@
 //! sits above the toolbar, the work panel at the top left, and the colonist panel, the tile
 //! panel, and a side panel (stockpile or workshop) flow from the right edge.
 //!
-//! Two places are reserved for Sprint 5: the temperature slot in the top bar and the alerts
-//! strip under the top bar. Nothing else uses them.
+//! Two places belong to the climate display: the temperature slot in the top bar (with the scale
+//! of the temperature overlay at its right) and the alerts strip under the top bar. Nothing else
+//! uses them.
 
 use crate::ui::{self, Rect};
 
@@ -22,10 +23,12 @@ pub const TOOLBAR_SPLIT: f32 = 12.0;
 pub const SPEED_W: f32 = 44.0;
 /// Height of a button in the top bar.
 pub const TOP_BUTTON_H: f32 = 40.0;
-/// Width of the reserved temperature slot.
-pub const TEMP_W: f32 = 200.0;
-/// Size of the reserved alerts strip.
-pub const ALERTS_SIZE: (f32, f32) = (360.0, 32.0);
+/// Width of the temperature slot.
+pub const TEMP_W: f32 = 168.0;
+/// Size of the scale of the temperature overlay.
+pub const SCALE_SIZE: (f32, f32) = (176.0, 28.0);
+/// Size of the alerts strip.
+pub const ALERTS_SIZE: (f32, f32) = (420.0, 36.0);
 /// Space left of the clock in the top bar.
 const TOP_EDGE: f32 = 16.0;
 /// Space between the groups of the top bar.
@@ -81,9 +84,11 @@ pub struct Placed {
     pub clock: (f32, f32),
     /// The colonist count at the right of the top bar.
     pub count: Rect,
-    /// Reserved: the temperature readout and forecast (Sprint 5). Nothing draws here now.
+    /// The temperature readout. The forecast shows as a tooltip.
     pub temp_slot: Rect,
-    /// Reserved: the strip of alerts under the top bar (Sprint 5). Nothing draws here now.
+    /// The scale of the temperature overlay, right of the temperature slot.
+    pub scale: Rect,
+    /// The strip of alerts under the top bar.
     pub alerts_slot: Rect,
     /// The toolbar.
     pub toolbar: Rect,
@@ -158,6 +163,12 @@ pub fn place(view: (f32, f32), s: &Sizes) -> Placed {
         x += SPEED_W + ui::GAP;
     }
     let temp_slot = Rect::new(x + TOP_GAP - ui::GAP, by, TEMP_W, TOP_BUTTON_H);
+    let scale = Rect::new(
+        temp_slot.right() + TOP_GAP,
+        by + (TOP_BUTTON_H - SCALE_SIZE.1) / 2.0,
+        SCALE_SIZE.0,
+        SCALE_SIZE.1,
+    );
     let count = Rect::new(
         (view.0 - TOP_EDGE - s.count_w).round(),
         by,
@@ -256,6 +267,7 @@ pub fn place(view: (f32, f32), s: &Sizes) -> Placed {
         clock: (TOP_EDGE, 8.0),
         count,
         temp_slot,
+        scale,
         alerts_slot,
         toolbar,
         toolbar_buttons,
@@ -303,11 +315,15 @@ mod tests {
         for pair in p.speeds.windows(2) {
             assert!(pair[1].x > pair[0].right());
         }
-        for r in p.speeds.iter().chain([&p.count, &p.temp_slot]) {
+        for r in p.speeds.iter().chain([&p.count, &p.temp_slot, &p.scale]) {
             assert!(r.bottom() <= p.top.bottom(), "{r:?}");
         }
         assert!(p.temp_slot.x > p.speeds[3].right(), "the slot is free");
-        assert!(p.count.x > p.temp_slot.right());
+        assert!(p.scale.x >= p.temp_slot.right());
+        assert!(
+            p.count.x > p.scale.right(),
+            "the scale fits left of the count"
+        );
     }
 
     #[test]

@@ -12,17 +12,22 @@ pub mod local;
 pub mod noise;
 pub mod plates;
 pub mod region;
+pub mod stamp;
 pub mod world;
 
 pub use biome::WorldBiome;
 pub use deposit::{Deposits, Mineral};
-pub use embark::{Biome, EmbarkSummary, LOCAL_SIZE};
+pub use embark::{
+    Biome, EmbarkSite, EmbarkSites, EmbarkSummary, LOCAL_SIZE,
+    check_content as check_embark_content, embark_from_world, is_habitable,
+};
 pub use geology::{Geology, Rock, Setting};
 pub use history::{
     Event, EventKind, History, check_content as check_history_content, generate_history,
 };
-pub use local::{Ground, LocalMapData, Ore, RockKind, generate_local};
+pub use local::{Ground, LocalMapData, Ore, RockKind, generate_local, generate_local_with_sites};
 pub use region::{RegionEdge, RegionInfo, RegionLink, Regions};
+pub use stamp::{PlacedSite, SiteTile};
 pub use world::{
     LAYER_STAGE_COUNT, LayerStage, REGION_STAGE_COUNT, RegionStage, STAGE_COUNT, Stage, WORLD_SIZE,
     WorldData, WorldParams, generate_world, try_generate_world,
