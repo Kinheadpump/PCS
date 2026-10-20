@@ -8,7 +8,7 @@ Writing rule: This document uses ASD-STE 100 Simplified Technical English. Code 
 
 The owner wants a technically infinite world. The world is now 256 × 256 world cells (D-019).
 
-**Recommendation: no-go for the MVP. Go for a "realm" design in Phase 4.**
+**Recommendation: no-go for the MVP. Go for truly infinite terrain with chunks in a Phase 4 sprint (S28).** The owner accepted this and asked to keep that sprint. The realm design (section 7, option B) is an optional step on the way and the owner does not need it.
 
 - An infinite world made of chunks works for height, temperature, and moisture. The prototype in `crates/worldgen/src/chunk.rs` shows this.
 - Rivers, lakes, regions, deposits, and history read the whole world today. A chunk version of each one is a redesign and not a small change. It breaks every golden hash of world steps 5 to 12.
@@ -115,8 +115,8 @@ An ocean edge between realms is a visible limit. The design can use it: the ocea
 
 ## 8. Decision for the owner
 
-1. Is the infinite world in the MVP? **Recommendation: no.** The MVP has 256 × 256 world cells.
-2. When the owner wants the infinite world after the MVP, does an ocean edge between realms satisfy the wish? **Recommendation: yes, for Phase 4.** If no, plan option C after M3 and do a second spike on rivers and history.
+1. Is the infinite world in the MVP? **Decision: no.** The MVP has 256 × 256 world cells.
+2. Does the infinite world come later? **Decision: yes.** Sprint S28 reworks the terrain into truly infinite terrain with chunks (option C). It starts with a second spike on rivers and history. An ocean edge between realms is not enough for the owner.
 3. What stays for now: world steps 5 to 12 do not change. The prototype in `chunk.rs` stays as a spike and the game does not use it. The file can be deleted when the owner picks option B.
 
 ## 9. Open points

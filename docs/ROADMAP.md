@@ -349,7 +349,7 @@ Get a minimum of 1 tester who is not the developer for each milestone.
 
 Plan these phases in detail only after M3. The connection of each system to the core loop is in `GAME_DESIGN.md` §16.2.
 
-- **Phase 4, Colonist life and external threats:** colonist life (§7.1), larger wars with rival civilizations, ranged combat, trade caravans, world map expeditions, legacy worlds (Q-005), more traits.
+- **Phase 4, Colonist life and external threats:** colonist life (§7.1), larger wars with rival civilizations, ranged combat, trade caravans, world map expeditions, legacy worlds (Q-005), more traits, and infinite terrain (S28, §7.3).
 - **Phase 5, Society:** religion from sites, social conflict and colony rules, diplomacy and allies, raids on other settlements, more metals and longer chains, cave-ins, floods, plague, crop blight, thieves.
 - **Phase 6, Scale and variety:** 300 colonists (`GAME_DESIGN.md` §7.1), 512² maps, social classes, playable races, a deep underground layer (Q-002).
 
@@ -392,7 +392,7 @@ Each step needs a rule ID, a content file, and a test before it goes into a spri
 
 ### 7.3 Infinite world and controls review (proposal)
 
-- **S11a Infinite world spike (Q-016):** a design spike, not a feature. It comes right after M2 (S11) and before S12, because an infinite world changes world generation, zoom, the world map, and embark. Output: a written design and a small prototype in `tools` that makes world chunks on demand from the seed. It answers how the zoom levels, the world map, history, and the embark choice work without a fixed world edge, and what changes in the golden hashes and in P-05. The owner decides after the spike if the infinite world goes into the MVP. Worldgen steps 5 to 12 are not changed before then. Status: the study is in `docs/INFINITE_WORLD.md`. The prototype is `crates/worldgen/src/chunk.rs` (not in `tools`, the game does not use it). It makes height, temperature, and moisture per chunk with no seams. Recommendation: no-go for the MVP, and a realm design in Phase 4 (D-073). The owner accepted this on 2026-10-20.
+- **S11a Infinite world spike (Q-016):** a design spike, not a feature. It comes right after M2 (S11) and before S12, because an infinite world changes world generation, zoom, the world map, and embark. Output: a written design and a small prototype in `tools` that makes world chunks on demand from the seed. It answers how the zoom levels, the world map, history, and the embark choice work without a fixed world edge, and what changes in the golden hashes and in P-05. The owner decides after the spike if the infinite world goes into the MVP. Worldgen steps 5 to 12 are not changed before then. Status: the study is in `docs/INFINITE_WORLD.md`. The prototype is `crates/worldgen/src/chunk.rs` (not in `tools`, the game does not use it). It makes height, temperature, and moisture per chunk with no seams. Decision (D-073): no infinite world in the MVP, and the sprint S28 in Phase 4 reworks it into truly infinite terrain (§7.3). The owner accepted this on 2026-10-20.
 - **Controls and game feel review (Q-017):** the `controls-reviewer` subagent checks how the controls feel and fit the gameplay. First review at M1 (S7 is the first sprint with real gameplay). Second review in S19, with the playtests. The review lists problems with camera, zoom, selection, and build input. The lead agent turns them into tasks.
 
 ### 7.4 Weather, seasons, sound, and music (proposal, Q-018)
