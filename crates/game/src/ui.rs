@@ -118,6 +118,24 @@ pub struct Rect {
 }
 
 impl Rect {
+    /// The right edge.
+    pub fn right(&self) -> f32 {
+        self.x + self.w
+    }
+
+    /// The bottom edge.
+    pub fn bottom(&self) -> f32 {
+        self.y + self.h
+    }
+
+    /// True if the two rectangles share an area. Rectangles that only touch do not.
+    pub fn intersects(&self, other: &Rect) -> bool {
+        self.x < other.right()
+            && other.x < self.right()
+            && self.y < other.bottom()
+            && other.y < self.bottom()
+    }
+
     /// A rectangle.
     pub fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
         Self { x, y, w, h }
@@ -138,9 +156,15 @@ pub enum UiAction {
     SetTool(Tool),
     /// The player pressed the work panel button.
     ToggleWork,
+    /// The player pressed the rooms overlay button.
+    ToggleRooms,
     /// The player clicked a colonist name in the work panel.
     SelectColonist(ColonistId),
-    /// A command for the sim: a priority change or a stockpile change.
+    /// The player chose a building type in the build panel (index in `buildings.ron`).
+    PickBuilding(usize),
+    /// The player chose a material in the build panel (material index).
+    PickMaterial(u16),
+    /// A command for the sim: a priority change, a stockpile change, or a craft order.
     Command(Command),
 }
 
@@ -351,27 +375,6 @@ impl Ui {
     }
 }
 
-/// Lay out a toolbar: one row of buttons with an icon and a label each.
-pub fn toolbar_layout(origin: (f32, f32), labels: &[&str]) -> HudLayout {
-    let widths: Vec<f32> = labels
-        .iter()
-        .map(|l| text_px(l) + 2.0 * BUTTON_PAD + ICON_W + GAP - 4.0)
-        .collect();
-    let row_w = widths.iter().sum::<f32>() + GAP * widths.len().saturating_sub(1) as f32;
-    let mut buttons = Vec::new();
-    let (mut bx, y) = (origin.0 + PAD, origin.1 + PAD);
-    for w in &widths {
-        buttons.push(Rect::new(bx, y, *w, BUTTON_H));
-        bx += w + GAP;
-    }
-    HudLayout {
-        panel: Rect::new(origin.0, origin.1, row_w + 2.0 * PAD, BUTTON_H + 2.0 * PAD),
-        before: Vec::new(),
-        buttons,
-        after: Vec::new(),
-    }
-}
-
 /// Draw a panel with text lines only.
 pub fn text_panel(ui: &mut Ui, origin: (f32, f32), lines: &[String]) {
     let layout = hud_layout(origin, lines, &[], &[]);
@@ -561,6 +564,203 @@ pub fn work_layout(origin: (f32, f32), names: &[String], hint: &str) -> WorkLayo
     }
 }
 
+/// Lay out a toolbar as one column of buttons of equal width, each with an icon and a label.
+pub fn column_layout(origin: (f32, f32), labels: &[&str]) -> HudLayout {
+    let w =
+        labels.iter().map(|l| text_px(l)).fold(0.0_f32, f32::max) + 2.0 * BUTTON_PAD + ICON_W + GAP
+            - 4.0;
+    let mut buttons = Vec::new();
+    let (x, mut y) = (origin.0 + PAD, origin.1 + PAD);
+    for _ in labels {
+        buttons.push(Rect::new(x, y, w, BUTTON_H));
+        y += BUTTON_H + GAP;
+    }
+    let h = if labels.is_empty() {
+        0.0
+    } else {
+        y - GAP - origin.1 + PAD
+    };
+    HudLayout {
+        panel: Rect::new(origin.0, origin.1, w + 2.0 * PAD, h),
+        before: Vec::new(),
+        buttons,
+        after: Vec::new(),
+    }
+}
+
+/// Place buttons in rows that wrap at `max_w`. Returns the rectangles, the width that the
+/// rows use, and the y below the last row.
+fn flow_buttons(x0: f32, y0: f32, labels: &[String], max_w: f32) -> (Vec<Rect>, f32, f32) {
+    let (mut x, mut y) = (x0, y0);
+    let mut used = 0.0_f32;
+    let mut out = Vec::new();
+    for label in labels {
+        let w = text_px(label) + 2.0 * BUTTON_PAD;
+        if x > x0 && x + w > x0 + max_w {
+            x = x0;
+            y += BUTTON_H + GAP;
+        }
+        out.push(Rect::new(x, y, w, BUTTON_H));
+        x += w + GAP;
+        used = used.max(x - GAP - x0);
+    }
+    if !labels.is_empty() {
+        y += BUTTON_H;
+    }
+    (out, used, y)
+}
+
+/// Positions of the build panel.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BuildLayout {
+    /// The panel rectangle.
+    pub panel: Rect,
+    /// Top left corner of the title.
+    pub title: (f32, f32),
+    /// One button for each building type.
+    pub buildings: Vec<Rect>,
+    /// Top left corner of the material header.
+    pub material_header: (f32, f32),
+    /// One button for each material.
+    pub materials: Vec<Rect>,
+    /// Top left corner of each text line at the bottom.
+    pub lines: Vec<(f32, f32)>,
+}
+
+/// Lay out the build panel: title, building buttons, material header, material buttons, and
+/// text lines. The buttons wrap at `max_inner_w`.
+pub fn build_layout(
+    origin: (f32, f32),
+    title: &str,
+    buildings: &[String],
+    material_header: &str,
+    materials: &[String],
+    lines: &[String],
+    max_inner_w: f32,
+) -> BuildLayout {
+    let x0 = origin.0 + PAD;
+    let title_pos = (x0, origin.1 + PAD);
+    let (b_rects, b_w, y) = flow_buttons(x0, title_pos.1 + ROW_H + GAP, buildings, max_inner_w);
+    let header = (x0, y + GAP + 2.0);
+    let (m_rects, m_w, mut y) = flow_buttons(x0, header.1 + ROW_H + GAP, materials, max_inner_w);
+    if materials.is_empty() {
+        y = header.1 + ROW_H;
+    } else {
+        y += GAP;
+    }
+    let mut line_pos = Vec::new();
+    for _ in lines {
+        line_pos.push((x0, y));
+        y += ROW_H;
+    }
+    let text_w = lines
+        .iter()
+        .map(|l| text_px(l))
+        .chain([text_px(title), text_px(material_header)])
+        .fold(0.0_f32, f32::max);
+    let inner_w = b_w.max(m_w).max(text_w);
+    BuildLayout {
+        panel: Rect::new(
+            origin.0,
+            origin.1,
+            inner_w + 2.0 * PAD,
+            y - origin.1 + PAD - 2.0,
+        ),
+        title: title_pos,
+        buildings: b_rects,
+        material_header: header,
+        materials: m_rects,
+        lines: line_pos,
+    }
+}
+
+/// Positions of one recipe in the workshop panel.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecipeRow {
+    /// Top left corner of the recipe name.
+    pub label: (f32, f32),
+    /// Top left corner of the line under the name (inputs, outputs, time).
+    pub detail: (f32, f32),
+    /// Buttons: add 1, add 5, add 10, clear.
+    pub buttons: [Rect; 4],
+}
+
+/// Positions of the workshop panel.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorkshopLayout {
+    /// The panel rectangle.
+    pub panel: Rect,
+    /// Top left corner of the title.
+    pub title: (f32, f32),
+    /// Top left corner of each text line under the title.
+    pub lines: Vec<(f32, f32)>,
+    /// One row for each recipe.
+    pub recipes: Vec<RecipeRow>,
+}
+
+/// Labels of the four buttons of a recipe row.
+pub const RECIPE_BUTTONS: [&str; 4] = ["+1", "+5", "+10", "Clear"];
+
+/// Lay out the workshop panel: a title, text lines, and for each recipe a name, a detail line,
+/// and a row of buttons.
+pub fn workshop_layout(
+    origin: (f32, f32),
+    title: &str,
+    lines: &[String],
+    recipe_labels: &[(String, String)],
+) -> WorkshopLayout {
+    let x0 = origin.0 + PAD;
+    let title_pos = (x0, origin.1 + PAD);
+    let mut y = title_pos.1 + ROW_H;
+    let mut line_pos = Vec::new();
+    for _ in lines {
+        line_pos.push((x0, y));
+        y += ROW_H;
+    }
+    let widths: Vec<f32> = RECIPE_BUTTONS
+        .iter()
+        .map(|l| text_px(l) + 2.0 * BUTTON_PAD)
+        .collect();
+    let button_row_w = widths.iter().sum::<f32>() + GAP * 3.0;
+    let mut recipes = Vec::new();
+    for _ in recipe_labels {
+        y += GAP + 2.0;
+        let label_pos = (x0, y);
+        y += ROW_H;
+        let detail_pos = (x0, y);
+        y += ROW_H;
+        let mut bx = x0;
+        let mut rects = [Rect::new(0.0, 0.0, 0.0, 0.0); 4];
+        for (rect, w) in rects.iter_mut().zip(&widths) {
+            *rect = Rect::new(bx, y, *w, BUTTON_H);
+            bx += w + GAP;
+        }
+        y += BUTTON_H;
+        recipes.push(RecipeRow {
+            label: label_pos,
+            detail: detail_pos,
+            buttons: rects,
+        });
+    }
+    let text_w = lines
+        .iter()
+        .chain(recipe_labels.iter().flat_map(|(a, b)| [a, b]))
+        .map(|l| text_px(l))
+        .chain([text_px(title)])
+        .fold(0.0_f32, f32::max);
+    WorkshopLayout {
+        panel: Rect::new(
+            origin.0,
+            origin.1,
+            text_w.max(button_row_w) + 2.0 * PAD,
+            y - origin.1 + PAD,
+        ),
+        title: title_pos,
+        lines: line_pos,
+        recipes,
+    }
+}
+
 /// Draw the status panel: text, speed buttons, more text.
 pub fn status_panel(
     ui: &mut Ui,
@@ -715,6 +915,91 @@ mod tests {
         assert!(l.names[1].y > l.names[0].y);
         assert_eq!(l.cells[0][1].x, l.cells[0][0].x + CELL_W + GAP);
         assert!(l.names[0].x + l.names[0].w < l.cells[0][0].x);
+    }
+
+    #[test]
+    fn a_column_toolbar_stacks_equal_buttons_inside_its_panel() {
+        let l = column_layout((8.0, 100.0), &["Select (V)", "Remove (X)", "Work (P)"]);
+        assert_eq!(l.buttons.len(), 3);
+        assert!(l.buttons.iter().all(|b| b.w == l.buttons[0].w));
+        assert_eq!(l.buttons[1].y, l.buttons[0].y + BUTTON_H + GAP);
+        for b in &l.buttons {
+            assert!(b.x >= l.panel.x && b.right() <= l.panel.right());
+            assert!(b.bottom() <= l.panel.bottom());
+        }
+        assert!(column_layout((0.0, 0.0), &[]).panel.h == 0.0);
+    }
+
+    #[test]
+    fn rects_that_only_touch_do_not_intersect() {
+        let a = Rect::new(0.0, 0.0, 10.0, 10.0);
+        assert!(!a.intersects(&Rect::new(10.0, 0.0, 5.0, 5.0)));
+        assert!(!a.intersects(&Rect::new(0.0, 10.0, 5.0, 5.0)));
+        assert!(a.intersects(&Rect::new(9.0, 9.0, 5.0, 5.0)));
+        assert!(a.intersects(&Rect::new(2.0, 2.0, 1.0, 1.0)));
+    }
+
+    #[test]
+    fn build_layout_wraps_both_button_groups_inside_the_panel() {
+        let to_strings =
+            |list: &[&str]| -> Vec<String> { list.iter().map(|s| (*s).to_owned()).collect() };
+        let buildings = to_strings(&["Wall", "Door", "Floor", "Roof", "Bed", "Hearth", "Workshop"]);
+        let materials = to_strings(&["Granite 3", "Limestone 0", "Log 12"]);
+        let lines = to_strings(&["Drag a line", "4 x Log, 3.0 h"]);
+        let l = build_layout(
+            (10.0, 10.0),
+            "Build",
+            &buildings,
+            "Material",
+            &materials,
+            &lines,
+            300.0,
+        );
+        assert_eq!(l.buildings.len(), 7);
+        assert_eq!(l.materials.len(), 3);
+        assert!(l.buildings[6].y > l.buildings[0].y, "the buildings wrap");
+        assert!(l.material_header.1 > l.buildings[6].bottom());
+        assert!(l.materials[0].y > l.material_header.1);
+        assert!(l.lines[0].1 >= l.materials[0].bottom());
+        for r in l.buildings.iter().chain(&l.materials) {
+            assert!(r.x >= l.panel.x && r.right() <= l.panel.right());
+            assert!(r.bottom() <= l.panel.bottom());
+        }
+        assert!(l.lines[1].1 + ROW_H <= l.panel.bottom() + 2.0);
+    }
+
+    #[test]
+    fn build_layout_without_materials_keeps_the_lines_below_the_header() {
+        let l = build_layout(
+            (0.0, 0.0),
+            "Build",
+            &["Wall".to_owned()],
+            "Material",
+            &[],
+            &["x".to_owned()],
+            300.0,
+        );
+        assert!(l.materials.is_empty());
+        assert!(l.lines[0].1 >= l.material_header.1 + ROW_H);
+    }
+
+    #[test]
+    fn workshop_layout_gives_each_recipe_a_text_and_four_buttons() {
+        let recipes = vec![
+            ("Make planks".to_owned(), "1 Log to 2 Plank".to_owned()),
+            ("Make firewood (ordered 3)".to_owned(), "1 Log".to_owned()),
+        ];
+        let l = workshop_layout((0.0, 0.0), "Workshop", &["Bin: empty".to_owned()], &recipes);
+        assert_eq!(l.recipes.len(), 2);
+        assert!(l.recipes[1].label.1 > l.recipes[0].buttons[0].bottom());
+        let row = &l.recipes[0];
+        assert!(row.detail.1 > row.label.1 && row.buttons[0].y > row.detail.1);
+        for pair in row.buttons.windows(2) {
+            assert!(pair[1].x > pair[0].right());
+        }
+        for r in l.recipes.iter().flat_map(|r| r.buttons.iter()) {
+            assert!(r.right() <= l.panel.right() && r.bottom() <= l.panel.bottom());
+        }
     }
 
     #[test]

@@ -23,6 +23,8 @@ pub fn cell_for(tool: Tool) -> usize {
         Tool::Haul => ic::HAUL,
         Tool::Stockpile => ic::ZONE,
         Tool::Cancel => ic::CANCEL,
+        Tool::Build => ic::BUILD,
+        Tool::Deconstruct => ic::REMOVE,
     }
 }
 

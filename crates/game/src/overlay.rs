@@ -40,10 +40,12 @@ pub fn tool_color(tool: Tool) -> Color {
         Tool::Haul => rgba(100, 180, 255, 255),
         Tool::Stockpile => rgba(80, 200, 200, 255),
         Tool::Cancel => rgba(240, 90, 90, 255),
+        Tool::Build => rgba(120, 190, 255, 255),
+        Tool::Deconstruct => rgba(255, 120, 80, 255),
     }
 }
 
-fn with_alpha(c: Color, a: f32) -> Color {
+pub fn with_alpha(c: Color, a: f32) -> Color {
     Color::new(c.r, c.g, c.b, a)
 }
 
@@ -61,15 +63,15 @@ pub struct Frame<'a> {
 }
 
 impl Frame<'_> {
-    fn visible(&self) -> Option<TileRect> {
+    pub fn visible(&self) -> Option<TileRect> {
         self.camera.visible_tiles(self.view, self.map_size)
     }
 
-    fn rect(&self, x: u16, y: u16) -> (f32, f32, f32, f32) {
+    pub fn rect(&self, x: u16, y: u16) -> (f32, f32, f32, f32) {
         screen_rect(self.camera, self.view, i32::from(x), i32::from(y), 1, 1)
     }
 
-    fn is_visible(&self, rect: &TileRect, x: u16, y: u16) -> bool {
+    pub fn is_visible(&self, rect: &TileRect, x: u16, y: u16) -> bool {
         (rect.min_x..=rect.max_x).contains(&i32::from(x))
             && (rect.min_y..=rect.max_y).contains(&i32::from(y))
     }
@@ -92,7 +94,7 @@ pub fn screen_rect(
 }
 
 /// Border thickness for a tile of the given screen size: one sprite pixel.
-fn thickness(tile_px: f32) -> f32 {
+pub fn thickness(tile_px: f32) -> f32 {
     (tile_px / 16.0).round().max(1.0)
 }
 
@@ -437,6 +439,15 @@ pub fn preview_label(area: &Area, count: u32) -> String {
     format!("{} x {} ({count})", area.width(), area.height())
 }
 
+/// True if the tool does something on the tile: a designation tool, or the remove tool.
+fn tool_applies(sim: &Sim, tool: Tool, x: u16, y: u16) -> bool {
+    if tool == Tool::Deconstruct {
+        crate::build_ui::remove_action(sim, x, y).is_some()
+    } else {
+        crate::tools::applies(sim, tool, x, y)
+    }
+}
+
 /// Draw the rectangle that a drag will use: fill, dashed border, tiles that the tool works on, and
 /// a label.
 pub fn draw_preview(f: &Frame, tool: Tool, area: Area) {
@@ -455,7 +466,7 @@ pub fn draw_preview(f: &Frame, tool: Tool, area: Area) {
         && tool != Tool::Stockpile
     {
         for (tx, ty) in area.tiles() {
-            if f.is_visible(&visible, tx, ty) && crate::tools::applies(f.sim, tool, tx, ty) {
+            if f.is_visible(&visible, tx, ty) && tool_applies(f.sim, tool, tx, ty) {
                 let r = f.rect(tx, ty);
                 draw_rectangle(r.0, r.1, r.2, r.3, with_alpha(color, 0.30));
             }
@@ -465,7 +476,12 @@ pub fn draw_preview(f: &Frame, tool: Tool, area: Area) {
     let dash = (f.camera.zoom / 4.0).round().max(2.0);
     dashed_rect(x, y, w, h, t * 2.0, dash, rgb_color(pal::ui::INK, 170));
     dashed_rect(x, y, w, h, t, dash, color);
-    let label = preview_label(&area, count_applicable(f.sim, tool, area));
+    let count = if tool == Tool::Deconstruct {
+        crate::build_ui::count_removable(f.sim, area)
+    } else {
+        count_applicable(f.sim, tool, area)
+    };
+    let label = preview_label(&area, count);
     let tw = ui::text_px(&label);
     let (lx, ly) = (x, (y - 26.0).max(2.0));
     ui::draw_tag(lx, ly, tw + 12.0, 22.0, color);
