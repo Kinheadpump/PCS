@@ -691,6 +691,7 @@ impl Sim {
                 }
                 best.map(|(tile, _)| (tile, None, None))
             }
+            JobKind::Haul if job.is_refuel() => self.eval_refuel(region, from, job),
             JobKind::Haul => {
                 let item_id = job.item?;
                 let item = self.items.get(item_id)?;
@@ -814,6 +815,7 @@ impl Sim {
                         .map
                         .rock(x, y)
                         .is_none_or(|r| r == worldgen::RockKind::None),
+                    JobKind::Haul if j.is_refuel() => !self.refuel_wanted(j.x, j.y),
                     JobKind::Haul => match j.item {
                         Some(item) => {
                             !self.items.get(item).is_some_and(|i| {
@@ -854,6 +856,7 @@ impl Sim {
         }
         if let Some(dest) = pick.dest
             && pick.kind == JobKind::Haul
+            && !self.is_refuel_job(pick.job)
         {
             self.jobs.dest_reservations.insert(dest, id);
         }
@@ -1047,7 +1050,7 @@ impl Sim {
             (i32::from(here.0), i32::from(here.1)),
             (i32::from(dest.0), i32::from(dest.1)),
         );
-        if valid && dest_ok && active.kind != JobKind::Haul {
+        if valid && dest_ok && (active.kind != JobKind::Haul || self.is_refuel_job(active.job)) {
             self.trim_to_need(&active, item);
         }
         if !valid || !dest_ok || !self.items.pick_up(item, id) {
@@ -1062,6 +1065,10 @@ impl Sim {
     }
 
     fn drop_item(&mut self, id: ColonistId, active: ActiveJob, dest: (u16, u16)) {
+        if active.kind == JobKind::Haul && self.is_refuel_job(active.job) {
+            self.deliver_refuel(id, active);
+            return;
+        }
         if active.kind != JobKind::Haul {
             self.deliver_item(id, active);
             return;
@@ -1133,7 +1140,7 @@ impl Sim {
                 let stack_max = self.rules.jobs.stack_max;
                 if let Some(kept) = self.items.put_down(item, here.0, here.1, stack_max) {
                     self.items.set_to_haul(kept, true);
-                    if active.kind == JobKind::Haul {
+                    if active.kind == JobKind::Haul && !self.is_refuel_job(active.job) {
                         if kept != item {
                             self.jobs.remove(active.job);
                         } else if let Some(job) = self.jobs.get_mut(active.job) {
@@ -1220,6 +1227,7 @@ impl Sim {
                 }
                 if let Some(dest) = a.dest
                     && a.kind == JobKind::Haul
+                    && !self.is_refuel_job(a.job)
                 {
                     dest_tiles.push(dest);
                     if self.jobs.dest_reserved_by(dest) != Some(cid) {

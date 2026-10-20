@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 4 (sim on `main`; the UI with build tools, rooms overlay, and room inspector is in PR review; rooms insulation and beauty are why chains). Sprints 0 to 3 are on `main`. The world generation work of Sprints 8 and 9 (steps 1 to 12) is also on `main`. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
+Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Current sprint: Sprint 5. Sprint 4 is on `main`. The Sprint 5 sim (tasks 1 to 7) is in PR review; task 8 (UI) follows the UI rework. Sprints 0 to 3 are on `main`. The world generation work of Sprints 8 and 9 (steps 1 to 12) is also on `main`. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
 
 This document is the canonical source for phases, sprints, milestones, the Definition of Done, the playtest record, and the backlog. Game rules (`R-nnn`) are in `GAME_DESIGN.md`. Technical rules, required checks, and performance targets (`P-nn`) are in `TECHNICAL_DESIGN.md`.
 

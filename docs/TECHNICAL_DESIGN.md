@@ -59,6 +59,7 @@ Inside `worldgen`, use modules: `world` (stage seeds, `WorldParams`, step order)
 
 Inside `sim`, Sprint 3 added modules `item`, `job`, `skill`, `stockpile`, and `rules`. Job numbers are in `assets/content/jobs.ron`. The save `FORMAT_VERSION` is 2. `Sim::drain_job_events()` returns `JobEvent` values. The `game` crate has the modules `ui`, `hud`, `overlay`, `tools`, and `inspector`.
 Sprint 4 added the `sim` modules `build` and `room` and the content files `buildings.ron`, `recipes.ron`, and `rooms.ron`. The `game` crate added the modules `structures`, `layout`, and `build_ui`.
+Sprint 5 added the `sim` modules `climate`, `hearth`, and `alert`, and the content file `climate.ron`. The save format version is 4.
 
 ### 3.2 Data ownership
 
