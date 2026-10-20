@@ -52,6 +52,11 @@ pub struct GameTime {
 }
 
 impl GameTime {
+    /// The game day of a tick, counted from 0 at the start of the game.
+    pub fn day_index(tick: u64) -> u64 {
+        tick / TICKS_PER_DAY
+    }
+
     /// Split a tick number into calendar units.
     pub fn from_tick(tick: u64) -> Self {
         let year0 = tick / TICKS_PER_YEAR;

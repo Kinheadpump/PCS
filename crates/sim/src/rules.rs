@@ -5,6 +5,7 @@
 //! dense indices (`u16`) of `materials.ron`. Buildings and recipes are the dense indices
 //! of `buildings.ron` and `recipes.ron`.
 
+use crate::climate::{ClimateRules, FuelDef, load_climate_rules};
 use base::content::{
     BuildingDef, BuildingKind, ContentError, ContentIssue, JobRules, MaterialDef, RecipeDef,
     RoomRules, load_buildings, load_job_rules, load_materials, load_recipes, load_room_rules,
@@ -17,6 +18,7 @@ const JOBS_TEXT: &str = include_str!("../../../assets/content/jobs.ron");
 const BUILDINGS_TEXT: &str = include_str!("../../../assets/content/buildings.ron");
 const RECIPES_TEXT: &str = include_str!("../../../assets/content/recipes.ron");
 const ROOMS_TEXT: &str = include_str!("../../../assets/content/rooms.ron");
+const CLIMATE_TEXT: &str = include_str!("../../../assets/content/climate.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
@@ -35,6 +37,8 @@ pub struct ContentTexts {
     pub recipes: &'static str,
     /// `rooms.ron`.
     pub rooms: &'static str,
+    /// `climate.ron`.
+    pub climate: &'static str,
 }
 
 /// The content texts of the repository.
@@ -44,6 +48,7 @@ pub const BUILTIN_TEXTS: ContentTexts = ContentTexts {
     buildings: BUILDINGS_TEXT,
     recipes: RECIPES_TEXT,
     rooms: ROOMS_TEXT,
+    climate: CLIMATE_TEXT,
 };
 
 /// Linked content for the sim systems.
@@ -59,6 +64,10 @@ pub struct SimRules {
     pub recipes: Vec<RecipeDef>,
     /// Room numbers.
     pub rooms: RoomRules,
+    /// Climate, weather, water, hearth, and alert numbers.
+    pub climate: ClimateRules,
+    /// Fuel materials of the hearth, in file order.
+    pub fuel: Vec<FuelDef>,
     /// Material of a log.
     pub log: u16,
     /// Material of a wall tile without a building (`rooms.ron`).
@@ -83,6 +92,8 @@ impl Default for SimRules {
                 roof_support_radius: 6,
                 bare_wall_material: String::new(),
             },
+            climate: ClimateRules::empty(),
+            fuel: Vec::new(),
             log: NO_MATERIAL,
             bare_wall: NO_MATERIAL,
             rock_item: [NO_MATERIAL; 4],
@@ -92,6 +103,18 @@ impl Default for SimRules {
 }
 
 impl SimRules {
+    /// Link the rules from the repository files, but with another climate file.
+    pub fn load_with_climate(climate_text: &str) -> Result<Self, ContentError> {
+        Self::load_texts_climate(
+            MATERIALS_TEXT,
+            JOBS_TEXT,
+            BUILDINGS_TEXT,
+            RECIPES_TEXT,
+            ROOMS_TEXT,
+            climate_text,
+        )
+    }
+
     /// Link the rules from the text of the materials file and the jobs file. The other
     /// files come from the repository. All required materials must exist.
     pub fn load(materials_text: &str, jobs_text: &str) -> Result<Self, ContentError> {
@@ -106,16 +129,18 @@ impl SimRules {
 
     /// Link the rules from a set of file texts.
     pub fn load_all(texts: &ContentTexts) -> Result<Self, ContentError> {
-        Self::load_texts(
+        Self::load_texts_climate(
             texts.materials,
             texts.jobs,
             texts.buildings,
             texts.recipes,
             texts.rooms,
+            texts.climate,
         )
     }
 
-    /// Link the rules from the text of the five content files.
+    /// Link the rules from the text of the five content files. The climate file comes from
+    /// the repository.
     pub fn load_texts(
         materials_text: &str,
         jobs_text: &str,
@@ -123,9 +148,29 @@ impl SimRules {
         recipes_text: &str,
         rooms_text: &str,
     ) -> Result<Self, ContentError> {
+        Self::load_texts_climate(
+            materials_text,
+            jobs_text,
+            buildings_text,
+            recipes_text,
+            rooms_text,
+            CLIMATE_TEXT,
+        )
+    }
+
+    /// Link the rules from the text of the six content files.
+    pub fn load_texts_climate(
+        materials_text: &str,
+        jobs_text: &str,
+        buildings_text: &str,
+        recipes_text: &str,
+        rooms_text: &str,
+        climate_text: &str,
+    ) -> Result<Self, ContentError> {
         let materials = load_materials("materials.ron", materials_text)?;
         let jobs = load_job_rules("jobs.ron", jobs_text)?;
         let rooms = load_room_rules("rooms.ron", rooms_text)?;
+        let climate = load_climate_rules("climate.ron", climate_text)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -153,6 +198,14 @@ impl SimRules {
             find("copper_ore"),
             find("iron_ore"),
         ];
+        let fuel: Vec<FuelDef> = climate
+            .fuel
+            .iter()
+            .map(|(key, hours)| FuelDef {
+                material: find(key),
+                hours: *hours,
+            })
+            .collect();
         if !issues.is_empty() {
             return Err(ContentError {
                 file: "materials.ron".to_string(),
@@ -167,6 +220,8 @@ impl SimRules {
             buildings,
             recipes,
             rooms,
+            climate,
+            fuel,
             log,
             bare_wall,
             rock_item,

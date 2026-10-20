@@ -31,6 +31,12 @@ pub struct LocalMap {
     /// Derived cache: true where a colonist can stand (not water, rock, or wall). Rebuilt on load.
     #[serde(skip)]
     passable: Vec<bool>,
+    /// Derived cache: true where deep water lies (R-004). Deep water does not freeze.
+    #[serde(skip)]
+    deep: Vec<bool>,
+    /// Derived cache: true while the shallow water is ice. `Sim` sets it from the climate.
+    #[serde(skip)]
+    ice: bool,
 }
 
 impl LocalMap {
@@ -47,6 +53,8 @@ impl LocalMap {
             wall: vec![false; len],
             solid: Vec::new(),
             passable: Vec::new(),
+            deep: Vec::new(),
+            ice: false,
         };
         map.rebuild_passable();
         map
@@ -91,6 +99,8 @@ impl LocalMap {
             wall: wall.to_vec(),
             solid: Vec::new(),
             passable: Vec::new(),
+            deep: Vec::new(),
+            ice: false,
         };
         map.rebuild_passable();
         map
@@ -121,10 +131,78 @@ impl LocalMap {
     }
 
     fn compute_passable(&self, i: usize) -> bool {
-        self.ground[i] != Ground::Water as u8
+        let deep = self.deep.get(i).copied().unwrap_or(false);
+        (self.ground[i] != Ground::Water as u8 || (self.ice && !deep))
             && self.rock[i] == RockKind::None as u8
             && !self.wall[i]
             && !self.solid.get(i).copied().unwrap_or(false)
+    }
+
+    /// Find the deep water: a water tile is deep if the nearest land tile is `distance`
+    /// tiles away or more (the larger of column and row distance). The map edge is not land.
+    pub(crate) fn rebuild_deep(&mut self, distance: u32) {
+        let (w, h) = (self.width as usize, self.height as usize);
+        let water = Ground::Water as u8;
+        let mut dist = vec![u32::MAX; self.ground.len()];
+        let mut queue = std::collections::VecDeque::new();
+        for (i, &g) in self.ground.iter().enumerate() {
+            if g != water {
+                dist[i] = 0;
+                queue.push_back(i);
+            }
+        }
+        while let Some(i) = queue.pop_front() {
+            let (x, y) = ((i % w) as i32, (i / w) as i32);
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let (nx, ny) = (x + dx, y + dy);
+                    if nx < 0 || ny < 0 || nx as usize >= w || ny as usize >= h {
+                        continue;
+                    }
+                    let ni = ny as usize * w + nx as usize;
+                    if dist[ni] == u32::MAX {
+                        dist[ni] = dist[i] + 1;
+                        queue.push_back(ni);
+                    }
+                }
+            }
+        }
+        self.deep = self
+            .ground
+            .iter()
+            .zip(&dist)
+            .map(|(&g, &d)| g == water && d >= distance)
+            .collect();
+        self.rebuild_passable();
+    }
+
+    /// Set whether shallow water is ice. Return true if the value changed. The passability
+    /// is updated.
+    pub(crate) fn set_ice(&mut self, ice: bool) -> bool {
+        if self.ice == ice {
+            return false;
+        }
+        self.ice = ice;
+        self.rebuild_passable();
+        true
+    }
+
+    /// True while the shallow water is ice.
+    pub fn ice(&self) -> bool {
+        self.ice
+    }
+
+    /// True if the tile is deep water.
+    pub fn is_deep_water(&self, x: i32, y: i32) -> bool {
+        self.index(x, y)
+            .and_then(|i| self.deep.get(i))
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// True if the tile is shallow water (water that is not deep).
+    pub fn is_shallow_water(&self, x: i32, y: i32) -> bool {
+        self.ground(x, y) == Some(Ground::Water) && !self.is_deep_water(x, y)
     }
 
     /// True if a building that blocks walking stands on the tile.
