@@ -21,4 +21,8 @@
     (id: "ice", name: "Ice", category: Fluid, hardness: 10, density: 92, value: 0, insulation: 100, flammability: 0, beauty: 6, color: (190, 225, 240), melts_at: 0, melts_into: "water"),
     (id: "plank", name: "Plank", category: Wood, hardness: 25, density: 50, value: 3, insulation: 480, flammability: 500, beauty: 4, color: (176, 134, 84)),
     (id: "firewood", name: "Firewood", category: Fuel, hardness: 20, density: 50, value: 2, insulation: 400, flammability: 700, beauty: 1, color: (140, 96, 60)),
+    (id: "berries", name: "Berries", category: Food, hardness: 0, density: 10, value: 2, insulation: 0, flammability: 0, beauty: 0, rot_rate: 100, color: (170, 40, 80)),
+    (id: "meal", name: "Simple meal", category: Food, hardness: 0, density: 30, value: 5, insulation: 0, flammability: 0, beauty: 0, rot_rate: 60, color: (200, 150, 90)),
+    (id: "simple_clothes", name: "Simple clothes", category: Cloth, hardness: 0, density: 20, value: 6, insulation: 0, flammability: 300, beauty: 1, color: (150, 140, 120)),
+    (id: "winter_coat", name: "Winter coat", category: Cloth, hardness: 0, density: 40, value: 15, insulation: 0, flammability: 300, beauty: 2, color: (110, 90, 70)),
 ]

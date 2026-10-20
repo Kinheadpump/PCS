@@ -37,3 +37,25 @@ fn d046_temperate_forest_is_common_and_no_biome_dominates() {
         }
     }
 }
+
+/// D-046: volcanic land and floodplain exist on every seed (each at least 8 per mille of the
+/// land), and neither is more than 5% of the land.
+#[test]
+fn d046_volcanic_and_floodplain_appear_on_every_seed() {
+    for seed in 1..=12u64 {
+        let s = land_shares(seed);
+        println!(
+            "seed {seed}: volcanic {} floodplain {}",
+            s[WorldBiome::Volcanic as usize],
+            s[WorldBiome::Floodplain as usize]
+        );
+        for b in [WorldBiome::Volcanic, WorldBiome::Floodplain] {
+            let share = s[b as usize];
+            assert!(
+                (8..=50).contains(&share),
+                "seed {seed}: {} is {share} per mille of land",
+                b.name()
+            );
+        }
+    }
+}

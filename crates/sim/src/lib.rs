@@ -14,7 +14,10 @@ pub mod event;
 pub mod hearth;
 pub mod item;
 pub mod job;
+pub mod life;
 pub mod map;
+pub mod needact;
+pub mod needs;
 pub mod path;
 pub mod region;
 pub mod room;
@@ -25,19 +28,25 @@ pub mod skill;
 pub mod stockpile;
 pub mod time;
 
-pub use alert::{Alert, AlertKind};
+pub use alert::{Alert, AlertKind, AlertLevel};
 pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
 pub use climate::{
     ClimateParams, ClimateRules, DayWeather, FORECAST_DAYS, OutdoorParts, TempCause, TempPart,
     TempPlace, TileTemperature,
 };
-pub use colonist::{Colonist, ColonistId};
+pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex};
 pub use command::Command;
 pub use event::Event;
 pub use hearth::REFUEL_ARG;
 pub use item::{Item, ItemId, ItemLoc, Items};
 pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, JobStep, Reject};
+pub use life::{
+    ComfortBand, ComfortCause, ComfortPart, Condition, DeathCause, EffectiveSpeed, Grave,
+    HealthCause, HealthPart, HealthReport, LifeEvent, Mood, MoodCause, MoodPart, SpeedMod,
+    SpeedModCause,
+};
 pub use map::LocalMap;
+pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
 pub use path::PathFinder;
 pub use region::Regions;
 pub use room::{
@@ -103,9 +112,17 @@ pub struct Sim {
     climate: climate::ClimateState,
     /// Room temperatures in thousandths of a degree. The key is the first tile of the room.
     room_temps: BTreeMap<(u16, u16), i32>,
+    /// The dead, oldest first (R-016).
+    graveyard: Vec<life::Grave>,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
+    /// Life events for the caller. Not part of the state.
+    #[serde(skip)]
+    life_events: Vec<LifeEvent>,
+    /// True: the needs system is off. Tests only. Not part of the state.
+    #[serde(skip)]
+    needs_off: bool,
     /// Job events for the caller. Not part of the state.
     #[serde(skip)]
     job_events: Vec<JobEvent>,
@@ -143,7 +160,10 @@ impl Sim {
         let map = LocalMap::from_data(data);
         let regions = Regions::build(&map);
         let spawns = center_spawns(&map, &regions, START_COLONISTS);
-        Self::from_map(map, seed, content_hash, &spawns)
+        let mut sim = Self::from_map(map, seed, content_hash, &spawns);
+        sim.roll_colonists(seed);
+        sim.place_start_food();
+        sim
     }
 
     /// Start a colony on a map with colonists on the given tiles. Tiles that are not
@@ -155,6 +175,7 @@ impl Sim {
             if map.passable(i32::from(x), i32::from(y)) {
                 let mut colonist = Colonist::new(x, y);
                 colonist.priorities = [rules.jobs.default_priority; JobKind::COUNT];
+                rules.needs.init_colonist(&mut colonist);
                 colonists.insert(colonist);
             }
         }
@@ -172,7 +193,10 @@ impl Sim {
             buildings: Buildings::default(),
             climate: climate::ClimateState::new(&rules.climate, seed),
             room_temps: BTreeMap::new(),
+            graveyard: Vec::new(),
             events: Vec::new(),
+            life_events: Vec::new(),
+            needs_off: false,
             job_events: Vec::new(),
             rules,
             rooms: Rooms::default(),
@@ -217,11 +241,13 @@ impl Sim {
         for command in commands {
             self.apply_command(command);
         }
+        self.update_needs();
         self.update_jobs();
         self.process_path_queue();
         self.move_colonists();
         self.tick += 1;
         self.climate_tick();
+        self.life_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -494,7 +520,7 @@ impl Sim {
         if !sim.climate_state_ok() {
             return None;
         }
-        if !sim.jobs_state_ok() {
+        if !sim.life_state_ok() || !sim.jobs_state_ok() {
             return None;
         }
         sim.refresh_rooms();

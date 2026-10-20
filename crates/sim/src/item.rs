@@ -207,6 +207,20 @@ impl Items {
         self.spawn(material, count, x, y, to_haul)
     }
 
+    /// Take one unit from a stack on a tile and free its reservation. A stack of 1 unit
+    /// ends. Return false if the stack does not exist.
+    pub(crate) fn take_one(&mut self, id: ItemId) -> bool {
+        let Some(item) = self.arena.get_mut(id) else {
+            return false;
+        };
+        if item.count > 1 {
+            item.count -= 1;
+            item.reserved_by = None;
+            return true;
+        }
+        self.remove(id).is_some()
+    }
+
     /// Move a stack that lies on a tile to another tile. Return false if the stack does
     /// not lie on a tile.
     pub(crate) fn relocate(&mut self, id: ItemId, x: u16, y: u16) -> bool {
