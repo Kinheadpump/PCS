@@ -8,7 +8,7 @@ use crate::overlay::{Frame, screen_rect, thickness};
 use crate::palette::Rgb;
 use crate::render::color as rgb_color;
 use macroquad::prelude::{draw_line, draw_rectangle};
-use sim::{AlertKind, Sim, TempPlace};
+use sim::{Alert, AlertKind, AlertLevel, Sim, TempPlace};
 
 /// Coldest temperature of the overlay scale, in tenths of a degree.
 pub const SCALE_MIN: i32 = -150;
@@ -131,79 +131,169 @@ pub struct AlertChip {
     pub tint: Rgb,
     /// The tile to center the camera on when the player clicks the chip.
     pub target: Option<(u16, u16)>,
+    /// How urgent the alert is.
+    pub level: AlertLevel,
 }
 
 /// Most chips in the strip. More alerts show as a count.
 pub const MAX_CHIPS: usize = 3;
 
-/// The chips of the alert strip. The cold period comes first, then the hearths. A click goes to
-/// the hearth of the alert, or to the first hearth for the cold period.
-pub fn alert_chips(sim: &Sim) -> Vec<AlertChip> {
-    let first_hearth = sim.hearth_tiles().first().copied();
-    let mut chips: Vec<AlertChip> = sim
-        .alerts()
+/// The color of the icon of an alert of a level that is not `Info`.
+pub fn level_tint(level: AlertLevel) -> Rgb {
+    match level {
+        AlertLevel::Danger => OUT_TINT,
+        AlertLevel::Warning => FUEL_TINT,
+        AlertLevel::Info => COLD_TINT,
+    }
+}
+
+/// True for the alerts about one colonist, and for deaths.
+fn is_colonist_alert(kind: &AlertKind) -> bool {
+    !matches!(
+        kind,
+        AlertKind::ColdPeriod { .. } | AlertKind::LowFuel { .. }
+    )
+}
+
+/// The highest level among the alerts about colonists, if there are any. The colonist count in
+/// the top bar takes its tint from it.
+pub fn colonist_level(sim: &Sim) -> Option<AlertLevel> {
+    sim.alerts()
         .iter()
-        .map(|alert| match alert.kind {
-            AlertKind::ColdPeriod { days_ahead, .. } => AlertChip {
-                icon: ic::SNOWFLAKE,
-                text: if days_ahead == 0 {
+        .filter(|a| is_colonist_alert(&a.kind))
+        .map(Alert::level)
+        .max()
+}
+
+/// The number of colonists with an alert of the level `Danger`.
+pub fn danger_count(sim: &Sim) -> usize {
+    sim.alerts()
+        .iter()
+        .filter(|a| {
+            matches!(
+                a.kind,
+                AlertKind::Hunger { .. }
+                    | AlertKind::Hypothermia { .. }
+                    | AlertKind::Heatstroke { .. }
+            ) && a.level() == AlertLevel::Danger
+        })
+        .count()
+}
+
+/// The chip of one alert and the group that it joins. Alerts of one group (for example all
+/// hungry colonists) make one chip with a count.
+fn chip_of(alert: &Alert, first_hearth: Option<(u16, u16)>) -> (AlertChip, Option<u8>) {
+    let level = alert.level();
+    let tint = level_tint(level);
+    let chip = |icon: usize, text: &str, tint: Rgb, target: Option<(u16, u16)>| AlertChip {
+        icon,
+        text: text.to_owned(),
+        tint,
+        target,
+        level,
+    };
+    match alert.kind {
+        AlertKind::ColdPeriod { days_ahead, .. } => (
+            chip(
+                ic::SNOWFLAKE,
+                &if days_ahead == 0 {
                     "Cold".to_owned()
                 } else {
                     format!("Cold in {days_ahead}d")
                 },
-                tint: COLD_TINT,
-                target: first_hearth,
-            },
-            AlertKind::LowFuel { x, y, hours } => AlertChip {
-                icon: ic::FLAME,
-                text: if hours == 0 {
+                COLD_TINT,
+                first_hearth,
+            ),
+            None,
+        ),
+        AlertKind::LowFuel { x, y, hours } => (
+            chip(
+                ic::FLAME,
+                &if hours == 0 {
                     "No fuel".to_owned()
                 } else {
                     format!("Fuel {hours}h")
                 },
-                tint: if hours == 0 { OUT_TINT } else { FUEL_TINT },
-                target: Some((x, y)),
-            },
-            AlertKind::Hunger { x, y, starving, .. } => AlertChip {
-                icon: ic::FLAME,
-                text: if starving { "Starving" } else { "Hungry" }.to_owned(),
-                tint: OUT_TINT,
-                target: Some((x, y)),
-            },
-            AlertKind::Hypothermia { x, y, .. } => AlertChip {
-                icon: ic::SNOWFLAKE,
-                text: "Hypothermia".to_owned(),
-                tint: COLD_TINT,
-                target: Some((x, y)),
-            },
-            AlertKind::Heatstroke { x, y, .. } => AlertChip {
-                icon: ic::FLAME,
-                text: "Heatstroke".to_owned(),
-                tint: OUT_TINT,
-                target: Some((x, y)),
-            },
-            AlertKind::LowMood { x, y, .. } => AlertChip {
-                icon: ic::FLAME,
-                text: "Low mood".to_owned(),
-                tint: FUEL_TINT,
-                target: Some((x, y)),
-            },
-            AlertKind::Death { x, y, .. } => AlertChip {
-                icon: ic::SNOWFLAKE,
-                text: "Death".to_owned(),
-                tint: OUT_TINT,
-                target: Some((x, y)),
-            },
+                if hours == 0 { OUT_TINT } else { FUEL_TINT },
+                Some((x, y)),
+            ),
+            None,
+        ),
+        AlertKind::Hunger { x, y, starving, .. } => (
+            chip(
+                ic::FOOD,
+                if starving { "Starving" } else { "Hungry" },
+                tint,
+                Some((x, y)),
+            ),
+            Some(u8::from(starving)),
+        ),
+        AlertKind::Hypothermia { x, y, .. } => (
+            chip(ic::THERMOMETER, "Hypothermia", tint, Some((x, y))),
+            Some(2),
+        ),
+        AlertKind::Heatstroke { x, y, .. } => {
+            (chip(ic::SUN, "Heatstroke", tint, Some((x, y))), Some(3))
+        }
+        AlertKind::LowMood { x, y, .. } => {
+            (chip(ic::MOOD, "Low mood", tint, Some((x, y))), Some(4))
+        }
+        AlertKind::Death { x, y, cause, .. } => (
+            chip(
+                ic::SKULL,
+                &format!("Died: {}", cause.name().to_lowercase()),
+                tint,
+                Some((x, y)),
+            ),
+            Some(5),
+        ),
+    }
+}
+
+/// The chips of the alert strip, most urgent first (`Danger`, then `Warning`, then `Info`; the
+/// sim order inside a level). Alerts of one kind about colonists share one chip with a count.
+/// A click goes to the tile of the alert (the first one of a group), or to the first hearth for
+/// the cold period. At most `MAX_CHIPS` chips show. Chips that do not fit become a count.
+pub fn alert_chips(sim: &Sim) -> Vec<AlertChip> {
+    let first_hearth = sim.hearth_tiles().first().copied();
+    let mut chips: Vec<(AlertChip, Option<u8>, usize)> = Vec::new();
+    for alert in &sim.alerts() {
+        let (chip, group) = chip_of(alert, first_hearth);
+        match group.and_then(|g| chips.iter_mut().find(|c| c.1 == Some(g))) {
+            Some(existing) => existing.2 += 1,
+            None => chips.push((chip, group, 1)),
+        }
+    }
+    let mut chips: Vec<AlertChip> = chips
+        .into_iter()
+        .map(|(mut chip, group, count)| {
+            if count > 1 {
+                chip.text = match group {
+                    Some(5) => format!("Deaths x{count}"),
+                    _ => format!("{} x{count}", chip.text),
+                };
+            }
+            chip
         })
         .collect();
+    chips.sort_by_key(|c| std::cmp::Reverse(c.level));
     if chips.len() > MAX_CHIPS {
-        let more = chips.len() - (MAX_CHIPS - 1);
-        chips.truncate(MAX_CHIPS - 1);
+        let hidden = chips.split_off(MAX_CHIPS - 1);
+        let level = hidden
+            .iter()
+            .map(|c| c.level)
+            .max()
+            .unwrap_or(AlertLevel::Info);
         chips.push(AlertChip {
-            icon: ic::FLAME,
-            text: format!("+{more}"),
-            tint: FUEL_TINT,
+            icon: ic::WARN,
+            text: format!("+{}", hidden.len()),
+            tint: if level == AlertLevel::Info {
+                FUEL_TINT
+            } else {
+                level_tint(level)
+            },
             target: None,
+            level,
         });
     }
     chips
@@ -413,6 +503,47 @@ mod tests {
         assert_eq!(chips.len(), MAX_CHIPS);
         assert_eq!(chips[MAX_CHIPS - 1].target, None);
         assert!(chips[MAX_CHIPS - 1].text.starts_with('+'));
+    }
+
+    fn ids(sim: &Sim) -> Vec<sim::ColonistId> {
+        sim.colonists().iter().map(|(id, _)| id).collect()
+    }
+
+    #[test]
+    fn r012_starving_colonists_share_one_danger_chip_with_a_count() {
+        let mut sim = sim_from_ascii("cc.", 1).unwrap();
+        for id in ids(&sim) {
+            sim.debug_set_hunger(id, 0);
+        }
+        let chips = alert_chips(&sim);
+        let starving: Vec<&AlertChip> = chips
+            .iter()
+            .filter(|c| c.text.starts_with("Starving"))
+            .collect();
+        assert_eq!(starving.len(), 1, "{chips:?}");
+        assert_eq!(starving[0].level, AlertLevel::Danger);
+        assert!(starving[0].text.contains("x2"), "{}", starving[0].text);
+        assert!(starving[0].target.is_some());
+        assert_eq!(colonist_level(&sim), Some(AlertLevel::Danger));
+        assert_eq!(danger_count(&sim), 2);
+    }
+
+    #[test]
+    fn danger_chips_come_before_warning_chips() {
+        let mut sim = sim_from_ascii("cc.", 1).unwrap();
+        let ids = ids(&sim);
+        sim.debug_set_hunger(ids[0], 20);
+        sim.debug_set_hunger(ids[1], 0);
+        let chips = alert_chips(&sim);
+        assert!(chips.windows(2).all(|w| w[0].level >= w[1].level));
+        assert_eq!(chips[0].level, AlertLevel::Danger);
+    }
+
+    #[test]
+    fn a_colony_without_trouble_has_no_colonist_alert() {
+        let sim = sim_from_ascii("cc.", 1).unwrap();
+        assert_eq!(colonist_level(&sim), None);
+        assert_eq!(danger_count(&sim), 0);
     }
 
     #[test]

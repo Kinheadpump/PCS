@@ -2,15 +2,27 @@
 //! rows of text. Each value that the player sees is a sum of named parts (why chain).
 
 use crate::build_ui;
+use crate::cells::icons as ic;
+use crate::palette::Rgb;
 use crate::tools::priority_text;
-use crate::ui::Row;
+use crate::ui::{Meter, Row};
 use crate::weather;
 use base::content::BuildingKind;
 use sim::skill::Skill;
 use sim::{
-    AbortReason, BuildLayer, Building, ColonistId, ItemFilter, ItemLoc, JobEvent, JobKind, JobStep,
-    Sim, SpeedCause, SpeedPart, StockpileId, WorkSpeed,
+    AbortReason, BuildLayer, Building, ColonistId, ComfortCause, Condition, HealthCause,
+    ItemFilter, ItemLoc, JobEvent, JobKind, JobStep, MoodCause, NeedAct, Sex, Sim, SpeedCause,
+    SpeedModCause, SpeedPart, StockpileId,
 };
+
+/// Color of a bar that is fine.
+const GOOD: Rgb = [104, 200, 120];
+/// Color of a bar that needs attention.
+const WARN: Rgb = [240, 176, 72];
+/// Color of a bar in danger.
+const BAD: Rgb = [236, 90, 84];
+/// Color of a bar that is neither good nor bad (the mood in the middle).
+const NEUTRAL: Rgb = [150, 196, 236];
 
 /// Display name of a colonist.
 pub fn colonist_name(id: ColonistId) -> String {
@@ -56,13 +68,77 @@ pub fn speed_part_lines(parts: &[SpeedPart]) -> Vec<String> {
         .collect()
 }
 
-/// The rows of a work speed: the total, then the named parts.
-fn speed_rows(kind: JobKind, speed: &WorkSpeed, rows: &mut Vec<Row>) {
+/// Name of a trait by its index.
+fn trait_name(sim: &Sim, index: u8) -> String {
+    sim.rules()
+        .traits
+        .get(usize::from(index))
+        .map_or_else(|| "Trait".to_owned(), |t| t.name.clone())
+}
+
+/// Name of the cause of a mood modifier.
+pub fn mood_cause_name(sim: &Sim, cause: MoodCause) -> String {
+    match cause {
+        MoodCause::Base => "Base".to_owned(),
+        MoodCause::Hungry => "Hungry".to_owned(),
+        MoodCause::Starving => "Starving".to_owned(),
+        MoodCause::Tired => "Tired".to_owned(),
+        MoodCause::Exhausted => "Exhausted".to_owned(),
+        MoodCause::Cold => "Cold".to_owned(),
+        MoodCause::Hot => "Hot".to_owned(),
+        MoodCause::Wounded => "Wounded".to_owned(),
+        MoodCause::RoomBeauty { per_tile } => format!("Room beauty ({per_tile:+})"),
+        MoodCause::Memory { key } => sim
+            .rules()
+            .needs
+            .memories
+            .get(usize::from(key))
+            .map_or_else(|| "Memory".to_owned(), |m| m.name.clone()),
+        _ => "Other".to_owned(),
+    }
+}
+
+/// Name of the cause of a part of the lower limit of the comfort band.
+fn comfort_cause_name(sim: &Sim, cause: ComfortCause) -> String {
+    match cause {
+        ComfortCause::Base => "Base".to_owned(),
+        ComfortCause::Clothes { material } => material_name(sim, material),
+        ComfortCause::Trait { index } => trait_name(sim, index),
+    }
+}
+
+/// Name of the cause of a part of a work speed that comes from life.
+fn speed_mod_name(sim: &Sim, cause: SpeedModCause) -> String {
+    match cause {
+        SpeedModCause::HighMood => "High mood".to_owned(),
+        SpeedModCause::LowMood => "Low mood".to_owned(),
+        SpeedModCause::Exhausted => "Exhausted".to_owned(),
+        SpeedModCause::Trait { index } => trait_name(sim, index),
+        _ => "Other".to_owned(),
+    }
+}
+
+/// The rows of a work speed: the total, then the named parts (skill, mood, exhaustion, traits).
+fn speed_rows(sim: &Sim, id: ColonistId, kind: JobKind, rows: &mut Vec<Row>) {
+    let Some(speed) = sim.effective_work_speed(id, kind) else {
+        return;
+    };
     rows.push(Row::Pair(
         kind.name().to_owned(),
         format!("{}%", speed.total_pct),
     ));
-    rows.extend(speed_part_lines(&speed.parts).into_iter().map(Row::Line));
+    rows.extend(
+        speed_part_lines(&speed.base.parts)
+            .into_iter()
+            .map(Row::Line),
+    );
+    for m in &speed.mods {
+        rows.push(Row::Line(format!(
+            "  {} {}",
+            speed_mod_name(sim, m.cause),
+            signed(m.pct)
+        )));
+    }
 }
 
 /// The priorities as lines of two job types each, so the panel stays narrow.
@@ -79,6 +155,169 @@ pub fn priorities_lines(priorities: &[u8; JobKind::COUNT]) -> Vec<String> {
         .collect()
 }
 
+/// Text of what a colonist does because of a need or a breakdown, if it does something like that.
+pub fn need_activity(sim: &Sim, c: &sim::Colonist) -> Option<String> {
+    if c.break_until > sim.tick() {
+        return Some("On a break".to_owned());
+    }
+    Some(match c.act? {
+        NeedAct::Eat { progress: None, .. } => "Walking to food".to_owned(),
+        NeedAct::Eat { .. } => "Eating".to_owned(),
+        NeedAct::Wear { item, .. } => sim.items().get(item).map_or_else(
+            || "Getting clothes".to_owned(),
+            |i| format!("Getting {}", material_name(sim, i.material).to_lowercase()),
+        ),
+        NeedAct::Sleep { asleep: false, .. } => "Walking to bed".to_owned(),
+        NeedAct::Sleep { bed: Some(_), .. } => "Sleeping in a bed".to_owned(),
+        NeedAct::Sleep { bed: None, .. } => "Sleeping on the ground".to_owned(),
+    })
+}
+
+/// Color of a need bar: red at 0, amber at or below the limit, green above it.
+fn need_tint(value: i32, warn_at: i32) -> Rgb {
+    if value <= 0 {
+        BAD
+    } else if value <= warn_at {
+        WARN
+    } else {
+        GOOD
+    }
+}
+
+/// The condition tags, one for each condition, with the icon and the color.
+fn condition_rows(sim: &Sim, id: ColonistId, c: &sim::Colonist, rows: &mut Vec<Row>) {
+    for cond in sim.conditions(id).unwrap_or_default() {
+        let (icon, tint, text) = match cond {
+            Condition::Starving => (ic::FOOD, BAD, cond.name().to_owned()),
+            Condition::Hypothermia => (
+                ic::THERMOMETER,
+                weather::COLD_TINT,
+                format!("{} {}", cond.name(), c.hypothermia),
+            ),
+            Condition::Heatstroke => (ic::SUN, BAD, format!("{} {}", cond.name(), c.heatstroke)),
+            Condition::Exhausted => (ic::MOON, BAD, cond.name().to_owned()),
+            Condition::Wounded => (ic::HEART, BAD, cond.name().to_owned()),
+        };
+        rows.push(Row::Tag(icon, text, tint));
+    }
+}
+
+/// Name of the cause of a part of the hourly health change.
+fn health_cause_name(cause: HealthCause) -> &'static str {
+    cause.name()
+}
+
+/// The rows of the needs, the mood, and the health: bars with icons, and the why chains as
+/// lines that the colonist panel puts behind folds.
+fn life_rows(sim: &Sim, id: ColonistId, c: &sim::Colonist, rows: &mut Vec<Row>) {
+    let n = &sim.rules().needs;
+    if !n.enabled {
+        return;
+    }
+    let meter = |icon, tip: &str, permille, tint, text, fold| {
+        Row::Meter(Meter {
+            icon,
+            tip: tip.to_owned(),
+            permille,
+            tint,
+            text,
+            fold,
+        })
+    };
+    let ratio = |v: i32, max: u32| v.saturating_mul(1000) / i32::try_from(max.max(1)).unwrap_or(1);
+    let eat_at = i32::try_from(n.hunger_eat_at).unwrap_or(0) * 1000;
+    let sleep_at = i32::try_from(n.rest_sleep_at).unwrap_or(0) * 1000;
+    condition_rows(sim, id, c, rows);
+    rows.push(meter(
+        ic::FOOD,
+        "Hunger",
+        ratio(c.hunger, n.hunger_max.saturating_mul(1000)),
+        need_tint(c.hunger, eat_at),
+        (c.hunger.max(0) / 1000).to_string(),
+        None,
+    ));
+    rows.push(meter(
+        ic::MOON,
+        "Rest",
+        ratio(c.rest, n.rest_max.saturating_mul(1000)),
+        need_tint(c.rest, sleep_at),
+        (c.rest.max(0) / 1000).to_string(),
+        None,
+    ));
+    if let Some(mood) = sim.mood(id) {
+        let tint = if mood.total < i32::from(n.mood_break_below) {
+            BAD
+        } else if mood.total < i32::from(n.mood_low_below) {
+            WARN
+        } else if mood.total >= i32::from(n.mood_high_from) {
+            GOOD
+        } else {
+            NEUTRAL
+        };
+        let span = i32::from(n.mood_max) - i32::from(n.mood_min);
+        rows.push(meter(
+            ic::MOOD,
+            "Mood",
+            (mood.total - i32::from(n.mood_min)) * 1000 / span.max(1),
+            tint,
+            mood.total.to_string(),
+            Some(false),
+        ));
+        for part in &mood.parts {
+            rows.push(Row::Line(format!(
+                "  {} {}",
+                mood_cause_name(sim, part.cause),
+                signed(part.value)
+            )));
+        }
+        if mood.sum != mood.total {
+            rows.push(Row::Line(format!(
+                "  Sum {}, limited to {}",
+                mood.sum, mood.total
+            )));
+        }
+    }
+    if let Some(report) = sim.health_report(id) {
+        let health = report.health;
+        let tint = if health * 4 < report.max {
+            BAD
+        } else if health * 5 < report.max * 3 {
+            WARN
+        } else {
+            GOOD
+        };
+        rows.push(meter(
+            ic::HEART,
+            "Health",
+            health.saturating_mul(1000) / report.max.max(1),
+            tint,
+            format!("{health} {:+}/h", report.per_hour),
+            Some(false),
+        ));
+        for part in &report.parts {
+            rows.push(Row::Line(format!(
+                "  {} {:+}/h",
+                health_cause_name(part.cause),
+                part.per_hour
+            )));
+        }
+    }
+    if let Some(band) = sim.comfort_band(id) {
+        rows.push(Row::Section(format!(
+            "Comfort {} to {}",
+            weather::tenths_text(band.low),
+            weather::temp_text(band.high)
+        )));
+        for part in &band.parts {
+            rows.push(Row::Line(format!(
+                "  {} {}",
+                comfort_cause_name(sim, part.cause),
+                weather::signed_text(part.tenths)
+            )));
+        }
+    }
+}
+
 /// The rows for the selected colonist. Empty if the colonist does not exist.
 pub fn colonist_rows(sim: &Sim, id: ColonistId) -> Vec<Row> {
     let Some(c) = sim.colonist(id) else {
@@ -92,15 +331,28 @@ pub fn colonist_rows(sim: &Sim, id: ColonistId) -> Vec<Row> {
     if let Some((tx, ty)) = c.target {
         rows.push(Row::Pair("Walking to".to_owned(), format!("({tx}, {ty})")));
     }
-    match c.job {
-        Some(job) => {
-            rows.push(Row::Pair(
-                "Job".to_owned(),
-                format!("{} at ({}, {})", job.kind.name(), job.stand.0, job.stand.1),
-            ));
-            rows.push(Row::Pair("Step".to_owned(), step_text(job.step).to_owned()));
+    if let Some(text) = need_activity(sim, c) {
+        rows.push(Row::Pair("Job".to_owned(), text));
+    } else {
+        match c.job {
+            Some(job) => {
+                rows.push(Row::Pair(
+                    "Job".to_owned(),
+                    format!("{} at ({}, {})", job.kind.name(), job.stand.0, job.stand.1),
+                ));
+                rows.push(Row::Pair("Step".to_owned(), step_text(job.step).to_owned()));
+            }
+            None => rows.push(Row::Pair("Job".to_owned(), "idle".to_owned())),
         }
-        None => rows.push(Row::Pair("Job".to_owned(), "idle".to_owned())),
+    }
+    let sex = match c.sex {
+        Sex::Female => "female",
+        Sex::Male => "male",
+    };
+    rows.push(Row::Pair("Age".to_owned(), format!("{}, {sex}", c.age)));
+    if !c.traits.is_empty() {
+        let names: Vec<String> = c.traits.iter().map(|&t| trait_name(sim, t)).collect();
+        rows.push(Row::Pair("Trait".to_owned(), names.join(", ")));
     }
     let carrying = c
         .carrying
@@ -114,6 +366,8 @@ pub fn colonist_rows(sim: &Sim, id: ColonistId) -> Vec<Row> {
         let key = if i == 0 { "Priorities" } else { "" };
         rows.push(Row::Pair(key.to_owned(), line));
     }
+
+    life_rows(sim, id, c, &mut rows);
 
     rows.push(Row::Section("Skills".to_owned()));
     let max_level = sim.rules().jobs.max_level;
@@ -130,9 +384,10 @@ pub fn colonist_rows(sim: &Sim, id: ColonistId) -> Vec<Row> {
 
     rows.push(Row::Section("Work speed".to_owned()));
     for kind in JobKind::ALL {
-        if let Some(speed) = sim.work_speed(id, kind) {
-            speed_rows(kind, &speed, &mut rows);
-        }
+        speed_rows(sim, id, kind, &mut rows);
+    }
+    if let Some(cap) = sim.carry_capacity(id) {
+        rows.push(Row::Pair("Carries".to_owned(), format!("{cap} units")));
     }
     rows
 }
@@ -560,6 +815,35 @@ mod tests {
 
     fn first_colonist(sim: &Sim) -> ColonistId {
         sim.colonists().iter().next().map(|(id, _)| id).unwrap()
+    }
+
+    #[test]
+    fn r011_the_life_rows_show_meters_tags_and_the_mood_why_chain() {
+        let mut sim = sim_from_ascii("c..", 1).unwrap();
+        let id = first_colonist(&sim);
+        sim.debug_set_hunger(id, 0);
+        let rows = colonist_rows(&sim, id);
+        let meters = rows.iter().filter(|r| matches!(r, Row::Meter(_))).count();
+        assert_eq!(meters, 4, "hunger, rest, mood, health");
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r, Row::Tag(_, t, _) if t == "Starving"))
+        );
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r, Row::Section(t) if t.starts_with("Comfort")))
+        );
+        let lines: Vec<&str> = rows
+            .iter()
+            .filter_map(|r| match r {
+                Row::Line(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect();
+        for part in &sim.mood(id).unwrap().parts {
+            let name = mood_cause_name(&sim, part.cause);
+            assert!(lines.iter().any(|l| l.contains(&name)), "{name}");
+        }
     }
 
     #[test]

@@ -12,6 +12,7 @@ mod icons;
 mod input;
 mod inspector;
 mod layout;
+mod lifemark;
 mod overlay;
 mod palette;
 mod render;
@@ -31,7 +32,7 @@ use clock::Clock;
 use input::{Action, InputState, Typed};
 use macroquad::prelude::{Conf, get_frame_time, get_screen_data, mouse_position, next_frame};
 use render::MapView;
-use sim::{ColonistId, Command, Event, JobEvent, JobKind, Sim};
+use sim::{ColonistId, Command, Event, JobEvent, JobKind, LifeEvent, Sim};
 use sprites::Sprites;
 use std::collections::BTreeSet;
 use structures::Structures;
@@ -55,6 +56,19 @@ const PAN_PIXELS_PER_SECOND: f32 = 700.0;
 const ZOOM_STEP: f32 = 1.25;
 /// Zoom at start, in screen pixels per tile.
 const START_ZOOM: f32 = 16.0;
+
+/// The toast text of a life event: who left or died, with the cause.
+fn life_event_text(event: LifeEvent) -> String {
+    match event {
+        LifeEvent::Died { x, y, cause } => {
+            format!(
+                "A colonist died at ({x}, {y}): {}",
+                cause.name().to_lowercase()
+            )
+        }
+        LifeEvent::Left { x, y } => format!("A colonist left the colony at ({x}, {y})"),
+    }
+}
 
 /// The window size. Developer aid: `PCS_WINDOW=<w>x<h>` sets it, for screenshots.
 fn window_size() -> (i32, i32) {
@@ -214,7 +228,10 @@ impl App {
     /// `PCS_TEMP=1` (temperature overlay), `PCS_CLIMATE=<mean>,<amplitude>,<moisture>` (tenths of a
     /// degree, moisture 0 to 255), and `PCS_FUEL=<x>,<y>,<hours>` (hearth fuel, several separated
     /// by `;`; these two run before the ticks). `PCS_DAYS=<n>` runs n days of ticks.
-    /// `PCS_FOLDS=1` opens the temperature fold of the tile panel.
+    /// `PCS_FOLDS=<words>` opens folds (1, temp, mood, health, comfort, skills, speed, all),
+    /// `PCS_NEEDS=<slot>,<hunger>,<rest>,<health>;...` sets needs, and
+    /// `PCS_LIFE=<slot>:<wound|kill|memory=<key>|traits=<i>/<j>|clothes=<key|none>>;...`
+    /// changes a colonist (both run before the ticks).
     fn debug_setup(&mut self) {
         let var = |k: &str| std::env::var(k).ok();
         let numbers = |v: &str| -> Vec<u16> {
@@ -232,8 +249,21 @@ impl App {
         }
         self.show_work = var("PCS_WORK").is_some_and(|v| v == "1");
         self.show_rooms = var("PCS_ROOMS").is_some_and(|v| v == "1");
-        if var("PCS_FOLDS").is_some_and(|v| v == "1") {
-            self.ui_state.open.insert(ui::Fold::TempChain);
+        for word in var("PCS_FOLDS").iter().flat_map(|v| v.split(',')) {
+            let all = word == "all";
+            for (name, fold) in [
+                ("1", ui::Fold::TempChain),
+                ("temp", ui::Fold::TempChain),
+                ("mood", ui::Fold::Mood),
+                ("health", ui::Fold::Health),
+                ("comfort", ui::Fold::Comfort),
+                ("skills", ui::Fold::Skills),
+                ("speed", ui::Fold::WorkSpeed),
+            ] {
+                if all || word == name {
+                    self.ui_state.open.insert(fold);
+                }
+            }
         }
         self.show_temp = var("PCS_TEMP").is_some_and(|v| v == "1");
         if let Some(v) = var("PCS_CLIMATE")
@@ -271,6 +301,7 @@ impl App {
                     .debug_spawn_item(material as u16, u32::from(*count), *x, *y);
             }
         }
+        self.debug_life(&var);
         if let Some(v) = var("PCS_PRIORITY") {
             let values: Vec<usize> = v.split(',').filter_map(|p| p.trim().parse().ok()).collect();
             if let [slot, job, priority] = values[..] {
@@ -309,6 +340,66 @@ impl App {
             self.note_events();
         }
         self.note_events();
+    }
+
+    /// Developer aid for the needs: `PCS_NEEDS=<slot>,<hunger>,<rest>,<health>` (whole units; `-`
+    /// keeps a value; several entries separated by `;`) and
+    /// `PCS_LIFE=<slot>:<action>[=<value>]` with the actions `wound`, `kill`, `memory=<key>`,
+    /// `traits=<index>/<index>`, and `clothes=<material key>|none` (several, separated by `;`).
+    fn debug_life(&mut self, var: &dyn Fn(&str) -> Option<String>) {
+        let nth = |sim: &Sim, slot: &str| {
+            let slot = slot.trim().parse::<usize>().ok()?;
+            sim.colonists().iter().nth(slot).map(|(id, _)| id)
+        };
+        for entry in var("PCS_NEEDS").iter().flat_map(|v| v.split(';')) {
+            let parts: Vec<&str> = entry.split(',').map(str::trim).collect();
+            let [slot, hunger, rest, health] = parts[..] else {
+                continue;
+            };
+            let Some(id) = nth(&self.sim, slot) else {
+                continue;
+            };
+            if let Ok(v) = hunger.parse() {
+                self.sim.debug_set_hunger(id, v);
+            }
+            if let Ok(v) = rest.parse() {
+                self.sim.debug_set_rest(id, v);
+            }
+            if let Ok(v) = health.parse() {
+                self.sim.debug_set_health(id, v);
+            }
+        }
+        for entry in var("PCS_LIFE").iter().flat_map(|v| v.split(';')) {
+            let Some((slot, action)) = entry.split_once(':') else {
+                continue;
+            };
+            let Some(id) = nth(&self.sim, slot) else {
+                continue;
+            };
+            let (name, value) = action.split_once('=').unwrap_or((action, ""));
+            match name {
+                "wound" => self.sim.debug_wound(id),
+                "kill" => self.sim.debug_kill(id),
+                "memory" => {
+                    self.sim.debug_add_memory(id, value);
+                }
+                "traits" => {
+                    let list: Vec<u8> = value.split('/').filter_map(|t| t.parse().ok()).collect();
+                    self.sim.debug_set_traits(id, &list);
+                }
+                "clothes" => {
+                    let material = self
+                        .sim
+                        .rules()
+                        .materials
+                        .iter()
+                        .position(|m| m.key == value)
+                        .map(|m| m as u16);
+                    self.sim.debug_set_clothes(id, material);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Developer aid for the build tool. `PCS_BUILD=<building>,<material>,<x0>,<y0>,<x1>,<y1>;...`
@@ -531,6 +622,15 @@ impl App {
                 Event::Crafted { x, y, .. } => format!("Crafted at ({x}, {y})"),
             };
         }
+        for event in self.sim.drain_life_events() {
+            self.last_event = life_event_text(event);
+        }
+        if self
+            .selected
+            .is_some_and(|id| self.sim.colonist(id).is_none())
+        {
+            self.selected = None;
+        }
         for event in self.sim.drain_job_events() {
             if let JobEvent::Completed {
                 kind: JobKind::Cut | JobKind::Mine,
@@ -718,6 +818,7 @@ impl App {
         overlay::draw_items(&frame);
         self.structures.draw_objects(&frame, &self.sprites);
         overlay::draw_designations(&frame);
+        lifemark::draw_graves(&frame);
         actors::draw(&self.sim, &self.camera, view, self.selected);
         let sprite_size = self.camera.zoom.max(12.0);
         for (id, c) in self.sim.colonists().iter() {
@@ -726,6 +827,7 @@ impl App {
                 overlay::draw_carried(&frame, p, sprite_size, id);
             }
         }
+        lifemark::draw_marks(&self.sim, &self.camera, view);
         self.structures.draw_roofs(&frame, &self.sprites);
         self.structures.draw_blueprints(&frame, &self.sprites);
         if self.show_rooms {
@@ -922,5 +1024,28 @@ async fn main() {
             break;
         }
         next_frame().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sim::scenario::sim_from_ascii;
+
+    #[test]
+    fn r016_a_death_toast_names_the_place_and_the_cause() {
+        let mut sim = sim_from_ascii("c..", 1).unwrap();
+        let id = sim.colonists().iter().next().map(|(id, _)| id).unwrap();
+        sim.debug_kill(id);
+        sim.step(&[]);
+        let events = sim.drain_life_events();
+        assert_eq!(events.len(), 1);
+        let text = life_event_text(events[0]);
+        assert!(text.starts_with("A colonist died at ("), "{text}");
+        assert!(text.contains("): "), "{text}");
+        assert_eq!(
+            life_event_text(LifeEvent::Left { x: 3, y: 4 }),
+            "A colonist left the colony at (3, 4)"
+        );
     }
 }
