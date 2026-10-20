@@ -28,7 +28,7 @@ pub const TEMP_W: f32 = 168.0;
 /// Size of the scale of the temperature overlay.
 pub const SCALE_SIZE: (f32, f32) = (176.0, 28.0);
 /// Size of the alerts strip.
-pub const ALERTS_SIZE: (f32, f32) = (420.0, 36.0);
+pub const ALERTS_SIZE: (f32, f32) = (540.0, 36.0);
 /// Space left of the clock in the top bar.
 const TOP_EDGE: f32 = 16.0;
 /// Space between the groups of the top bar.

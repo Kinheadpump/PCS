@@ -20,7 +20,7 @@ use crate::tools::{self, Tool};
 use crate::ui::{self, Fold, Row, Ui, UiAction};
 use crate::weather;
 use macroquad::prelude::{Color, draw_rectangle};
-use sim::{ColonistId, Command, ItemFilter, JobKind, Sim, Speed, StockpileId};
+use sim::{AlertLevel, ColonistId, Command, ItemFilter, JobKind, Sim, Speed, StockpileId};
 use std::collections::BTreeSet;
 
 /// Widest row of chips in the filter panel, in pixels.
@@ -158,12 +158,12 @@ pub fn recipe_command(x: u16, y: u16, recipe: u16, button: usize) -> Command {
     }
 }
 
-/// The rows of the colonist panel: name, job, walking target, and what the colonist carries.
-/// The skills and the work speeds (why chains) are folds.
+/// The rows of the colonist panel: name, job, age, the need bars, and what the colonist carries.
+/// The why chains (mood, health, comfort, skills, work speeds) are folds.
 fn colonist_panel_rows(rows: Vec<Row>, state: &UiState) -> (Vec<Row>, Vec<Fold>) {
     let mut out = Vec::new();
     let mut folds = Vec::new();
-    // `Some(open)` while the rows of a fold go by.
+    // `Some(open)` while the lines of a fold go by.
     let mut inside: Option<bool> = None;
     for row in rows {
         match row {
@@ -171,6 +171,7 @@ fn colonist_panel_rows(rows: Vec<Row>, state: &UiState) -> (Vec<Row>, Vec<Fold>)
                 let fold = match name.as_str() {
                     "Skills" => Some(Fold::Skills),
                     "Work speed" => Some(Fold::WorkSpeed),
+                    n if n.starts_with("Comfort") => Some(Fold::Comfort),
                     _ => None,
                 };
                 match fold {
@@ -186,10 +187,27 @@ fn colonist_panel_rows(rows: Vec<Row>, state: &UiState) -> (Vec<Row>, Vec<Fold>)
                     }
                 }
             }
+            Row::Meter(mut m) if m.fold.is_some() => {
+                let f = if m.tip == "Mood" {
+                    Fold::Mood
+                } else {
+                    Fold::Health
+                };
+                let open = state.open.contains(&f);
+                m.fold = Some(open);
+                out.push(Row::Meter(m));
+                folds.push(f);
+                inside = Some(open);
+            }
+            Row::Line(_) if inside == Some(false) => {}
+            Row::Line(_) => out.push(row),
             Row::Pair(key, _)
                 if inside.is_none()
                     && matches!(key.as_str(), "Position" | "Step" | "Priorities" | "") => {}
             other => {
+                if matches!(other, Row::Meter(_) | Row::Tag(..)) {
+                    inside = None;
+                }
                 if inside != Some(false) {
                     out.push(other);
                 }
@@ -257,9 +275,14 @@ fn fit_rows(mut rows: Vec<Row>, max_h: f32) -> Vec<Row> {
                 *k = shorten(k, CLIP_CHARS);
                 *v = shorten(v, CLIP_CHARS);
             }
-            Row::Line(t) | Row::Section(t) | Row::Fold(t, _) | Row::Title(t) => {
+            Row::Line(t)
+            | Row::Section(t)
+            | Row::Fold(t, _)
+            | Row::Title(t)
+            | Row::Tag(_, t, _) => {
                 *t = shorten(t, CLIP_CHARS + 6);
             }
+            Row::Meter(_) => {}
         }
     }
     let mut cut = false;
@@ -408,11 +431,26 @@ enum Side {
     Workshop(WorkshopPanel),
 }
 
+/// Tooltip of the colonist count: the name, and the number of colonists in danger if any.
+fn count_tip(sim: &Sim) -> String {
+    match weather::danger_count(sim) {
+        0 => "Colonists".to_owned(),
+        n => format!(
+            "Colonists
+{n} in danger"
+        ),
+    }
+}
+
 /// The text and data of every panel of one frame.
 struct Content {
     clock: String,
     date: String,
     count: String,
+    /// The highest level of the alerts about colonists, for the tint of the count.
+    count_level: Option<AlertLevel>,
+    /// Tooltip of the count.
+    count_tip: String,
     work_names: Vec<String>,
     build: Option<BuildPanel>,
     colonist: Vec<Row>,
@@ -469,6 +507,8 @@ impl Content {
             clock: ui::clock_text(&time),
             date: ui::date_text(&time),
             count: h.sim.colonists().iter().count().to_string(),
+            count_level: weather::colonist_level(h.sim),
+            count_tip: count_tip(h.sim),
             work_names: inspector::work_rows(h.sim)
                 .iter()
                 .map(|r| r.name.clone())
@@ -534,17 +574,25 @@ fn draw_top(ui: &mut Ui, placed: &Placed, content: &Content, h: &HudInput) -> Ve
         }
     }
     let c = placed.count;
+    let tint = match content.count_level {
+        Some(AlertLevel::Danger | AlertLevel::Warning) => Some(rgb_color(
+            weather::level_tint(content.count_level.unwrap_or(AlertLevel::Info)),
+            255,
+        )),
+        _ => None,
+    };
     ui.icon(
         cells::icons::PERSON,
         (c.x, c.y + (c.h - ui::ICON_PX) / 2.0),
         ui::ICON_PX,
-        rgb_color(pal::KEY, 255),
+        tint.unwrap_or_else(|| rgb_color(pal::KEY, 255)),
     );
-    ui.label(
-        (c.x + ui::ICON_PX + 6.0, c.y + (c.h - 16.0) / 2.0),
-        &content.count,
-    );
-    ui.tip(c, "Colonists");
+    let pos = (c.x + ui::ICON_PX + 6.0, c.y + (c.h - 16.0) / 2.0);
+    match tint {
+        Some(color) => ui.label_color(pos, &content.count, color),
+        None => ui.label(pos, &content.count),
+    }
+    ui.tip(c, &content.count_tip);
     draw_temp(ui, placed, h);
     actions
 }
@@ -1107,6 +1155,9 @@ mod tests {
     fn all_folds_open() -> UiState {
         UiState {
             open: [
+                Fold::Mood,
+                Fold::Health,
+                Fold::Comfort,
                 Fold::Skills,
                 Fold::WorkSpeed,
                 Fold::Details,
@@ -1235,7 +1286,16 @@ mod tests {
         let rows = inspector::colonist_rows(&sim, id);
         let closed = UiState::default();
         let (short, folds) = colonist_panel_rows(rows.clone(), &closed);
-        assert_eq!(folds, vec![Fold::Skills, Fold::WorkSpeed]);
+        assert_eq!(
+            folds,
+            vec![
+                Fold::Mood,
+                Fold::Health,
+                Fold::Comfort,
+                Fold::Skills,
+                Fold::WorkSpeed
+            ]
+        );
         assert!(
             !short
                 .iter()
@@ -1250,6 +1310,41 @@ mod tests {
         let (long, _) = colonist_panel_rows(rows, &all_folds_open());
         assert!(long.len() > short.len() + 9);
         assert!(long.iter().any(|r| matches!(r, Row::Line(_))));
+    }
+
+    #[test]
+    fn r011_every_mood_part_shows_with_its_value_when_the_mood_fold_opens() {
+        let sim = busy_sim();
+        let (id, _) = sim.colonists().iter().next().unwrap();
+        let rows = inspector::colonist_rows(&sim, id);
+        let mood = sim.mood(id).unwrap();
+        assert!(!mood.parts.is_empty());
+        let lines = |state: &UiState| -> Vec<String> {
+            colonist_panel_rows(rows.clone(), state)
+                .0
+                .into_iter()
+                .filter_map(|r| match r {
+                    Row::Line(t) => Some(t),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(lines(&UiState::default()).is_empty());
+        let open = UiState {
+            open: [Fold::Mood].into_iter().collect(),
+            debug: false,
+        };
+        let shown = lines(&open);
+        for part in &mood.parts {
+            let name = inspector::mood_cause_name(&sim, part.cause);
+            let value = format!("{:+}", part.value);
+            assert!(
+                shown
+                    .iter()
+                    .any(|l| l.contains(&name) && l.contains(&value)),
+                "{name} {value} missing in {shown:?}"
+            );
+        }
     }
 
     #[test]

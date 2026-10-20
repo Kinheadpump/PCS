@@ -171,6 +171,12 @@ pub enum Fold {
     Details,
     /// The named parts of the temperature of the tile panel (a why chain).
     TempChain,
+    /// The modifiers of the mood of the colonist panel (a why chain).
+    Mood,
+    /// The hourly health change of the colonist panel (a why chain).
+    Health,
+    /// The parts of the comfort band of the colonist panel (a why chain).
+    Comfort,
 }
 
 /// What the interface asks the game to do.
@@ -218,6 +224,51 @@ pub enum Row {
     /// A heading that the player can click to show or hide the rows below it. The flag is
     /// true if the rows show.
     Fold(String, bool),
+    /// A need as a small icon, a bar, and a value. With `fold` set, the player can click the
+    /// row to show or hide the `Line` rows below it.
+    Meter(Meter),
+    /// A short label with an icon, for example a condition.
+    Tag(usize, String, [u8; 3]),
+}
+
+/// A bar row of a key and value panel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Meter {
+    /// Icon cell.
+    pub icon: usize,
+    /// Tooltip: the name of the value.
+    pub tip: String,
+    /// Fill of the bar, from 0 to 1000.
+    pub permille: i32,
+    /// Color of the bar.
+    pub tint: [u8; 3],
+    /// The value as text.
+    pub text: String,
+    /// `Some(open)` if the row folds the lines below it.
+    pub fold: Option<bool>,
+}
+
+/// Size of a small icon in a row, in screen pixels (one icon pixel is one screen pixel).
+pub const SMALL_ICON: f32 = 16.0;
+/// Width of the bar of a meter row.
+pub const BAR_W: f32 = 96.0;
+/// Height of the bar of a meter row.
+pub const BAR_H: f32 = 10.0;
+
+impl Row {
+    /// `Some(open)` if the row is a fold header that the player can click.
+    pub fn fold_state(&self) -> Option<bool> {
+        match self {
+            Row::Fold(_, open) => Some(*open),
+            Row::Meter(m) => m.fold,
+            _ => None,
+        }
+    }
+}
+
+/// Width of a meter row.
+fn meter_w(m: &Meter) -> f32 {
+    FOLD_INDENT + SMALL_ICON + GAP + BAR_W + 8.0 + text_px(&m.text)
 }
 
 /// Width of a text on screen, in pixels.
@@ -567,6 +618,58 @@ impl Ui {
         self.clicked(r)
     }
 
+    /// Draw the chevron of a fold meter row and report a click on the row. The tooltip of the
+    /// row is set by `meter`.
+    pub fn fold_marker(&self, r: Rect, open: bool) -> bool {
+        let cell = if open {
+            crate::cells::icons::CHEVRON_DOWN
+        } else {
+            crate::cells::icons::CHEVRON_RIGHT
+        };
+        let color = if r.contains(self.mouse) {
+            text_color()
+        } else {
+            dim()
+        };
+        self.icon(
+            cell,
+            (r.x - 8.0, r.y + (r.h - ICON_PX) / 2.0),
+            ICON_PX,
+            color,
+        );
+        self.clicked(r)
+    }
+
+    /// Draw a meter row: a small icon, a bar, and the value.
+    pub fn meter(&self, r: Rect, m: &Meter) {
+        let ix = r.x + FOLD_INDENT;
+        let tint = rgb_color(m.tint, 255);
+        self.icon(
+            m.icon,
+            (ix, r.y + (r.h - SMALL_ICON) / 2.0),
+            SMALL_ICON,
+            tint,
+        );
+        let bx = (ix + SMALL_ICON + GAP).round();
+        let by = (r.y + (r.h - BAR_H) / 2.0).round();
+        let ink = rgb_color(pal::INK, 255);
+        draw_rectangle(bx - PX, by - PX, BAR_W + 2.0 * PX, BAR_H + 2.0 * PX, ink);
+        draw_rectangle(bx, by, BAR_W, BAR_H, rgb_color(pal::PANEL_DARK, 255));
+        let fill = (BAR_W * m.permille.clamp(0, 1000) as f32 / 1000.0).round();
+        if fill > 0.0 {
+            draw_rectangle(bx, by, fill, BAR_H, tint);
+            draw_rectangle(bx, by, fill, PX, lighten(tint, 0.3));
+        }
+        let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
+        shadow_text(
+            &m.text,
+            (bx + BAR_W + 8.0).round(),
+            ty.round(),
+            text_color(),
+        );
+        self.tip(Rect::new(r.x, r.y, meter_w(m), r.h), &m.tip);
+    }
+
     /// Draw a button with a given fill. Hover makes it lighter. Returns which mouse
     /// buttons clicked it in this frame.
     pub fn tinted_button(&self, r: Rect, text: &str, fill: Color) -> Press {
@@ -673,6 +776,8 @@ pub fn rows_layout(origin: (f32, f32), rows: &[Row], closable: bool) -> RowsLayo
             Row::Title(t) => text_px(t) + close_w,
             Row::Section(t) | Row::Line(t) => text_px(t),
             Row::Fold(t, _) => FOLD_INDENT + text_px(t),
+            Row::Meter(m) => meter_w(m),
+            Row::Tag(_, t, _) => FOLD_INDENT + SMALL_ICON + GAP + text_px(t),
             Row::Pair(_, v) => key_w + KEY_GAP + text_px(v),
         })
         .fold(0.0_f32, f32::max);
@@ -700,6 +805,11 @@ pub fn rows_layout(origin: (f32, f32), rows: &[Row], closable: bool) -> RowsLayo
         if matches!(row, Row::Fold(..)) {
             folds.push(Rect::new(x, y, inner_w, FOLD_H));
             y += FOLD_H;
+        } else if matches!(row, Row::Meter(_)) {
+            if row.fold_state().is_some() {
+                folds.push(Rect::new(x, y, inner_w, ROW_H));
+            }
+            y += ROW_H;
         } else {
             y += ROW_H;
         }
@@ -757,6 +867,31 @@ pub fn rows_panel(
                     hit.fold = Some(fold_index);
                 }
                 fold_index += 1;
+            }
+            Row::Meter(m) => {
+                let r = Rect::new(pos.0, pos.1, layout.panel.w - 2.0 * PAD, ROW_H);
+                ui.meter(r, m);
+                if let Some(open) = m.fold {
+                    if let Some(f) = layout.folds.get(fold_index)
+                        && ui.fold_marker(*f, open)
+                    {
+                        hit.fold = Some(fold_index);
+                    }
+                    fold_index += 1;
+                }
+            }
+            Row::Tag(icon, t, tint) => {
+                ui.icon(
+                    *icon,
+                    (pos.0 + FOLD_INDENT, pos.1 + (ROW_H - SMALL_ICON) / 2.0),
+                    SMALL_ICON,
+                    rgb_color(*tint, 255),
+                );
+                ui.label_color(
+                    (pos.0 + FOLD_INDENT + SMALL_ICON + GAP, pos.1),
+                    t,
+                    key_color(),
+                );
             }
         }
     }
