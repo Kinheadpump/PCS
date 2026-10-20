@@ -51,6 +51,29 @@ impl WorldBiome {
     /// Number of biomes.
     pub const COUNT: usize = 19;
 
+    /// All biomes in order.
+    pub const ALL: [WorldBiome; WorldBiome::COUNT] = [
+        B::Ocean,
+        B::Lake,
+        B::Glacier,
+        B::HighMountain,
+        B::Volcanic,
+        B::Coast,
+        B::Floodplain,
+        B::Tundra,
+        B::ColdDesert,
+        B::Taiga,
+        B::Steppe,
+        B::Shrubland,
+        B::Grassland,
+        B::TemperateForest,
+        B::Marsh,
+        B::Desert,
+        B::Savanna,
+        B::TropicalForest,
+        B::Rainforest,
+    ];
+
     /// Name for tools and the world map.
     pub fn name(self) -> &'static str {
         match self {
