@@ -1,6 +1,6 @@
-seed1.geology=d1ecc72bca1dde6d
-seed1.deposits=ca5a74469268aef9
-seed2.geology=54d52ed92d1f906e
+seed1.geology=8eb02155a45e6cd9
+seed1.deposits=ac800a3d7eb7930c
+seed2.geology=79b2948234f91b80
 seed2.deposits=8ee24f9ff1631009
-seed3.geology=51f74daf9d160efc
-seed3.deposits=0a8271294fa1fffe
+seed3.geology=963e0af1641f8829
+seed3.deposits=437a5205541778f1
