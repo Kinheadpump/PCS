@@ -169,6 +169,8 @@ pub enum Fold {
     WorkSpeed,
     /// The why chains of the room part of the tile panel.
     Details,
+    /// The named parts of the temperature of the tile panel (a why chain).
+    TempChain,
 }
 
 /// What the interface asks the game to do.
@@ -182,6 +184,10 @@ pub enum UiAction {
     ToggleWork,
     /// The player pressed the rooms overlay button.
     ToggleRooms,
+    /// The player pressed the temperature overlay button.
+    ToggleTemp,
+    /// The player clicked an alert: center the camera on this tile.
+    JumpTo(u16, u16),
     /// The player clicked a colonist name in the work panel.
     SelectColonist(ColonistId),
     /// The player chose a building type in the build panel (index in `buildings.ron`).
@@ -502,6 +508,32 @@ impl Ui {
         self.clicked(r)
     }
 
+    /// Width of an alert chip with a text.
+    pub fn alert_chip_width(text: &str) -> f32 {
+        ICON_PX + 4.0 + text_px(text) + BUTTON_PAD
+    }
+
+    /// Draw an alert chip: a colored icon and a short text on a button. It counts as a panel,
+    /// so a click on it does not reach the map. Returns true if clicked in this frame.
+    pub fn alert_chip(&mut self, r: Rect, icon: usize, tint: Color, text: &str) -> bool {
+        self.panels.push(r);
+        self.button_frame(r, self.state_color(r, false), false);
+        self.icon(
+            icon,
+            (r.x + 2.0, r.y + (r.h - ICON_PX) / 2.0),
+            ICON_PX,
+            tint,
+        );
+        let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
+        shadow_text(
+            text,
+            (r.x + ICON_PX + 4.0).round(),
+            ty.round(),
+            text_color(),
+        );
+        self.clicked(r)
+    }
+
     /// Draw the close button of a panel. Returns true if clicked in this frame.
     pub fn close_button(&self, r: Rect) -> bool {
         let hover = r.contains(self.mouse);
@@ -564,16 +596,31 @@ impl Ui {
             rgb_color(pal::INK, 255),
             false,
         );
-        let ty = tip.y + (tip.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
-        shadow_text(&text, (tip.x + 8.0).round(), ty.round(), text_color());
+        let lines = text.lines().count().max(1);
+        let ty = tip.y + (tip.h - lines as f32 * LINE_H + 4.0) / 2.0;
+        for (i, line) in text.lines().enumerate() {
+            let color = if i == 0 { text_color() } else { key_color() };
+            shadow_text(
+                line,
+                (tip.x + 8.0).round(),
+                (ty + i as f32 * LINE_H).round(),
+                color,
+            );
+        }
     }
 }
 
 /// Where the tooltip of a widget goes: above it, or below it if there is no room above, and
-/// always inside the window.
+/// always inside the window. A text with several lines (separated by a line break) makes a
+/// taller tooltip.
 pub fn tooltip_rect(target: Rect, text: &str, view: (f32, f32)) -> Rect {
-    let w = text_px(text) + 16.0;
-    let h = 28.0;
+    let w = text.lines().map(text_px).fold(0.0_f32, f32::max) + 16.0;
+    let lines = text.lines().count().max(1);
+    let h = if lines == 1 {
+        28.0
+    } else {
+        lines as f32 * LINE_H + 8.0
+    };
     let above = target.y - h - GAP;
     let y = if above >= 0.0 {
         above
@@ -1220,6 +1267,24 @@ mod tests {
         assert!(near_right.right() <= view.0);
         let target = Rect::new(100.0, 200.0, 40.0, 40.0);
         assert!(!tooltip_rect(target, "Cut (T)", view).intersects(&target));
+    }
+
+    #[test]
+    fn a_tooltip_with_several_lines_is_taller_and_as_wide_as_its_longest_line() {
+        let view = (800.0, 600.0);
+        let target = Rect::new(300.0, 300.0, 40.0, 40.0);
+        let one = tooltip_rect(target, "Now", view);
+        let three = tooltip_rect(
+            target,
+            "Now
+Tomorrow 3 degrees, rain
+In 2 days",
+            view,
+        );
+        assert!(three.h > one.h);
+        assert!(three.w > one.w);
+        assert_eq!(three.w, text_px("Tomorrow 3 degrees, rain") + 16.0);
+        assert!(!three.intersects(&target));
     }
 
     #[test]

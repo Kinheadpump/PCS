@@ -4,6 +4,8 @@
 use crate::build_ui;
 use crate::tools::priority_text;
 use crate::ui::Row;
+use crate::weather;
+use base::content::BuildingKind;
 use sim::skill::Skill;
 use sim::{
     AbortReason, BuildLayer, Building, ColonistId, ItemFilter, ItemLoc, JobEvent, JobKind, JobStep,
@@ -187,6 +189,7 @@ pub fn tile_rows(sim: &Sim, x: u16, y: u16, haulable: &[u16]) -> Vec<Row> {
         "Walkable".to_owned(),
         if map.passable(ix, iy) { "yes" } else { "no" }.to_owned(),
     ));
+    temperature_rows(sim, x, y, &mut rows);
 
     let designation = match sim.designation(x, y) {
         Some(kind) => match sim
@@ -269,6 +272,45 @@ const LAYER_ROWS: [(BuildLayer, &str); 3] = [
     (BuildLayer::Roof, "Roof"),
 ];
 
+/// Name of the section that holds the named parts of the temperature. The tile panel puts them
+/// behind a fold.
+pub const TEMP_PARTS: &str = "Temperature parts";
+
+/// Rows for the temperature of a tile and the ice: the value, then the named parts (a why chain)
+/// whose sum is the value.
+pub fn temperature_rows(sim: &Sim, x: u16, y: u16, rows: &mut Vec<Row>) {
+    let Some(t) = sim.tile_temperature(x, y) else {
+        return;
+    };
+    rows.push(Row::Pair(
+        "Temperature".to_owned(),
+        weather::temp_text(i32::from(t.total)),
+    ));
+    if sim.ice_at(x, y) {
+        rows.push(Row::Pair("Ice".to_owned(), "yes".to_owned()));
+    }
+    rows.push(Row::Section(TEMP_PARTS.to_owned()));
+    rows.push(Row::Line(format!("  {}", weather::place_name(t.place))));
+    for part in &t.parts {
+        rows.push(Row::Line(format!(
+            "  {} {}",
+            part.cause.name(),
+            weather::signed_text(part.tenths)
+        )));
+    }
+}
+
+/// The fuel row of a hearth: the burning hours that are left and the capacity.
+pub fn hearth_fuel_text(sim: &Sim, x: u16, y: u16) -> String {
+    let fuel = sim.hearth_fuel(x, y);
+    let capacity = sim.rules().climate.hearth_fuel_capacity_hours;
+    if fuel == 0 {
+        "none".to_owned()
+    } else {
+        format!("{fuel} of {capacity} h")
+    }
+}
+
 /// Rows for the buildings and blueprints of a tile: one row for each layer that has one.
 pub fn building_rows(sim: &Sim, x: u16, y: u16, rows: &mut Vec<Row>) {
     let buildings = sim.buildings();
@@ -295,6 +337,11 @@ pub fn building_rows(sim: &Sim, x: u16, y: u16, rows: &mut Vec<Row>) {
                 ),
             ));
         }
+    }
+    if let Some(b) = buildings.object_at(x, y)
+        && sim.rules().is_kind(b.def, BuildingKind::Hearth)
+    {
+        rows.push(Row::Pair("Fuel".to_owned(), hearth_fuel_text(sim, x, y)));
     }
     if let Some(b) = buildings.object_at(x, y)
         && build_ui::is_workshop(sim.rules(), b.def)

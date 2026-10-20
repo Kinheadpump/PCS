@@ -19,6 +19,7 @@ mod sprites;
 mod structures;
 mod tools;
 mod ui;
+mod weather;
 
 use bake::Palette;
 use build_ui::BuildState;
@@ -121,6 +122,8 @@ struct App {
     show_work: bool,
     /// True if the rooms overlay is on.
     show_rooms: bool,
+    /// True if the temperature overlay is on.
+    show_temp: bool,
     /// The building and the material of the build tool.
     build: BuildState,
     /// The textures of the buildings.
@@ -143,10 +146,20 @@ impl App {
         Loaded { map, view }
     }
 
+    /// A new sim for a preset. The mean temperature comes from the embark. The embark has no
+    /// seasonal amplitude and no moisture yet, so the sim keeps the defaults of `climate.ron`.
+    fn start_sim(map: &LocalMapData, preset: usize, content_hash: u64) -> Sim {
+        let mean = PRESETS[preset % PRESETS.len()].1().mean_temperature;
+        let mut sim = Sim::new(map, SEED, content_hash);
+        let params = sim.climate_params();
+        sim.set_climate(mean, params.amplitude, params.moisture);
+        sim
+    }
+
     fn new(palette: Palette, sprites: Sprites, content_hash: u64) -> Self {
         let loaded = Self::load_preset(&palette, &sprites, 0);
         let size = (loaded.map.ground.width(), loaded.map.ground.height());
-        let sim = Sim::new(&loaded.map, SEED, content_hash);
+        let sim = Self::start_sim(&loaded.map, 0, content_hash);
         let build = BuildState::new(sim.rules());
         Self {
             content_hash,
@@ -161,6 +174,7 @@ impl App {
             ui_state: hud::UiState::default(),
             show_work: false,
             show_rooms: false,
+            show_temp: false,
             build,
             structures: Structures::new(),
             panels: Vec::new(),
@@ -180,7 +194,11 @@ impl App {
     /// `PCS_TOOL=<word>`, `PCS_DESIGNATE=<tool:x0,y0,x1,y1;...>` (the orders a drag would give),
     /// `PCS_PREVIEW=<tool:x0,y0,x1,y1>` (draw a drag preview), `PCS_TILE=<x>,<y>`,
     /// `PCS_WORK=1`, `PCS_PRIORITY=<slot>,<job 0-2>,<priority>`, and
-    /// `PCS_ITEM=<material key>,<count>,<x>,<y>` (several, separated by `;`).
+    /// `PCS_ITEM=<material key>,<count>,<x>,<y>` (several, separated by `;`),
+    /// `PCS_TEMP=1` (temperature overlay), `PCS_CLIMATE=<mean>,<amplitude>,<moisture>` (tenths of a
+    /// degree, moisture 0 to 255), and `PCS_FUEL=<x>,<y>,<hours>` (hearth fuel, several separated
+    /// by `;`; these two run before the ticks). `PCS_DAYS=<n>` runs n days of ticks.
+    /// `PCS_FOLDS=1` opens the temperature fold of the tile panel.
     fn debug_setup(&mut self) {
         let var = |k: &str| std::env::var(k).ok();
         let numbers = |v: &str| -> Vec<u16> {
@@ -188,12 +206,32 @@ impl App {
                 .filter_map(|p| p.trim().parse::<u16>().ok())
                 .collect()
         };
+        let numbers_signed = |v: &str| -> Vec<i32> {
+            v.split(',')
+                .filter_map(|p| p.trim().parse::<i32>().ok())
+                .collect()
+        };
         if let Some(tool) = var("PCS_TOOL").and_then(|v| Tool::from_word(&v)) {
             self.tool = tool;
         }
         self.show_work = var("PCS_WORK").is_some_and(|v| v == "1");
         self.show_rooms = var("PCS_ROOMS").is_some_and(|v| v == "1");
+        if var("PCS_FOLDS").is_some_and(|v| v == "1") {
+            self.ui_state.open.insert(ui::Fold::TempChain);
+        }
+        self.show_temp = var("PCS_TEMP").is_some_and(|v| v == "1");
+        if let Some(v) = var("PCS_CLIMATE")
+            && let [mean, amplitude, moisture] = numbers_signed(&v)[..]
+        {
+            self.sim
+                .set_climate(mean as i16, amplitude as i16, moisture.clamp(0, 255) as u8);
+        }
         self.debug_build(&var);
+        for entry in var("PCS_FUEL").iter().flat_map(|v| v.split(';')) {
+            if let [x, y, hours] = numbers(entry)[..] {
+                self.sim.debug_set_hearth_fuel(x, y, u32::from(hours));
+            }
+        }
         if let Some(slot) = var("PCS_SELECT").and_then(|v| v.parse::<usize>().ok()) {
             self.selected = self.sim.colonists().iter().nth(slot).map(|(id, _)| id);
         }
@@ -240,9 +278,13 @@ impl App {
             }
         }
         self.preview_override = var("PCS_PREVIEW").and_then(|v| tools::parse_order(&v, self.tool));
+        let days = var("PCS_DAYS")
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(0);
         let ticks = var("PCS_TICKS")
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(0)
+            .saturating_add(days.saturating_mul(sim::time::TICKS_PER_DAY as u32))
             .max(if var("PCS_BUILD").is_some() { 2 } else { 0 })
             .max(u32::from(!self.pending.is_empty()));
         for _ in 0..ticks {
@@ -320,7 +362,7 @@ impl App {
                 Action::Preset(n) if n < PRESETS.len() && n != self.preset => {
                     self.preset = n;
                     self.loaded = Self::load_preset(&self.palette, &self.sprites, n);
-                    self.sim = Sim::new(&self.loaded.map, SEED, self.content_hash);
+                    self.sim = Self::start_sim(&self.loaded.map, n, self.content_hash);
                     self.selected = None;
                     self.selected_tile = None;
                     self.drag_start = None;
@@ -332,6 +374,7 @@ impl App {
                 Action::SelectTool(tool) => self.set_tool(tool),
                 Action::ToggleWork => self.show_work = !self.show_work,
                 Action::ToggleRooms => self.show_rooms = !self.show_rooms,
+                Action::ToggleTemp => self.show_temp = !self.show_temp,
                 Action::PickBuilding(n) => {
                     self.set_tool(Tool::Build);
                     self.build.pick_building(self.sim.rules(), n);
@@ -556,6 +599,7 @@ impl App {
         let selected_zone = self
             .selected_tile
             .and_then(|(x, y)| inspector::zone_at(&self.sim, x, y));
+        weather::draw_ice(&frame);
         overlay::draw_zones(&frame, selected_zone);
         self.structures.draw_floors(&frame, &self.sprites);
         overlay::draw_items(&frame);
@@ -573,6 +617,9 @@ impl App {
         self.structures.draw_blueprints(&frame, &self.sprites);
         if self.show_rooms {
             structures::draw_rooms(&frame);
+        }
+        if self.show_temp {
+            weather::draw_temperature(&frame);
         }
         let mouse = mouse_position();
         let hover_tile = if self.panels.iter().any(|r| r.contains(mouse)) {
@@ -619,6 +666,7 @@ impl App {
             build: &self.build,
             show_work: self.show_work,
             show_rooms: self.show_rooms,
+            show_temp: self.show_temp,
             selected: self.selected,
             selected_tile: self.selected_tile,
             hover_tile,
@@ -641,6 +689,11 @@ impl App {
                 UiAction::SetTool(tool) => self.set_tool(tool),
                 UiAction::ToggleWork => self.show_work = !self.show_work,
                 UiAction::ToggleRooms => self.show_rooms = !self.show_rooms,
+                UiAction::ToggleTemp => self.show_temp = !self.show_temp,
+                UiAction::JumpTo(x, y) => {
+                    self.camera.center = (f32::from(x) + 0.5, f32::from(y) + 0.5);
+                    self.camera.clamp_center(size);
+                }
                 UiAction::PickBuilding(n) => self.build.pick_building(self.sim.rules(), n),
                 UiAction::PickMaterial(m) => self.build.pick_material(self.sim.rules(), m),
                 UiAction::SelectColonist(id) => {

@@ -18,7 +18,8 @@ use crate::palette::ui as pal;
 use crate::render::color as rgb_color;
 use crate::tools::{self, Tool};
 use crate::ui::{self, Fold, Row, Ui, UiAction};
-use macroquad::prelude::Color;
+use crate::weather;
+use macroquad::prelude::{Color, draw_rectangle};
 use sim::{ColonistId, Command, ItemFilter, JobKind, Sim, Speed, StockpileId};
 use std::collections::BTreeSet;
 
@@ -76,6 +77,8 @@ pub struct HudInput<'a> {
     pub show_work: bool,
     /// True if the rooms overlay is on.
     pub show_rooms: bool,
+    /// True if the temperature overlay is on.
+    pub show_temp: bool,
     /// The selected colonist.
     pub selected: Option<ColonistId>,
     /// The selected tile.
@@ -114,6 +117,12 @@ pub fn tool_label(tool: Tool) -> String {
 pub const WORK_LABEL: &str = "Work (P)";
 /// The tooltip of the rooms overlay button.
 pub const ROOMS_LABEL: &str = "Rooms (O)";
+/// Tooltip of the temperature overlay button.
+pub const TEMP_LABEL: &str = "Temperature (Y)";
+/// The number of toolbar buttons after the tools: work, rooms, temperature.
+pub const PANEL_BUTTONS: usize = 3;
+/// Color of the rain icon.
+const RAIN_COLOR: [u8; 3] = [124, 184, 255];
 
 /// The command for a click on a priority cell.
 pub fn priority_command(id: ColonistId, kind: JobKind, current: u8, backward: bool) -> Command {
@@ -196,8 +205,26 @@ fn tile_panel_rows(rows: Vec<Row>, state: &UiState) -> (Vec<Row>, Vec<Fold>) {
     let mut out = Vec::new();
     let mut parts = Vec::new();
     let mut in_room = false;
+    // `Some(open)` while the lines of the temperature fold go by.
+    let mut in_temp: Option<bool> = None;
+    let mut folds = Vec::new();
     for row in rows {
+        if in_temp.is_some() && !matches!(row, Row::Line(_)) {
+            in_temp = None;
+        }
         match row {
+            Row::Line(_) if in_temp.is_some() => {
+                if in_temp == Some(true) {
+                    out.push(row);
+                }
+            }
+            Row::Section(ref name) if name == inspector::TEMP_PARTS => {
+                let open = state.open.contains(&Fold::TempChain);
+                out.push(Row::Fold("Temperature parts".to_owned(), open));
+                folds.push(Fold::TempChain);
+                in_temp = Some(open);
+                in_room = false;
+            }
             Row::Pair(_, ref v) if v == "-" => {}
             Row::Section(ref name) if name == "Room" => {
                 in_room = true;
@@ -211,7 +238,6 @@ fn tile_panel_rows(rows: Vec<Row>, state: &UiState) -> (Vec<Row>, Vec<Fold>) {
             other => out.push(other),
         }
     }
-    let mut folds = Vec::new();
     if !parts.is_empty() {
         let open = state.open.contains(&Fold::Details);
         out.push(Row::Fold("Details".to_owned(), open));
@@ -400,7 +426,7 @@ struct Content {
 impl Content {
     fn new(h: &HudInput) -> Self {
         let time = h.sim.time();
-        let max_h = layout::panel_height(h.view, Tool::ALL.len() + 2);
+        let max_h = layout::panel_height(h.view, Tool::ALL.len() + PANEL_BUTTONS);
         let (colonist, colonist_folds) = match h.selected {
             Some(id) => {
                 let (rows, folds) =
@@ -467,7 +493,7 @@ impl Content {
         Sizes {
             clock_w: ui::text_px(&self.clock).max(ui::text_px(&self.date)),
             count_w: self.count_w(),
-            toolbar_buttons: (Tool::ALL.len() + 2, Tool::ALL.len()),
+            toolbar_buttons: (Tool::ALL.len() + PANEL_BUTTONS, Tool::ALL.len()),
             work: h
                 .show_work
                 .then(|| size(ui::work_layout(origin, &self.work_names).panel)),
@@ -519,6 +545,105 @@ fn draw_top(ui: &mut Ui, placed: &Placed, content: &Content, h: &HudInput) -> Ve
         &content.count,
     );
     ui.tip(c, "Colonists");
+    draw_temp(ui, placed, h);
+    actions
+}
+
+/// The temperature readout of the top bar: a thermometer in the color of the temperature, the
+/// value, and a drop if it rains today. The tooltip has the forecast.
+fn draw_temp(ui: &mut Ui, placed: &Placed, h: &HudInput) {
+    let r = placed.temp_slot;
+    let outdoor = i32::from(h.sim.outdoor_temp());
+    let icon_y = r.y + (r.h - ui::ICON_PX) / 2.0;
+    ui.icon(
+        cells::icons::THERMOMETER,
+        (r.x, icon_y),
+        ui::ICON_PX,
+        rgb_color(weather::temp_color(outdoor), 255),
+    );
+    let text = weather::top_text(h.sim);
+    let tx = r.x + ui::ICON_PX + 4.0;
+    ui.label((tx, r.y + (r.h - 16.0) / 2.0), &text);
+    if h.sim.weather_today().rain {
+        ui.icon(
+            cells::icons::RAIN,
+            (tx + ui::text_px(&text) + 4.0, icon_y),
+            ui::ICON_PX,
+            rgb_color(RAIN_COLOR, 255),
+        );
+    }
+    ui.tip(r, &weather::forecast_tip(h.sim));
+    if h.show_temp {
+        draw_scale(ui, placed.scale, outdoor);
+    }
+}
+
+/// The scale of the temperature overlay: a gradient with the two end values and a tick at the
+/// outdoor temperature.
+fn draw_scale(ui: &Ui, r: ui::Rect, outdoor: i32) {
+    let low = (weather::SCALE_MIN / 10).to_string();
+    let high = (weather::SCALE_MAX / 10).to_string();
+    let (lw, hw) = (ui::text_px(&low), ui::text_px(&high));
+    let text_y = r.y + (r.h - 16.0) / 2.0;
+    ui.label_color((r.x, text_y), &low, ui::dim());
+    ui.label_color((r.right() - hw, text_y), &high, ui::dim());
+    let bar = ui::Rect::new(
+        r.x + lw + 8.0,
+        (r.y + (r.h - 12.0) / 2.0).round(),
+        r.w - lw - hw - 16.0,
+        12.0,
+    );
+    let ink = rgb_color(pal::INK, 255);
+    draw_rectangle(bar.x - 2.0, bar.y - 2.0, bar.w + 4.0, bar.h + 4.0, ink);
+    let step: f32 = 2.0;
+    let mut x = 0.0;
+    while x < bar.w {
+        let t = weather::SCALE_MIN
+            + (weather::SCALE_MAX - weather::SCALE_MIN) * (x / bar.w * 1000.0) as i32 / 1000;
+        let w = step.min(bar.w - x);
+        draw_rectangle(
+            bar.x + x,
+            bar.y,
+            w,
+            bar.h,
+            rgb_color(weather::temp_color(t), 255),
+        );
+        x += step;
+    }
+    let mark = (bar.x + bar.w * weather::scale_permille(outdoor) as f32 / 1000.0).round();
+    draw_rectangle(mark - 2.0, bar.y - 4.0, 4.0, bar.h + 8.0, ink);
+    draw_rectangle(
+        mark - 1.0,
+        bar.y - 3.0,
+        2.0,
+        bar.h + 6.0,
+        rgb_color(pal::TEXT, 255),
+    );
+    ui.tip(r, "Outdoor temperature");
+}
+
+/// The alert strip under the top bar: one chip for each alert. A click jumps to the hearth.
+fn draw_alerts(ui: &mut Ui, placed: &Placed, h: &HudInput) -> Vec<UiAction> {
+    let chips = weather::alert_chips(h.sim);
+    let gap = ui::GAP * 2.0;
+    let widths: Vec<f32> = chips
+        .iter()
+        .map(|c| Ui::alert_chip_width(&c.text))
+        .collect();
+    let total = widths.iter().sum::<f32>() + gap * chips.len().saturating_sub(1) as f32;
+    let slot = placed.alerts_slot;
+    let mut x = (slot.x + (slot.w - total) / 2.0).round();
+    let mut actions = Vec::new();
+    for (chip, w) in chips.iter().zip(widths) {
+        let r = ui::Rect::new(x, slot.y, w, slot.h);
+        let tint = rgb_color(chip.tint, 255);
+        if ui.alert_chip(r, chip.icon, tint, &chip.text)
+            && let Some((tx, ty)) = chip.target
+        {
+            actions.push(UiAction::JumpTo(tx, ty));
+        }
+        x += w + gap;
+    }
     actions
 }
 
@@ -542,9 +667,14 @@ fn draw_toolbar(ui: &mut Ui, placed: &Placed, h: &HudInput) -> Vec<UiAction> {
                     actions.push(UiAction::ToggleWork);
                 }
             }
-            None => {
+            None if i == Tool::ALL.len() + 1 => {
                 if ui.icon_button(*rect, cells::icons::BRACKETS, h.show_rooms, ROOMS_LABEL) {
                     actions.push(UiAction::ToggleRooms);
+                }
+            }
+            None => {
+                if ui.icon_button(*rect, cells::icons::THERMOMETER, h.show_temp, TEMP_LABEL) {
+                    actions.push(UiAction::ToggleTemp);
                 }
             }
         }
@@ -767,6 +897,7 @@ pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
     let mut actions = Vec::new();
     actions.extend(draw_top(ui, &placed, &content, h));
     actions.extend(draw_toolbar(ui, &placed, h));
+    actions.extend(draw_alerts(ui, &placed, h));
     draw_toast(ui, &placed, h);
     draw_debug(ui, &placed, h);
     if let (Some(r), Some(panel)) = (placed.build, &content.build) {
@@ -833,6 +964,7 @@ mod tests {
         assert_eq!(tool_label(Tool::Deconstruct), "Remove (X)");
         assert_eq!(WORK_LABEL, "Work (P)");
         assert_eq!(ROOMS_LABEL, "Rooms (O)");
+        assert_eq!(TEMP_LABEL, "Temperature (Y)");
     }
 
     #[test]
@@ -959,6 +1091,7 @@ mod tests {
             build,
             show_work: true,
             show_rooms: true,
+            show_temp: false,
             selected: sim.colonists().iter().next().map(|(id, _)| id),
             selected_tile: tile,
             hover_tile: None,
@@ -973,9 +1106,14 @@ mod tests {
 
     fn all_folds_open() -> UiState {
         UiState {
-            open: [Fold::Skills, Fold::WorkSpeed, Fold::Details]
-                .into_iter()
-                .collect(),
+            open: [
+                Fold::Skills,
+                Fold::WorkSpeed,
+                Fold::Details,
+                Fold::TempChain,
+            ]
+            .into_iter()
+            .collect(),
             debug: false,
         }
     }
@@ -1079,7 +1217,10 @@ mod tests {
         for view in VIEWS {
             let h = input(&sim, &build, &state, view, Tool::Select, None);
             let (_, placed) = plan(&h);
-            assert_eq!(placed.toolbar_buttons.len(), Tool::ALL.len() + 2);
+            assert_eq!(
+                placed.toolbar_buttons.len(),
+                Tool::ALL.len() + PANEL_BUTTONS
+            );
             assert_eq!(placed.speeds.len(), 4);
             for b in &placed.toolbar_buttons {
                 assert!(b.right() <= view.0 && b.bottom() <= view.1);
@@ -1122,7 +1263,12 @@ mod tests {
                 .iter()
                 .any(|r| matches!(r, Row::Pair(_, v) if v == "-"))
         );
-        assert_eq!(folds, vec![Fold::Details]);
+        assert_eq!(folds, vec![Fold::TempChain, Fold::Details]);
+        assert!(
+            short
+                .iter()
+                .any(|r| matches!(r, Row::Pair(k, _) if k == "Temperature"))
+        );
         assert!(
             !short
                 .iter()

@@ -56,6 +56,8 @@ pub enum Action {
     ToggleWork,
     /// Show or hide the rooms overlay.
     ToggleRooms,
+    /// Show or hide the temperature overlay.
+    ToggleTemp,
     /// Choose the building of the build tool by its number (0-based, `buildings.ron` order).
     PickBuilding(usize),
     /// Close the game.
@@ -118,6 +120,7 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
         Action::SelectTool(Tool::Deconstruct),
     ),
     (Trigger::Pressed(KeyCode::O), Action::ToggleRooms),
+    (Trigger::Pressed(KeyCode::Y), Action::ToggleTemp),
     (Trigger::Pressed(KeyCode::Key1), Action::PickBuilding(0)),
     (Trigger::Pressed(KeyCode::Key2), Action::PickBuilding(1)),
     (Trigger::Pressed(KeyCode::Key3), Action::PickBuilding(2)),

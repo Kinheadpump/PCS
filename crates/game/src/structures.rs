@@ -23,6 +23,8 @@ use std::collections::BTreeMap;
 pub const CLOTH: Rgb = [168, 72, 64];
 /// Color of fire pixels (hearth).
 pub const FIRE: Rgb = [240, 140, 40];
+/// Color of the fire pixels of a hearth without fuel: cold ash and dead coals.
+pub const ASH: Rgb = [92, 86, 96];
 /// Color of metal pixels (tools).
 pub const METAL: Rgb = [176, 180, 188];
 /// Opacity of a roof. The rooms below stay visible.
@@ -46,15 +48,22 @@ const ROOM_TINTS: [Rgb; 6] = [
     [240, 150, 90],
 ];
 
+#[cfg(test)]
 /// RGBA pixels (16 x 16) of a building cell in a material color. Material pixels go through the
 /// ramp. Cloth, fire, and metal pixels use their own colors. Shadow pixels stay black.
 pub fn building_image(sheet: &Png, cell: usize, material: Rgb) -> Vec<u8> {
+    building_image_with(sheet, cell, material, FIRE)
+}
+
+/// Like [`building_image`], with a color for the fire pixels: [`FIRE`] for a burning hearth,
+/// [`ASH`] for a hearth without fuel.
+pub fn building_image_with(sheet: &Png, cell: usize, material: Rgb, fire: Rgb) -> Vec<u8> {
     let mut bytes = sheet.cell_bytes(cell);
     for px in bytes.chunks_mut(4) {
         let tint = match px[3] {
             bc::MATERIAL_ALPHA => material,
             bc::CLOTH_ALPHA => CLOTH,
-            bc::FIRE_ALPHA => FIRE,
+            bc::FIRE_ALPHA => fire,
             bc::METAL_ALPHA => METAL,
             _ => continue,
         };
@@ -179,7 +188,7 @@ pub fn cell_at(
 /// The textures of the building cells, one for each cell and material color.
 #[derive(Default)]
 pub struct Structures {
-    textures: BTreeMap<(usize, Rgb), Texture2D>,
+    textures: BTreeMap<(usize, Rgb, Rgb), Texture2D>,
 }
 
 impl Structures {
@@ -188,10 +197,10 @@ impl Structures {
         Self::default()
     }
 
-    fn texture(&mut self, sprites: &Sprites, cell: usize, color: Rgb) -> &Texture2D {
-        self.textures.entry((cell, color)).or_insert_with(|| {
+    fn texture(&mut self, sprites: &Sprites, cell: usize, color: Rgb, fire: Rgb) -> &Texture2D {
+        self.textures.entry((cell, color, fire)).or_insert_with(|| {
             let image = Image {
-                bytes: building_image(&sprites.buildings, cell, color),
+                bytes: building_image_with(&sprites.buildings, cell, color, fire),
                 width: 16,
                 height: 16,
             };
@@ -206,10 +215,11 @@ impl Structures {
         sprites: &Sprites,
         cell: usize,
         color: Rgb,
+        fire: Rgb,
         rect: (f32, f32, f32, f32),
         tint: Color,
     ) {
-        let texture = self.texture(sprites, cell, color);
+        let texture = self.texture(sprites, cell, color, fire);
         draw_texture_ex(
             texture,
             rect.0,
@@ -239,7 +249,14 @@ impl Structures {
                 .materials
                 .get(usize::from(b.material))
                 .map_or([200, 200, 200], |m| m.color);
-            self.draw_cell(sprites, cell, color, f.rect(x, y), tint);
+            // A hearth without fuel has no flame: it shows cold ash and the first frame.
+            let dead = rules.is_kind(b.def, BuildingKind::Hearth) && !f.sim.hearth_burning(x, y);
+            let (cell, fire) = if dead {
+                (bc::HEARTH, ASH)
+            } else {
+                (cell, FIRE)
+            };
+            self.draw_cell(sprites, cell, color, fire, f.rect(x, y), tint);
         }
     }
 
@@ -288,6 +305,7 @@ impl Structures {
                     sprites,
                     cell,
                     color,
+                    FIRE,
                     rect,
                     Color::new(0.8, 0.92, 1.0, alpha),
                 );
@@ -345,7 +363,14 @@ impl Structures {
                 // Walls and roofs in the drag join each other.
                 let cell = preview_cell(f.sim, building, material, x, y, tiles);
                 if let Some(cell) = cell {
-                    self.draw_cell(sprites, cell, color, rect, Color::new(0.9, 1.0, 0.95, 0.72));
+                    self.draw_cell(
+                        sprites,
+                        cell,
+                        color,
+                        FIRE,
+                        rect,
+                        Color::new(0.9, 1.0, 0.95, 0.72),
+                    );
                 }
                 let blue = tool_color(Tool::Build);
                 draw_rectangle(rect.0, rect.1, rect.2, rect.3, with_alpha(blue, 0.28));
@@ -558,6 +583,32 @@ mod tests {
         };
         assert!(!fire(&a).is_empty());
         assert_eq!(fire(&a), fire(&b));
+    }
+
+    #[test]
+    fn a_hearth_without_fuel_has_ash_instead_of_fire() {
+        let Some(sheet) = sheet() else { return };
+        let fire_pixels = |fire: Rgb| -> Vec<[u8; 3]> {
+            let image = building_image_with(&sheet, bc::HEARTH, [120, 120, 130], fire);
+            sheet
+                .cell_bytes(bc::HEARTH)
+                .chunks(4)
+                .zip(image.chunks(4))
+                .filter(|(raw, _)| raw[3] == bc::FIRE_ALPHA)
+                .map(|(_, p)| [p[0], p[1], p[2]])
+                .collect()
+        };
+        let lit = fire_pixels(FIRE);
+        let dead = fire_pixels(ASH);
+        assert!(!lit.is_empty());
+        assert_eq!(lit.len(), dead.len());
+        let warmth = |p: &[u8; 3]| i32::from(p[0]) - i32::from(p[2]);
+        let lit_warm: i32 = lit.iter().map(warmth).sum();
+        let dead_warm: i32 = dead.iter().map(warmth).sum();
+        assert!(
+            lit_warm > dead_warm + 100 * lit.len() as i32 / 2,
+            "ash is not orange"
+        );
     }
 
     #[test]

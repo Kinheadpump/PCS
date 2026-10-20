@@ -155,6 +155,14 @@ pub mod icons {
     pub const CHEVRON_RIGHT: usize = 19;
     /// Three triangles: the fastest speed.
     pub const FASTEST: usize = 20;
+    /// A thermometer: temperature.
+    pub const THERMOMETER: usize = 21;
+    /// A drop: rain.
+    pub const RAIN: usize = 22;
+    /// A flame: hearth fuel.
+    pub const FLAME: usize = 23;
+    /// A snowflake: cold period.
+    pub const SNOWFLAKE: usize = 24;
     /// Rows of the sheet.
     pub const ROWS: usize = 2;
 }

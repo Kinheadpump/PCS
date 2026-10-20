@@ -52,8 +52,15 @@ pub const GLYPHS: [[u8; 5]; 95] = [
     [0x00,0x41,0x36,0x08,0x00],[0x02,0x01,0x02,0x04,0x02],
 ];
 
-/// The glyph of a character. A character outside 32..=126 shows as `?`.
+/// The degree sign, the only glyph outside ASCII.
+pub const DEGREE_SIGN: char = '\u{b0}';
+const DEGREE: [u8; 5] = [0x00, 0x06, 0x09, 0x09, 0x06];
+
+/// The glyph of a character. A character outside 32..=126 shows as `?`, except the degree sign.
 pub fn glyph(c: char) -> &'static [u8; 5] {
+    if c == DEGREE_SIGN {
+        return &DEGREE;
+    }
     let code = u32::from(c);
     let index = if (u32::from(FIRST)..=u32::from(LAST)).contains(&code) {
         code - u32::from(FIRST)
@@ -116,6 +123,7 @@ mod tests {
     fn unknown_characters_show_as_question_mark() {
         assert_eq!(glyph('\u{e9}'), glyph('?'));
         assert_eq!(glyph('\n'), glyph('?'));
+        assert_ne!(glyph(DEGREE_SIGN), glyph('?'));
     }
 
     #[test]
