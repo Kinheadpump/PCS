@@ -1,8 +1,9 @@
 //! Local map generation (TECHNICAL_DESIGN §8.2): layers of enums, no content strings.
 //! The game maps the enums to `materials.ron` entries.
 
-use crate::embark::EmbarkSummary;
+use crate::embark::{EmbarkSites, EmbarkSummary, embark_rules};
 use crate::noise::{fbm, threshold_for_share};
+use crate::stamp::{PlacedSite, SiteTile, stamp};
 use base::Grid;
 use base::hash::Fnv1a;
 use base::rng::mix;
@@ -72,6 +73,14 @@ pub struct LocalMapData {
     pub ore: Grid<Ore>,
     /// True where a tree stands.
     pub tree: Grid<bool>,
+    /// Structure layer: buildings, rubble, tunnels, seals, and debris (S11).
+    pub site: Grid<SiteTile>,
+    /// True where an old road runs (S11).
+    pub road: Grid<bool>,
+    /// Sites that were placed, in placement order (S11).
+    pub placed: Vec<PlacedSite>,
+    /// Tiles with salvage in ruins (S11).
+    pub salvage: Vec<(u16, u16)>,
 }
 
 impl LocalMapData {
@@ -188,5 +197,45 @@ pub fn generate_local(embark: &EmbarkSummary) -> LocalMapData {
         rock,
         ore,
         tree,
+        site: Grid::new(w, h, SiteTile::None),
+        road: Grid::new(w, h, false),
+        placed: Vec::new(),
+        salvage: Vec::new(),
     }
+}
+
+impl LocalMapData {
+    /// Stable hash of the history layers: structure, roads, placed sites, and salvage.
+    /// `hash()` does not include them, so maps without history keep their hash.
+    pub fn site_hash(&self) -> u64 {
+        let mut h = Fnv1a::new();
+        let bytes: Vec<u8> = self.site.as_slice().iter().map(|&s| s as u8).collect();
+        h.write(&bytes);
+        let bytes: Vec<u8> = self.road.as_slice().iter().map(|&r| u8::from(r)).collect();
+        h.write(&bytes);
+        for p in &self.placed {
+            h.write_u32(p.id);
+            h.write(&[p.kind as u8, p.width, p.height, u8::from(p.fallback)]);
+            h.write(&p.x.to_le_bytes());
+            h.write(&p.y.to_le_bytes());
+            h.write_u32(p.age);
+        }
+        for &(x, y) in &self.salvage {
+            h.write(&x.to_le_bytes());
+            h.write(&y.to_le_bytes());
+        }
+        h.finish()
+    }
+}
+
+/// Make a local map and stamp the history of the embark area on it (R-041). The ground,
+/// rock, ore, and tree layers come from `generate_local`, then ore loses depletion, roads and
+/// sites are stamped. A map always has at least 1 site: if `sites` has none, a small ruin is
+/// added. Same input gives the same map.
+pub fn generate_local_with_sites(embark: &EmbarkSummary, sites: &EmbarkSites) -> LocalMapData {
+    let mut map = generate_local(embark);
+    if let Ok(rules) = embark_rules() {
+        stamp(&mut map, sites, rules);
+    }
+    map
 }
