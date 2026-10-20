@@ -5,10 +5,13 @@
 //! This crate uses no floats, no hash collections, no file I/O, no time, and no threads
 //! (TECHNICAL_DESIGN §7).
 
+pub mod alert;
 pub mod build;
+pub mod climate;
 pub mod colonist;
 pub mod command;
 pub mod event;
+pub mod hearth;
 pub mod item;
 pub mod job;
 pub mod map;
@@ -22,10 +25,16 @@ pub mod skill;
 pub mod stockpile;
 pub mod time;
 
+pub use alert::{Alert, AlertKind};
 pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
+pub use climate::{
+    ClimateParams, ClimateRules, DayWeather, FORECAST_DAYS, OutdoorParts, TempCause, TempPart,
+    TempPlace, TileTemperature,
+};
 pub use colonist::{Colonist, ColonistId};
 pub use command::Command;
 pub use event::Event;
+pub use hearth::REFUEL_ARG;
 pub use item::{Item, ItemId, ItemLoc, Items};
 pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, JobStep, Reject};
 pub use map::LocalMap;
@@ -90,6 +99,10 @@ pub struct Sim {
     stockpiles: Arena<Stockpile>,
     /// Buildings and blueprints.
     buildings: Buildings,
+    /// Climate numbers, weather, and ice (Sprint 5).
+    climate: climate::ClimateState,
+    /// Room temperatures in thousandths of a degree. The key is the first tile of the room.
+    room_temps: BTreeMap<(u16, u16), i32>,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -157,6 +170,8 @@ impl Sim {
             designations: BTreeMap::new(),
             stockpiles: Arena::new(),
             buildings: Buildings::default(),
+            climate: climate::ClimateState::new(&rules.climate, seed),
+            room_temps: BTreeMap::new(),
             events: Vec::new(),
             job_events: Vec::new(),
             rules,
@@ -179,6 +194,9 @@ impl Sim {
             .buildings
             .object_tiles(|def| self.rules.building(def).is_some_and(|d| d.blocks_walking));
         self.map.reset_solid(blocking.into_iter());
+        self.map
+            .rebuild_deep(u32::from(self.rules.climate.deep_water_distance));
+        self.map.set_ice(self.climate.ice);
         self.regions.rebuild(&self.map);
         self.items.rebuild_index();
     }
@@ -187,12 +205,13 @@ impl Sim {
     /// first tick; the buildings must fit the new rules.
     pub fn debug_set_rules(&mut self, rules: Arc<SimRules>) {
         self.rules = rules;
+        self.resync_weather();
         self.rebuild_caches();
         self.refresh_rooms();
     }
 
     /// Run one tick. Order: room detection (only after a structural change), commands, jobs,
-    /// path requests, movement, then the tick number increases.
+    /// path requests, movement, the tick number increases, then the climate (each game hour).
     pub fn step(&mut self, commands: &[Command]) {
         self.detect_rooms();
         for command in commands {
@@ -202,6 +221,7 @@ impl Sim {
         self.process_path_queue();
         self.move_colonists();
         self.tick += 1;
+        self.climate_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -471,6 +491,9 @@ impl Sim {
             return None;
         }
         sim.rebuild_caches();
+        if !sim.climate_state_ok() {
+            return None;
+        }
         if !sim.jobs_state_ok() {
             return None;
         }

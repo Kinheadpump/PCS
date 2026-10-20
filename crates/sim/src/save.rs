@@ -11,7 +11,7 @@ use std::fmt;
 /// Magic bytes at the start of a save.
 pub const MAGIC: [u8; 8] = *b"COLSAVE1";
 /// Version of the payload layout. Before version 1.0 a different version is refused.
-pub const FORMAT_VERSION: u32 = 3;
+pub const FORMAT_VERSION: u32 = 4;
 /// Size of the header in bytes.
 pub const HEADER_LEN: usize = 8 + 4 + 8 + 8;
 
