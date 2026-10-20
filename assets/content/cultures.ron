@@ -1,0 +1,13 @@
+// Cultures of the historical civilizations (S10). Integers only (D-014).
+// The values are the base drives from 0 to 100. Each civilization gets a random offset.
+// "mining" is the preference for mines. A culture can appear in many civilizations.
+(
+    cultures: [
+        (id: "karthi",  name: "Karthi",  expansion: 70, aggression: 55, prosperity: 45, mining: 40),
+        (id: "velun",   name: "Velun",   expansion: 45, aggression: 25, prosperity: 65, mining: 55),
+        (id: "orsk",    name: "Orsk",    expansion: 55, aggression: 70, prosperity: 40, mining: 70),
+        (id: "thessal", name: "Thessal", expansion: 60, aggression: 35, prosperity: 55, mining: 30),
+        (id: "mirran",  name: "Mirran",  expansion: 40, aggression: 45, prosperity: 60, mining: 50),
+        (id: "dunmar",  name: "Dunmar",  expansion: 50, aggression: 60, prosperity: 50, mining: 80),
+    ],
+)

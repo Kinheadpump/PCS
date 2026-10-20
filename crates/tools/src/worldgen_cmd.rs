@@ -1,12 +1,14 @@
 //! World terrain tools: gen-world and the world layer images of dump-layers.
 
 use super::ppm;
+use worldgen::history::{EventKind, HistoryStage, LIMIT_NAMES, SiteKind};
 use worldgen::{
     LayerStage, Mineral, RegionStage, Rock, Stage, WORLD_SIZE, WorldBiome, WorldData, WorldParams,
-    generate_world,
+    generate_history, generate_world, try_generate_world,
 };
 
-const WORLD_USAGE: &str = "usage: tools gen-world --seed <n> [--out <dir>]";
+const WORLD_USAGE: &str =
+    "usage: tools gen-world --seed <n> [--out <dir>] [--history [--years <n>]]";
 
 /// Parse an optional seed pair. The default seed is 1.
 fn parse_seed(args: &[String]) -> Result<u64, String> {
@@ -225,16 +227,118 @@ pub fn dump_world_layers(dir: &str, rest: &[String]) -> Result<String, String> {
     Ok(format!("{:016x}", w.stage_hashes[Stage::Biomes as usize]))
 }
 
-/// Parse the arguments of gen-world: a seed and an optional output directory.
-fn parse_gen_args(args: &[String]) -> Result<(u64, Option<String>), String> {
-    match args {
-        [flag, _] if flag == "--seed" => Ok((parse_seed(args)?, None)),
-        [flag, value, flag2, dir] if flag == "--seed" && flag2 == "--out" => {
-            let seed = parse_seed(&[flag.clone(), value.clone()])?;
-            Ok((seed, Some(dir.clone())))
+/// Options of gen-world.
+struct GenArgs {
+    seed: u64,
+    out: Option<String>,
+    history: bool,
+    years: Option<u32>,
+}
+
+/// Parse the arguments of gen-world: a seed, an optional output directory, and the
+/// optional history flags.
+fn parse_gen_args(args: &[String]) -> Result<GenArgs, String> {
+    let mut seed = None;
+    let mut out = None;
+    let mut history = false;
+    let mut years = None;
+    let mut it = args.iter();
+    while let Some(flag) = it.next() {
+        match flag.as_str() {
+            "--history" => history = true,
+            "--seed" | "--out" | "--years" => {
+                let value = it.next().ok_or_else(|| WORLD_USAGE.to_owned())?;
+                match flag.as_str() {
+                    "--seed" => seed = Some(parse_seed(&[flag.clone(), value.clone()])?),
+                    "--out" => out = Some(value.clone()),
+                    _ => {
+                        years = Some(
+                            value
+                                .parse::<u32>()
+                                .map_err(|e| format!("bad years {value:?}: {e}"))?,
+                        );
+                    }
+                }
+            }
+            _ => return Err(WORLD_USAGE.to_owned()),
         }
-        _ => Err(WORLD_USAGE.to_owned()),
     }
+    if years.is_some() && !history {
+        return Err(WORLD_USAGE.to_owned());
+    }
+    Ok(GenArgs {
+        seed: seed.ok_or_else(|| WORLD_USAGE.to_owned())?,
+        out,
+        history,
+        years,
+    })
+}
+
+/// Chronicle summary and statistics of a history.
+#[allow(clippy::disallowed_methods)] // tools may read the clock
+fn history_report(w: &WorldData, years: Option<u32>) -> Result<Vec<String>, String> {
+    let start = std::time::Instant::now();
+    let h = generate_history(w, years).map_err(|e| e.to_string())?;
+    let micros = start.elapsed().as_micros();
+    let mut lines = vec![format!("history years {}", h.years)];
+    for stage in HistoryStage::ALL {
+        lines.push(format!(
+            "history hash {} {:016x}",
+            stage.name(),
+            h.hashes[stage as usize]
+        ));
+    }
+    for kind in EventKind::ALL {
+        lines.push(format!("event {} {}", kind.name(), h.count(kind)));
+    }
+    lines.push(format!("events {}", h.events.len()));
+    let alive = h.alive_by_year.iter().copied();
+    let lo = alive.clone().min().unwrap_or(0);
+    let hi = alive.clone().max().unwrap_or(0);
+    let ok = alive.filter(|&a| (2..=8).contains(&a)).count();
+    let total = h.alive_by_year.len().max(1);
+    lines.push(format!(
+        "alive min {lo} max {hi} in range per mille {}",
+        ok * 1000 / total
+    ));
+    lines.push(format!(
+        "civs {} alive at end {}",
+        h.civs.len(),
+        h.alive_civs()
+    ));
+    for c in &h.civs {
+        let end = if c.collapsed == u16::MAX {
+            "alive".to_owned()
+        } else {
+            format!("collapsed {}", c.collapsed)
+        };
+        lines.push(format!(
+            "civ {} culture {} founded {} {end}",
+            c.id, c.culture, c.founded
+        ));
+    }
+    lines.push(format!("settlements {}", h.settlements.len()));
+    for kind in SiteKind::ALL {
+        let n = h.sites.iter().filter(|s| s.kind == kind).count();
+        lines.push(format!("sites {} {n}", kind.name()));
+    }
+    lines.push(format!("artifacts {}", h.artifacts.len()));
+    let road = h.road.as_slice().iter().filter(|&&r| r > 0).count();
+    let depleted = h.depletion.as_slice().iter().filter(|&&d| d > 0).count();
+    let holy = h.sanctity.as_slice().iter().filter(|&&s| s > 0).count();
+    let cursed = h.sanctity.as_slice().iter().filter(|&&s| s < 0).count();
+    lines.push(format!("road cells {road} depleted cells {depleted}"));
+    lines.push(format!("sacred cells {holy} cursed cells {cursed}"));
+    for (name, n) in LIMIT_NAMES.iter().zip(h.skipped) {
+        lines.push(format!("skipped {name} {n}"));
+    }
+    lines.push("chronicle".to_owned());
+    let step = (h.events.len() / 12).max(1);
+    for e in h.events.iter().step_by(step) {
+        lines.push(format!("  {}", h.render(e)));
+    }
+    lines.push(format!("history microseconds {micros}"));
+    Ok(lines)
 }
 
 const ALL_BIOMES: [WorldBiome; WorldBiome::COUNT] = [
@@ -262,9 +366,14 @@ const ALL_BIOMES: [WorldBiome; WorldBiome::COUNT] = [
 /// gen-world: generate a world, print the stage hashes and statistics.
 #[allow(clippy::disallowed_methods)] // tools may read the clock
 pub fn gen_world(args: &[String]) -> Result<String, String> {
-    let (seed, out) = parse_gen_args(args)?;
+    let GenArgs {
+        seed,
+        out,
+        history,
+        years,
+    } = parse_gen_args(args)?;
     let start = std::time::Instant::now();
-    let w = generate_world(seed, &WorldParams::default());
+    let w = try_generate_world(seed, &WorldParams::default()).map_err(|e| e.to_string())?;
     let micros = start.elapsed().as_micros();
     let mut lines = vec![format!("seed {seed}")];
     for stage in Stage::ALL {
@@ -313,6 +422,9 @@ pub fn gen_world(args: &[String]) -> Result<String, String> {
     lines.push(format!("region edges {}", r.edges.len()));
     lines.push(format!("region repaired deposits {}", r.repaired.len()));
     lines.push(format!("generation microseconds {micros}"));
+    if history {
+        lines.extend(history_report(&w, years)?);
+    }
     if let Some(dir) = out {
         write_layers(&w, &dir)?;
         lines.push(format!("layers written to {dir}"));

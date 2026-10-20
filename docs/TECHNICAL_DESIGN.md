@@ -241,6 +241,7 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 - Homeostasis: keep 2 to 8 civilizations alive. Spawn migrants if there are too few. Increase collapse pressure if there are too many.
 - Hard limits: civilizations ≤ 32 (≤ 8 alive), settlements ≤ 600, figures ≤ 2,000, artifacts ≤ 300, sites ≤ 1,500, events ≤ 50,000. At a limit, the history skips rolls of that kind in a deterministic way.
 - Cell overlays at the end: owner, road, depletion (`u8`), sanctity (`i8`).
+- Implementation (Sprint 10): `generate_history(&WorldData, years)` returns `History`. It has its own seed (`mix(world seed ^ tag)`) and two hashes (`HistoryStage`: records, overlays). It does not change `WorldData`. A short history is a prefix of a long history, because the loop does not read the number of years. Regions with fewer than 24 cells are ignored (D-053). Each region holds at most one settlement. A civilization loses its last settlement only if more than 2 civilizations are alive. This keeps the alive count in the range 2 to 8 by construction. Figures are not in Sprint 10 (D-055).
 
 ### 8.2 Local map generation
 
@@ -268,6 +269,7 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 ## 10. Content data (D-014)
 
 - RON files in `assets/content/`: materials, rocks, deposits, items, buildings, recipes, crops, wild plants, creatures, site templates, legend templates, chronicle templates.
+- `worldgen` also embeds `history.ron`, `cultures.ron`, and `event_templates.ron` (D-054). `history.ron` holds all history numbers. `cultures.ron` holds the culture drives. `event_templates.ron` holds one template for each event type, in `EventKind` order.
 - `worldgen` does no file I/O. It embeds `rocks.ron` and `deposits.ron` with `include_str!` and parses them once with `base::content` (`load_rocks`, `load_minerals`). The file order feeds the hashes and must match the `Rock`, `Setting`, and `Mineral` enums. `rocks.ron` has `rocks` and `settings` (each with a `pool`). `deposits.ron` has `minerals` (each with an `affinity` list).
 - All numbers in content are integers: tenths of °C, per-mille (‰), or whole units. The loader refuses float literals.
 - Load into `Raw*` structs with `serde`. Then validate and link into `Content`:
