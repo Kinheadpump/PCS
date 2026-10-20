@@ -1,6 +1,6 @@
 # Infinite World Study (S11a, Q-016)
 
-Status: Draft for the owner decision. This study is a design spike. It adds no feature to the game.
+Status: Accepted by the owner on 2026-10-20 (D-073). This study is a design spike. It adds no feature to the game.
 
 Writing rule: This document uses ASD-STE 100 Simplified Technical English. Code names are written as `code`.
 
