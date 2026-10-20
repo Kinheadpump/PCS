@@ -99,6 +99,8 @@ Work continues with the recommended choice until the owner answers.
 | D-058 | Hearth: fuel is stored in burning hours (capacity 48). It burns 1 hour per game hour. Firewood and coal give 4 hours per unit. A hearth with 24 hours or less gets a refuel haul job. A new hearth starts with 0 fuel. Without fuel it gives no heat. |
 | D-059 | Water with 3 or more tiles to land is deep and never freezes. Ice is global. 3 days with a mean below 0 °C freeze shallow water. 3 days above 0 °C thaw it. A colonist on ice at thaw moves to the nearest land tile. |
 | D-060 | Alerts are computed on demand and are not saved. Low fuel: less than 12 hours left. Cold period: offset of −6.0 °C or lower today or in the forecast. Save format version is 4. Golden hashes changed: `sim_ascii_600_ticks` eff68292bc9965e5 to 55c702b6c5485075, `sim_forest_seed1_1000_ticks` 407cda27705b85dc to e88cd008435bccc4. |
+| D-061 | The HUD shows no help panel, no key legend, and no hint lines. Tooltips are short and show on hover only. The explanations move to a tutorial in a later sprint. The top bar has the clock, the date, the speed buttons, and the colonist count. The layout reserves a slot for the temperature readout and a strip for alerts (Sprint 5). |
+| D-062 | F4 shows a debug text (tick, state hash, FPS, zoom, map, hover tile). The developer hook `PCS_WINDOW=<w>x<h>` sets the window size for screenshots. |
 
 ## 3. Assumptions
 
