@@ -159,27 +159,29 @@ pub const PETALS: [Rgb; 4] = [
 pub mod ui {
     use super::Rgb;
     /// Outer line of a panel and the text shadow.
-    pub const INK: Rgb = [14, 12, 24];
+    pub const INK: Rgb = [12, 10, 22];
     /// Panel fill.
-    pub const PANEL: Rgb = [30, 32, 52];
+    pub const PANEL: Rgb = [26, 28, 48];
     /// Light bevel line (top and left) of a panel.
-    pub const PANEL_LIGHT: Rgb = [74, 80, 118];
+    pub const PANEL_LIGHT: Rgb = [66, 72, 110];
     /// Dark bevel line (bottom and right) of a panel.
-    pub const PANEL_DARK: Rgb = [18, 18, 32];
+    pub const PANEL_DARK: Rgb = [16, 16, 30];
+    /// Fill of a title strip and of a recessed field.
+    pub const HEADER: Rgb = [38, 42, 72];
     /// Button fill, hover fill, and active fill.
-    pub const BUTTON: Rgb = [46, 50, 78];
+    pub const BUTTON: Rgb = [44, 48, 78];
     /// Button fill under the mouse.
-    pub const BUTTON_HOVER: Rgb = [66, 74, 112];
+    pub const BUTTON_HOVER: Rgb = [66, 74, 114];
     /// Button fill of the chosen tool or speed.
-    pub const BUTTON_ACTIVE: Rgb = [36, 112, 96];
+    pub const BUTTON_ACTIVE: Rgb = [36, 118, 100];
     /// Main text.
     pub const TEXT: Rgb = [242, 238, 228];
     /// Titles.
     pub const ACCENT: Rgb = [150, 218, 226];
     /// Hints and section headings.
-    pub const DIM: Rgb = [146, 154, 184];
+    pub const DIM: Rgb = [136, 144, 176];
     /// Keys of key and value rows.
-    pub const KEY: Rgb = [186, 190, 212];
+    pub const KEY: Rgb = [180, 186, 210];
     /// The selection color. Yellow is for selection only.
     pub const SELECT: Rgb = [255, 242, 51];
 }
@@ -203,6 +205,7 @@ pub fn swatches() -> Vec<(&'static str, Vec<Rgb>)> {
                 ui::PANEL,
                 ui::PANEL_LIGHT,
                 ui::PANEL_DARK,
+                ui::HEADER,
                 ui::BUTTON,
                 ui::BUTTON_HOVER,
                 ui::BUTTON_ACTIVE,

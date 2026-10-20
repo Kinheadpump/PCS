@@ -30,6 +30,7 @@ pub fn shape_of(kind: BuildingKind) -> Shape {
 }
 
 /// Text that tells how to drag, for the build panel.
+#[cfg(test)]
 pub fn shape_hint(shape: Shape) -> &'static str {
     match shape {
         Shape::Point => "Click a tile",

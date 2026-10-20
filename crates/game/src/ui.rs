@@ -1,8 +1,10 @@
-//! Small immediate-mode interface: panel, label, button, key and value panel, and the
-//! layouts of the work panel. It reads game state and returns `UiAction` values. It never
-//! changes the `Sim` (AGENTS.md code rules). Layout is pure math, so tests run without a window.
+//! Small immediate-mode interface: framed panels, icon buttons, chips, folds, tooltips, and the
+//! layouts of the panels. It reads game state and returns `UiAction` values. It never changes
+//! the `Sim` (AGENTS.md code rules). Layout is pure math, so tests run without a window.
+//!
+//! All sizes are multiples of `PX`, one font pixel (2 screen pixels), so that frames, text, and
+//! icons sit on one pixel grid.
 
-use crate::clock::{SPEEDS, speed_label};
 use crate::font;
 use crate::icons;
 use crate::palette::ui as pal;
@@ -11,45 +13,56 @@ use crate::tools::Tool;
 use macroquad::prelude::{Color, draw_rectangle};
 use sim::time::{GameTime, Season};
 use sim::{ColonistId, Command, JobKind, Speed};
+use std::cell::RefCell;
 
 /// Screen pixels per font pixel.
 pub const SCALE: u32 = 2;
 /// Padding inside a panel, in screen pixels.
-pub const PAD: f32 = 8.0;
+pub const PAD: f32 = 10.0;
 /// Gap between buttons, in screen pixels.
 pub const GAP: f32 = 4.0;
 /// Height of a text line.
 pub const LINE_H: f32 = (font::GLYPH_H * SCALE) as f32 + 4.0;
-/// Height of a button.
-pub const BUTTON_H: f32 = (font::GLYPH_H * SCALE) as f32 + 8.0;
+/// Height of a text button and of a chip.
+pub const BUTTON_H: f32 = (font::GLYPH_H * SCALE) as f32 + 12.0;
 /// Horizontal padding inside a button.
-const BUTTON_PAD: f32 = 8.0;
+const BUTTON_PAD: f32 = 10.0;
 /// Height of a row in a key and value panel.
-pub const ROW_H: f32 = (font::GLYPH_H * SCALE) as f32 + 2.0;
-/// Extra space above a section heading.
+pub const ROW_H: f32 = (font::GLYPH_H * SCALE) as f32 + 4.0;
+/// Height of a fold header row.
+const FOLD_H: f32 = ROW_H + 4.0;
+/// Extra space above a section heading and a fold.
 const SECTION_GAP: f32 = 6.0;
 /// Space between the key column and the value column.
-const KEY_GAP: f32 = 16.0;
+const KEY_GAP: f32 = 24.0;
 /// Width of a priority cell in the work panel.
-pub const CELL_W: f32 = 56.0;
+pub const CELL_W: f32 = 48.0;
 /// Height of a row in the work panel.
 pub const WORK_ROW_H: f32 = BUTTON_H - 2.0;
+/// Height of the title strip of a panel.
+pub const TITLE_H: f32 = 36.0;
+/// Side of the close button.
+pub const CLOSE_W: f32 = 28.0;
+/// Side of a square icon button.
+pub const ICON_BUTTON: f32 = 44.0;
+/// Size of an icon cell on the screen: 2 screen pixels for each icon pixel.
+pub const ICON_PX: f32 = 32.0;
+/// Width that a fold chevron takes left of the fold label.
+const FOLD_INDENT: f32 = 20.0;
 
 /// Size of one interface pixel in screen pixels: a font pixel. Frames use the same grid.
 const PX: f32 = SCALE as f32;
-/// Width of an icon in a button, in screen pixels.
-pub const ICON_W: f32 = 16.0;
 
 fn text_color() -> Color {
     rgb_color(pal::TEXT, 255)
 }
 
-/// Title text color of a key and value panel.
+/// Title text color.
 pub fn accent() -> Color {
     rgb_color(pal::ACCENT, 255)
 }
 
-/// Section heading and hint text color.
+/// Section heading and secondary text color.
 pub fn dim() -> Color {
     rgb_color(pal::DIM, 255)
 }
@@ -58,7 +71,7 @@ fn key_color() -> Color {
     rgb_color(pal::KEY, 255)
 }
 
-/// Draw a box with a hard 1 pixel outline, rounded corners (one pixel cut), and a bevel: light on
+/// Draw a box with a hard outline, rounded corners (one pixel cut), and a bevel: light on
 /// the top and left, dark on the bottom and right. `sunk` swaps the bevel. Pixels are `PX` big.
 pub fn draw_frame(r: Rect, fill: Color, light: Color, dark: Color, ink: Color, sunk: bool) {
     let (x, y, w, h) = (r.x.round(), r.y.round(), r.w.round(), r.h.round());
@@ -147,6 +160,17 @@ impl Rect {
     }
 }
 
+/// A part of a panel that the player can fold: it shows its rows or only its heading.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Fold {
+    /// The skills of the colonist panel.
+    Skills,
+    /// The work speeds of the colonist panel (a why chain).
+    WorkSpeed,
+    /// The why chains of the room part of the tile panel.
+    Details,
+}
+
 /// What the interface asks the game to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UiAction {
@@ -164,6 +188,12 @@ pub enum UiAction {
     PickBuilding(usize),
     /// The player chose a material in the build panel (material index).
     PickMaterial(u16),
+    /// The player opened or closed a fold.
+    ToggleFold(Fold),
+    /// The player closed the colonist panel.
+    CloseColonist,
+    /// The player closed the tile panel and the panels that belong to it.
+    CloseTile,
     /// A command for the sim: a priority change, a stockpile change, or a craft order.
     Command(Command),
 }
@@ -179,6 +209,9 @@ pub enum Row {
     Pair(String, String),
     /// A plain line.
     Line(String),
+    /// A heading that the player can click to show or hide the rows below it. The flag is
+    /// true if the rows show.
+    Fold(String, bool),
 }
 
 /// Width of a text on screen, in pixels.
@@ -254,12 +287,16 @@ pub fn hud_layout(
     }
 }
 
+/// The tooltip of the frame: the rectangle of the widget and the text.
+type Tip = Option<(Rect, String)>;
+
 /// Immediate-mode UI for one frame.
 pub struct Ui {
     mouse: (f32, f32),
     click: Option<(f32, f32)>,
     right_click: Option<(f32, f32)>,
     panels: Vec<Rect>,
+    tip: RefCell<Tip>,
 }
 
 /// Which mouse buttons clicked a widget in this frame.
@@ -279,6 +316,7 @@ impl Ui {
             click,
             right_click: None,
             panels: Vec::new(),
+            tip: RefCell::new(None),
         }
     }
 
@@ -298,17 +336,76 @@ impl Ui {
         self.panels.iter().any(|r| r.contains(p))
     }
 
-    /// Draw a panel background.
+    /// Draw a panel background: a soft shadow and a frame with a bevel.
     pub fn panel(&mut self, r: Rect) {
+        let ink = rgb_color(pal::INK, 255);
+        draw_rectangle(
+            r.x + 2.0 * PX,
+            r.y + 2.0 * PX,
+            r.w,
+            r.h,
+            Color::new(ink.r, ink.g, ink.b, 0.38),
+        );
         draw_frame(
             r,
-            rgb_color(pal::PANEL, 244),
+            rgb_color(pal::PANEL, 246),
             rgb_color(pal::PANEL_LIGHT, 255),
             rgb_color(pal::PANEL_DARK, 255),
-            rgb_color(pal::INK, 255),
+            ink,
             false,
         );
         self.panels.push(r);
+    }
+
+    /// Draw a panel with a title strip and a close button. Returns true if the player
+    /// clicked the close button in this frame.
+    pub fn titled_panel(&mut self, r: Rect, title: &str, close: Option<Rect>) -> bool {
+        self.panel(r);
+        let bar = Rect::new(
+            r.x + 2.0 * PX,
+            r.y + 2.0 * PX,
+            r.w - 4.0 * PX,
+            TITLE_H - 2.0 * PX,
+        );
+        draw_rectangle(bar.x, bar.y, bar.w, bar.h, rgb_color(pal::HEADER, 255));
+        draw_rectangle(
+            bar.x,
+            bar.bottom(),
+            bar.w,
+            PX,
+            rgb_color(pal::PANEL_DARK, 255),
+        );
+        let ty = r.y + (TITLE_H - (font::GLYPH_H * SCALE) as f32) / 2.0;
+        self.label_color((r.x + PAD, ty.round()), title, accent());
+        close.is_some_and(|c| self.close_button(c))
+    }
+
+    /// Draw the bar at the top of the window. It has a shadow at the bottom edge.
+    pub fn bar(&mut self, r: Rect) {
+        let ink = rgb_color(pal::INK, 255);
+        draw_rectangle(
+            r.x,
+            r.bottom(),
+            r.w,
+            2.0 * PX,
+            Color::new(ink.r, ink.g, ink.b, 0.38),
+        );
+        draw_rectangle(r.x, r.y, r.w, r.h, rgb_color(pal::PANEL, 250));
+        draw_rectangle(
+            r.x,
+            r.bottom() - 3.0 * PX,
+            r.w,
+            PX,
+            rgb_color(pal::PANEL_LIGHT, 255),
+        );
+        draw_rectangle(r.x, r.bottom() - 2.0 * PX, r.w, 2.0 * PX, ink);
+        self.panels.push(r);
+    }
+
+    /// Draw a thin dividing line.
+    pub fn rule(&self, x: f32, y: f32, w: f32) {
+        draw_rectangle(x, y, w, PX, rgb_color(pal::PANEL_DARK, 255));
+        draw_rectangle(x, y + PX, w, PX, rgb_color(pal::PANEL_LIGHT, 120));
     }
 
     /// Draw a text label at a top left corner.
@@ -319,6 +416,11 @@ impl Ui {
     /// Draw a text label in a color.
     pub fn label_color(&self, pos: (f32, f32), text: &str, color: Color) {
         shadow_text(text, pos.0, pos.1, color);
+    }
+
+    /// Draw an icon in a square at a position. `size` is a multiple of 16.
+    pub fn icon(&self, cell: usize, pos: (f32, f32), size: f32, color: Color) {
+        icons::draw(cell, pos.0, pos.1, size, color);
     }
 
     fn button_frame(&self, r: Rect, fill: Color, pressed: bool) {
@@ -337,26 +439,100 @@ impl Ui {
         }
     }
 
-    /// Draw a button. Returns true if the player clicked it in this frame.
+    fn clicked(&self, r: Rect) -> bool {
+        self.click.is_some_and(|c| r.contains(c))
+    }
+
+    /// Remember a tooltip for a widget. The mouse must be over it.
+    pub fn tip(&self, r: Rect, text: &str) {
+        if r.contains(self.mouse) && !text.is_empty() {
+            *self.tip.borrow_mut() = Some((r, text.to_owned()));
+        }
+    }
+
+    /// Draw a button with a text. Returns true if the player clicked it in this frame.
     pub fn button(&self, r: Rect, text: &str, active: bool) -> bool {
         self.button_frame(r, self.state_color(r, active), active);
         let drop = f32::from(u8::from(active));
         let tx = r.x + (r.w - text_px(text)) / 2.0;
         let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0 + drop;
         shadow_text(text, tx.round(), ty.round(), text_color());
-        self.click.is_some_and(|c| r.contains(c))
+        self.clicked(r)
     }
 
-    /// Draw a button with an icon at the left and a text. Returns true if clicked in this frame.
-    pub fn icon_button(&self, r: Rect, icon: usize, text: &str, active: bool) -> bool {
+    /// Draw a button with an icon and no text. The tooltip shows when the mouse is over it.
+    /// Returns true if the player clicked it in this frame.
+    pub fn icon_button(&self, r: Rect, icon: usize, active: bool, tip: &str) -> bool {
+        self.button_frame(r, self.state_color(r, active), active);
+        let drop = f32::from(u8::from(active)) * PX;
+        let color = if active || r.contains(self.mouse) {
+            text_color()
+        } else {
+            key_color()
+        };
+        let pos = (
+            r.x + (r.w - ICON_PX) / 2.0,
+            r.y + (r.h - ICON_PX) / 2.0 + drop,
+        );
+        self.icon(icon, pos, ICON_PX, color);
+        self.tip(r, tip);
+        self.clicked(r)
+    }
+
+    /// Draw a chip: a button with a small color swatch and a text.
+    pub fn chip(&self, r: Rect, text: &str, swatch: Option<Color>, active: bool) -> bool {
         self.button_frame(r, self.state_color(r, active), active);
         let drop = f32::from(u8::from(active));
-        let iy = r.y + (r.h - ICON_W) / 2.0 + drop;
-        icons::draw(icon, r.x + BUTTON_PAD - 2.0, iy, ICON_W, text_color());
-        let tx = r.x + BUTTON_PAD - 2.0 + ICON_W + GAP;
+        let mut tx = r.x + BUTTON_PAD;
+        if let Some(c) = swatch {
+            let s = 4.0 * PX;
+            let sy = (r.y + (r.h - s) / 2.0 + drop).round();
+            draw_rectangle(
+                tx - PX,
+                sy - PX,
+                s + 2.0 * PX,
+                s + 2.0 * PX,
+                rgb_color(pal::INK, 255),
+            );
+            draw_rectangle(tx, sy, s, s, c);
+            tx += s + GAP + PX;
+        }
         let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0 + drop;
         shadow_text(text, tx.round(), ty.round(), text_color());
-        self.click.is_some_and(|c| r.contains(c))
+        self.clicked(r)
+    }
+
+    /// Draw the close button of a panel. Returns true if clicked in this frame.
+    pub fn close_button(&self, r: Rect) -> bool {
+        let hover = r.contains(self.mouse);
+        if hover {
+            self.button_frame(r, rgb_color(pal::BUTTON_HOVER, 255), false);
+        }
+        let color = if hover { text_color() } else { dim() };
+        let pos = (r.x + (r.w - ICON_PX) / 2.0, r.y + (r.h - ICON_PX) / 2.0);
+        self.icon(crate::cells::icons::CLOSE, pos, ICON_PX, color);
+        self.tip(r, "Close");
+        self.clicked(r)
+    }
+
+    /// Draw a fold heading: a chevron and a label. Returns true if clicked in this frame.
+    pub fn fold_header(&self, r: Rect, label: &str, open: bool) -> bool {
+        let hover = r.contains(self.mouse);
+        let cell = if open {
+            crate::cells::icons::CHEVRON_DOWN
+        } else {
+            crate::cells::icons::CHEVRON_RIGHT
+        };
+        let color = if hover { text_color() } else { dim() };
+        self.icon(
+            cell,
+            (r.x - 8.0, r.y + (r.h - ICON_PX) / 2.0),
+            ICON_PX,
+            color,
+        );
+        let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
+        self.label_color((r.x + FOLD_INDENT, ty.round()), label, color);
+        self.clicked(r)
     }
 
     /// Draw a button with a given fill. Hover makes it lighter. Returns which mouse
@@ -369,10 +545,43 @@ impl Ui {
         let ty = r.y + (r.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
         shadow_text(text, tx.round(), ty.round(), text_color());
         Press {
-            left: self.click.is_some_and(|c| r.contains(c)),
+            left: self.clicked(r),
             right: self.right_click.is_some_and(|c| r.contains(c)),
         }
     }
+
+    /// Draw the tooltip of the frame, if any. Call it last, so that it lies over all panels.
+    pub fn finish(&self, view: (f32, f32)) {
+        let Some((r, text)) = self.tip.borrow_mut().take() else {
+            return;
+        };
+        let tip = tooltip_rect(r, &text, view);
+        draw_frame(
+            tip,
+            rgb_color(pal::INK, 250),
+            rgb_color(pal::PANEL_LIGHT, 255),
+            rgb_color(pal::PANEL_DARK, 255),
+            rgb_color(pal::INK, 255),
+            false,
+        );
+        let ty = tip.y + (tip.h - (font::GLYPH_H * SCALE) as f32) / 2.0;
+        shadow_text(&text, (tip.x + 8.0).round(), ty.round(), text_color());
+    }
+}
+
+/// Where the tooltip of a widget goes: above it, or below it if there is no room above, and
+/// always inside the window.
+pub fn tooltip_rect(target: Rect, text: &str, view: (f32, f32)) -> Rect {
+    let w = text_px(text) + 16.0;
+    let h = 28.0;
+    let above = target.y - h - GAP;
+    let y = if above >= 0.0 {
+        above
+    } else {
+        target.bottom() + GAP
+    };
+    let x = (target.x + (target.w - w) / 2.0).clamp(0.0, (view.0 - w).max(0.0));
+    Rect::new(x.round(), y.round(), w, h)
 }
 
 /// Draw a panel with text lines only.
@@ -394,10 +603,15 @@ pub struct RowsLayout {
     pub panel: Rect,
     /// For each row: the position of its text, and the position of its value (pairs only).
     pub rows: Vec<RowPos>,
+    /// The close button, if the panel has one.
+    pub close: Option<Rect>,
+    /// The clickable rectangle of each fold row, in row order.
+    pub folds: Vec<Rect>,
 }
 
-/// Lay out a key and value panel. Keys line up in one column, values in the next.
-pub fn rows_layout(origin: (f32, f32), rows: &[Row]) -> RowsLayout {
+/// Lay out a key and value panel. Keys line up in one column, values in the next. A `Title`
+/// row goes in the title strip. A panel with `closable` has a close button in the strip.
+pub fn rows_layout(origin: (f32, f32), rows: &[Row], closable: bool) -> RowsLayout {
     let key_w = rows
         .iter()
         .filter_map(|r| match r {
@@ -405,97 +619,172 @@ pub fn rows_layout(origin: (f32, f32), rows: &[Row]) -> RowsLayout {
             _ => None,
         })
         .fold(0.0_f32, f32::max);
+    let close_w = if closable { CLOSE_W + GAP } else { 0.0 };
     let inner_w = rows
         .iter()
         .map(|r| match r {
-            Row::Title(t) | Row::Section(t) | Row::Line(t) => text_px(t),
+            Row::Title(t) => text_px(t) + close_w,
+            Row::Section(t) | Row::Line(t) => text_px(t),
+            Row::Fold(t, _) => FOLD_INDENT + text_px(t),
             Row::Pair(_, v) => key_w + KEY_GAP + text_px(v),
         })
         .fold(0.0_f32, f32::max);
+    let inner_w = inner_w.max(if closable { 220.0 } else { 0.0 });
+    let panel_w = inner_w + 2.0 * PAD;
     let x = origin.0 + PAD;
     let mut y = origin.1 + PAD;
     let mut out = Vec::new();
+    let mut folds = Vec::new();
+    let mut close = None;
     for (i, row) in rows.iter().enumerate() {
-        if matches!(row, Row::Section(_)) && i > 0 {
+        if matches!(row, Row::Title(_)) {
+            out.push(((x, origin.1), None));
+            y = origin.1 + TITLE_H + PAD / 2.0;
+            if closable {
+                close = Some(close_rect(origin, panel_w));
+            }
+            continue;
+        }
+        if matches!(row, Row::Section(_) | Row::Fold(..)) && i > 0 {
             y += SECTION_GAP;
         }
         let value = matches!(row, Row::Pair(..)).then_some((x + key_w + KEY_GAP, y));
         out.push(((x, y), value));
-        y += ROW_H;
+        if matches!(row, Row::Fold(..)) {
+            folds.push(Rect::new(x, y, inner_w, FOLD_H));
+            y += FOLD_H;
+        } else {
+            y += ROW_H;
+        }
     }
     RowsLayout {
-        panel: Rect::new(
-            origin.0,
-            origin.1,
-            inner_w + 2.0 * PAD,
-            y - origin.1 + PAD - 2.0,
-        ),
+        panel: Rect::new(origin.0, origin.1, panel_w, y - origin.1 + PAD - 2.0),
         rows: out,
+        close,
+        folds,
     }
 }
 
-/// Draw a key and value panel. Returns its rectangle.
-pub fn rows_panel(ui: &mut Ui, origin: (f32, f32), rows: &[Row]) -> Rect {
-    let layout = rows_layout(origin, rows);
-    ui.panel(layout.panel);
+/// What the player did in a key and value panel in this frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RowsHit {
+    /// The index (among the fold rows) of the fold that the player clicked.
+    pub fold: Option<usize>,
+    /// True if the player clicked the close button.
+    pub closed: bool,
+}
+
+/// Draw a key and value panel. Returns its rectangle and the clicks of this frame.
+pub fn rows_panel(
+    ui: &mut Ui,
+    origin: (f32, f32),
+    rows: &[Row],
+    closable: bool,
+) -> (Rect, RowsHit) {
+    let layout = rows_layout(origin, rows, closable);
+    let title = rows.iter().find_map(|r| match r {
+        Row::Title(t) => Some(t.as_str()),
+        _ => None,
+    });
+    let mut hit = RowsHit::default();
+    match title {
+        Some(t) => hit.closed = ui.titled_panel(layout.panel, t, layout.close),
+        None => ui.panel(layout.panel),
+    }
+    let mut fold_index = 0;
     for (row, (pos, value)) in rows.iter().zip(&layout.rows) {
         match row {
-            Row::Title(t) => ui.label_color(*pos, t, accent()),
+            Row::Title(_) => {}
             Row::Section(t) => ui.label_color(*pos, t, dim()),
-            Row::Line(t) => ui.label(*pos, t),
+            Row::Line(t) => ui.label_color(*pos, t, key_color()),
             Row::Pair(k, v) => {
                 ui.label_color(*pos, k, key_color());
                 if let Some(vp) = value {
                     ui.label(*vp, v);
                 }
             }
+            Row::Fold(t, open) => {
+                if let Some(r) = layout.folds.get(fold_index)
+                    && ui.fold_header(*r, t, *open)
+                {
+                    hit.fold = Some(fold_index);
+                }
+                fold_index += 1;
+            }
         }
     }
-    layout.panel
+    (layout.panel, hit)
 }
 
-/// Positions of a panel with a header line and wrapped buttons.
-#[derive(Clone, Debug, PartialEq)]
-pub struct GridLayout {
-    /// The panel rectangle.
-    pub panel: Rect,
-    /// Top left corner of the header text.
-    pub header: (f32, f32),
-    /// One rectangle for each button.
-    pub buttons: Vec<Rect>,
-}
-
-/// Lay out a header line and buttons that wrap at `max_inner_w` pixels.
-pub fn grid_layout(
-    origin: (f32, f32),
-    header: &str,
+/// Lay out chips that wrap at `max_w` pixels. Returns the rectangles, the width that the
+/// rows use, and the y below the last row.
+pub fn flow_chips(
+    x0: f32,
+    y0: f32,
     labels: &[String],
-    max_inner_w: f32,
-) -> GridLayout {
-    let x0 = origin.0 + PAD;
-    let header_pos = (x0, origin.1 + PAD);
-    let mut y = origin.1 + PAD + ROW_H + GAP;
-    let mut x = x0;
-    let mut used_w = text_px(header);
-    let mut buttons = Vec::new();
+    extra_w: f32,
+    max_w: f32,
+) -> (Vec<Rect>, f32, f32) {
+    let (mut x, mut y) = (x0, y0);
+    let mut used = 0.0_f32;
+    let mut out = Vec::new();
     for label in labels {
-        let w = text_px(label) + 2.0 * BUTTON_PAD;
-        if x > x0 && x + w > x0 + max_inner_w {
+        let w = text_px(label) + 2.0 * BUTTON_PAD + extra_w;
+        if x > x0 && x + w > x0 + max_w {
             x = x0;
             y += BUTTON_H + GAP;
         }
-        buttons.push(Rect::new(x, y, w, BUTTON_H));
+        out.push(Rect::new(x, y, w, BUTTON_H));
         x += w + GAP;
-        used_w = used_w.max(x - GAP - x0);
+        used = used.max(x - GAP - x0);
     }
     if !labels.is_empty() {
         y += BUTTON_H;
     }
+    (out, used, y)
+}
+
+/// Extra width of a chip with a color swatch.
+pub const SWATCH_W: f32 = 4.0 * PX + GAP + PX;
+
+/// Positions of a panel with a title and wrapped chips (the stockpile panel).
+#[derive(Clone, Debug, PartialEq)]
+pub struct GridLayout {
+    /// The panel rectangle.
+    pub panel: Rect,
+    /// The close button.
+    pub close: Rect,
+    /// One rectangle for each chip.
+    pub buttons: Vec<Rect>,
+}
+
+/// Lay out a title strip and chips that wrap at `max_inner_w` pixels.
+pub fn grid_layout(
+    origin: (f32, f32),
+    title: &str,
+    labels: &[String],
+    max_inner_w: f32,
+) -> GridLayout {
+    let x0 = origin.0 + PAD;
+    let (buttons, used, y) =
+        flow_chips(x0, origin.1 + TITLE_H + PAD, labels, SWATCH_W, max_inner_w);
+    let inner_w = used.max(text_px(title) + CLOSE_W + 2.0 * GAP);
+    let w = inner_w + 2.0 * PAD;
     GridLayout {
-        panel: Rect::new(origin.0, origin.1, used_w + 2.0 * PAD, y - origin.1 + PAD),
-        header: header_pos,
+        panel: Rect::new(origin.0, origin.1, w, y - origin.1 + PAD),
+        close: close_rect(origin, w),
         buttons,
     }
+}
+
+/// The close button of a panel with the given origin and width.
+pub fn close_rect(origin: (f32, f32), w: f32) -> Rect {
+    Rect::new(
+        origin.0 + w - CLOSE_W - 6.0,
+        origin.1 + (TITLE_H - CLOSE_W) / 2.0,
+        CLOSE_W,
+        CLOSE_W,
+    )
 }
 
 /// Positions of the work panel: a table of colonists and job types.
@@ -503,10 +792,8 @@ pub fn grid_layout(
 pub struct WorkLayout {
     /// The panel rectangle.
     pub panel: Rect,
-    /// Top left corner of the title.
-    pub title: (f32, f32),
-    /// Top left corner of the hint line.
-    pub hint: (f32, f32),
+    /// The close button.
+    pub close: Rect,
     /// Top left corner of the label of each job type column.
     pub headers: Vec<(f32, f32)>,
     /// The colonist name button of each row.
@@ -516,7 +803,7 @@ pub struct WorkLayout {
 }
 
 /// Lay out the work panel for colonists with the given names.
-pub fn work_layout(origin: (f32, f32), names: &[String], hint: &str) -> WorkLayout {
+pub fn work_layout(origin: (f32, f32), names: &[String]) -> WorkLayout {
     let name_w = names
         .iter()
         .map(|n| text_px(n))
@@ -524,16 +811,15 @@ pub fn work_layout(origin: (f32, f32), names: &[String], hint: &str) -> WorkLayo
         + 2.0 * BUTTON_PAD;
     let x0 = origin.0 + PAD;
     let table_w = name_w + (CELL_W + GAP) * JobKind::COUNT as f32;
-    let inner_w = table_w.max(text_px(hint)).max(text_px("Work priorities"));
-    let title = (x0, origin.1 + PAD);
-    let hint_pos = (x0, title.1 + ROW_H);
-    let header_y = hint_pos.1 + ROW_H + GAP;
+    let inner_w = table_w.max(text_px("Work priorities") + CLOSE_W + 2.0 * GAP);
+    let header_y = origin.1 + TITLE_H + PAD;
     let cell_x = |k: usize| x0 + name_w + GAP + k as f32 * (CELL_W + GAP);
     let headers = JobKind::ALL
         .iter()
         .enumerate()
         .map(|(k, kind)| {
-            let w = text_px(kind.name());
+            let label: String = kind.name().chars().take(3).collect();
+            let w = text_px(&label);
             (cell_x(k) + (CELL_W - w) / 2.0, header_y)
         })
         .collect();
@@ -549,65 +835,14 @@ pub fn work_layout(origin: (f32, f32), names: &[String], hint: &str) -> WorkLayo
         );
         y += WORK_ROW_H + 2.0;
     }
+    let w = inner_w + 2.0 * PAD;
     WorkLayout {
-        panel: Rect::new(
-            origin.0,
-            origin.1,
-            inner_w + 2.0 * PAD,
-            y - origin.1 + PAD - 2.0,
-        ),
-        title,
-        hint: hint_pos,
+        panel: Rect::new(origin.0, origin.1, w, y - origin.1 + PAD - 2.0),
+        close: close_rect(origin, w),
         headers,
         names: name_rects,
         cells,
     }
-}
-
-/// Lay out a toolbar as one column of buttons of equal width, each with an icon and a label.
-pub fn column_layout(origin: (f32, f32), labels: &[&str]) -> HudLayout {
-    let w =
-        labels.iter().map(|l| text_px(l)).fold(0.0_f32, f32::max) + 2.0 * BUTTON_PAD + ICON_W + GAP
-            - 4.0;
-    let mut buttons = Vec::new();
-    let (x, mut y) = (origin.0 + PAD, origin.1 + PAD);
-    for _ in labels {
-        buttons.push(Rect::new(x, y, w, BUTTON_H));
-        y += BUTTON_H + GAP;
-    }
-    let h = if labels.is_empty() {
-        0.0
-    } else {
-        y - GAP - origin.1 + PAD
-    };
-    HudLayout {
-        panel: Rect::new(origin.0, origin.1, w + 2.0 * PAD, h),
-        before: Vec::new(),
-        buttons,
-        after: Vec::new(),
-    }
-}
-
-/// Place buttons in rows that wrap at `max_w`. Returns the rectangles, the width that the
-/// rows use, and the y below the last row.
-fn flow_buttons(x0: f32, y0: f32, labels: &[String], max_w: f32) -> (Vec<Rect>, f32, f32) {
-    let (mut x, mut y) = (x0, y0);
-    let mut used = 0.0_f32;
-    let mut out = Vec::new();
-    for label in labels {
-        let w = text_px(label) + 2.0 * BUTTON_PAD;
-        if x > x0 && x + w > x0 + max_w {
-            x = x0;
-            y += BUTTON_H + GAP;
-        }
-        out.push(Rect::new(x, y, w, BUTTON_H));
-        x += w + GAP;
-        used = used.max(x - GAP - x0);
-    }
-    if !labels.is_empty() {
-        y += BUTTON_H;
-    }
-    (out, used, y)
 }
 
 /// Positions of the build panel.
@@ -615,38 +850,35 @@ fn flow_buttons(x0: f32, y0: f32, labels: &[String], max_w: f32) -> (Vec<Rect>, 
 pub struct BuildLayout {
     /// The panel rectangle.
     pub panel: Rect,
-    /// Top left corner of the title.
-    pub title: (f32, f32),
-    /// One button for each building type.
+    /// The close button.
+    pub close: Rect,
+    /// One chip for each building type.
     pub buildings: Vec<Rect>,
-    /// Top left corner of the material header.
-    pub material_header: (f32, f32),
-    /// One button for each material.
+    /// Y of the line between the building chips and the material chips.
+    pub rule_y: f32,
+    /// One chip for each material.
     pub materials: Vec<Rect>,
     /// Top left corner of each text line at the bottom.
     pub lines: Vec<(f32, f32)>,
 }
 
-/// Lay out the build panel: title, building buttons, material header, material buttons, and
-/// text lines. The buttons wrap at `max_inner_w`.
+/// Lay out the build panel: a title strip, building chips, a line, material chips, and text
+/// lines. The chips wrap at `max_inner_w`.
 pub fn build_layout(
     origin: (f32, f32),
     title: &str,
     buildings: &[String],
-    material_header: &str,
     materials: &[String],
     lines: &[String],
     max_inner_w: f32,
 ) -> BuildLayout {
     let x0 = origin.0 + PAD;
-    let title_pos = (x0, origin.1 + PAD);
-    let (b_rects, b_w, y) = flow_buttons(x0, title_pos.1 + ROW_H + GAP, buildings, max_inner_w);
-    let header = (x0, y + GAP + 2.0);
-    let (m_rects, m_w, mut y) = flow_buttons(x0, header.1 + ROW_H + GAP, materials, max_inner_w);
-    if materials.is_empty() {
-        y = header.1 + ROW_H;
-    } else {
-        y += GAP;
+    let (b_rects, b_w, y) = flow_chips(x0, origin.1 + TITLE_H + PAD, buildings, 0.0, max_inner_w);
+    let rule_y = y + GAP + 2.0;
+    let mut y = rule_y + PX * 2.0 + GAP + 2.0;
+    let (m_rects, m_w, my) = flow_chips(x0, y, materials, SWATCH_W, max_inner_w);
+    if !materials.is_empty() {
+        y = my + GAP + 2.0;
     }
     let mut line_pos = Vec::new();
     for _ in lines {
@@ -656,19 +888,15 @@ pub fn build_layout(
     let text_w = lines
         .iter()
         .map(|l| text_px(l))
-        .chain([text_px(title), text_px(material_header)])
+        .chain([text_px(title) + CLOSE_W + 2.0 * GAP])
         .fold(0.0_f32, f32::max);
     let inner_w = b_w.max(m_w).max(text_w);
+    let w = inner_w + 2.0 * PAD;
     BuildLayout {
-        panel: Rect::new(
-            origin.0,
-            origin.1,
-            inner_w + 2.0 * PAD,
-            y - origin.1 + PAD - 2.0,
-        ),
-        title: title_pos,
+        panel: Rect::new(origin.0, origin.1, w, y - origin.1 + PAD - 2.0),
+        close: close_rect(origin, w),
         buildings: b_rects,
-        material_header: header,
+        rule_y,
         materials: m_rects,
         lines: line_pos,
     }
@@ -683,6 +911,8 @@ pub struct RecipeRow {
     pub detail: (f32, f32),
     /// Buttons: add 1, add 5, add 10, clear.
     pub buttons: [Rect; 4],
+    /// Y of the line above the recipe.
+    pub rule_y: f32,
 }
 
 /// Positions of the workshop panel.
@@ -690,8 +920,8 @@ pub struct RecipeRow {
 pub struct WorkshopLayout {
     /// The panel rectangle.
     pub panel: Rect,
-    /// Top left corner of the title.
-    pub title: (f32, f32),
+    /// The close button.
+    pub close: Rect,
     /// Top left corner of each text line under the title.
     pub lines: Vec<(f32, f32)>,
     /// One row for each recipe.
@@ -701,8 +931,8 @@ pub struct WorkshopLayout {
 /// Labels of the four buttons of a recipe row.
 pub const RECIPE_BUTTONS: [&str; 4] = ["+1", "+5", "+10", "Clear"];
 
-/// Lay out the workshop panel: a title, text lines, and for each recipe a name, a detail line,
-/// and a row of buttons.
+/// Lay out the workshop panel: a title strip, text lines, and for each recipe a name, a detail
+/// line, and a row of buttons.
 pub fn workshop_layout(
     origin: (f32, f32),
     title: &str,
@@ -710,8 +940,7 @@ pub fn workshop_layout(
     recipe_labels: &[(String, String)],
 ) -> WorkshopLayout {
     let x0 = origin.0 + PAD;
-    let title_pos = (x0, origin.1 + PAD);
-    let mut y = title_pos.1 + ROW_H;
+    let mut y = origin.1 + TITLE_H + PAD / 2.0;
     let mut line_pos = Vec::new();
     for _ in lines {
         line_pos.push((x0, y));
@@ -724,11 +953,12 @@ pub fn workshop_layout(
     let button_row_w = widths.iter().sum::<f32>() + GAP * 3.0;
     let mut recipes = Vec::new();
     for _ in recipe_labels {
-        y += GAP + 2.0;
+        let rule_y = y + GAP;
+        y += GAP * 2.0 + PX * 2.0;
         let label_pos = (x0, y);
         y += ROW_H;
         let detail_pos = (x0, y);
-        y += ROW_H;
+        y += ROW_H + GAP;
         let mut bx = x0;
         let mut rects = [Rect::new(0.0, 0.0, 0.0, 0.0); 4];
         for (rect, w) in rects.iter_mut().zip(&widths) {
@@ -740,51 +970,22 @@ pub fn workshop_layout(
             label: label_pos,
             detail: detail_pos,
             buttons: rects,
+            rule_y,
         });
     }
     let text_w = lines
         .iter()
         .chain(recipe_labels.iter().flat_map(|(a, b)| [a, b]))
         .map(|l| text_px(l))
-        .chain([text_px(title)])
+        .chain([text_px(title) + CLOSE_W + 2.0 * GAP])
         .fold(0.0_f32, f32::max);
+    let w = text_w.max(button_row_w) + 2.0 * PAD;
     WorkshopLayout {
-        panel: Rect::new(
-            origin.0,
-            origin.1,
-            text_w.max(button_row_w) + 2.0 * PAD,
-            y - origin.1 + PAD,
-        ),
-        title: title_pos,
+        panel: Rect::new(origin.0, origin.1, w, y - origin.1 + PAD),
+        close: close_rect(origin, w),
         lines: line_pos,
         recipes,
     }
-}
-
-/// Draw the status panel: text, speed buttons, more text.
-pub fn status_panel(
-    ui: &mut Ui,
-    origin: (f32, f32),
-    before: &[String],
-    speed: Speed,
-    after: &[String],
-) -> Vec<UiAction> {
-    let labels: Vec<&str> = SPEEDS.iter().map(|s| speed_label(*s)).collect();
-    let layout = hud_layout(origin, before, &labels, after);
-    ui.panel(layout.panel);
-    for (pos, line) in layout.before.iter().zip(before) {
-        ui.label(*pos, line);
-    }
-    let mut actions = Vec::new();
-    for ((rect, s), label) in layout.buttons.iter().zip(SPEEDS).zip(&labels) {
-        if ui.button(*rect, label, s == speed) {
-            actions.push(UiAction::SetSpeed(s));
-        }
-    }
-    for (pos, line) in layout.after.iter().zip(after) {
-        ui.label(*pos, line);
-    }
-    actions
 }
 
 /// Name of a season.
@@ -798,6 +999,7 @@ pub fn season_name(season: Season) -> &'static str {
 }
 
 /// Calendar text, for example `Year 1, Spring, day 3, 07:00`.
+#[cfg(test)]
 pub fn format_time(t: &GameTime) -> String {
     format!(
         "Year {}, {}, day {}, {:02}:{:02}",
@@ -807,6 +1009,16 @@ pub fn format_time(t: &GameTime) -> String {
         t.hour,
         t.tick_of_hour * 60 / 100
     )
+}
+
+/// The clock text of the top bar, for example `07:30`.
+pub fn clock_text(t: &GameTime) -> String {
+    format!("{:02}:{:02}", t.hour, t.tick_of_hour * 60 / 100)
+}
+
+/// The date text of the top bar, for example `Spring 3, Y1`.
+pub fn date_text(t: &GameTime) -> String {
+    format!("{} {}, Y{}", season_name(t.season), t.day_of_season, t.year)
 }
 
 #[cfg(test)]
@@ -838,7 +1050,6 @@ mod tests {
             assert!(r.x >= l.panel.x && r.x + r.w <= l.panel.x + l.panel.w);
             assert!(r.y + r.h <= l.panel.y + l.panel.h);
         }
-        assert!(l.after[0].1 + LINE_H <= l.panel.y + l.panel.h + 4.0);
     }
 
     #[test]
@@ -851,7 +1062,6 @@ mod tests {
 
     #[test]
     fn captures_only_points_over_registered_panels() {
-        // Panels are registered by `panel`, which draws. Test the hit rule directly.
         let mut ui = Ui::new((0.0, 0.0), None);
         ui.panels.push(Rect::new(0.0, 0.0, 10.0, 10.0));
         assert!(ui.captures((5.0, 5.0)));
@@ -867,41 +1077,61 @@ mod tests {
             Row::Section("Skills".to_owned()),
             Row::Line("a line".to_owned()),
         ];
-        let l = rows_layout((10.0, 20.0), &rows);
+        let l = rows_layout((10.0, 20.0), &rows, true);
         assert_eq!(l.rows.len(), 5);
         let (_, v1) = l.rows[1];
         let (_, v2) = l.rows[2];
         assert_eq!(v1.map(|p| p.0), v2.map(|p| p.0));
         assert!(l.rows[0].1.is_none() && l.rows[4].1.is_none());
-        assert_eq!(l.rows[1].0.1, l.rows[0].0.1 + ROW_H);
+        assert_eq!(l.rows[2].0.1, l.rows[1].0.1 + ROW_H);
         assert_eq!(l.rows[3].0.1, l.rows[2].0.1 + ROW_H + SECTION_GAP);
         let value_end = v2.map_or(0.0, |p| p.0) + text_px("nothing");
         assert!(l.panel.x + l.panel.w >= value_end);
         let last_bottom = l.rows[4].0.1 + ROW_H;
         assert!(l.panel.y + l.panel.h >= last_bottom);
+        let close = l.close.unwrap();
+        assert!(close.right() <= l.panel.right() && close.bottom() <= l.rows[1].0.1);
     }
 
     #[test]
-    fn grid_layout_wraps_buttons_and_keeps_them_inside_the_panel() {
+    fn a_fold_row_has_a_click_rectangle_inside_the_panel() {
+        let rows = vec![
+            Row::Title("T".to_owned()),
+            Row::Fold("Skills".to_owned(), false),
+            Row::Fold("Speed".to_owned(), true),
+            Row::Line("part".to_owned()),
+        ];
+        let l = rows_layout((0.0, 0.0), &rows, true);
+        assert_eq!(l.folds.len(), 2);
+        assert!(l.folds[1].y >= l.folds[0].bottom());
+        for f in &l.folds {
+            assert!(f.x >= l.panel.x && f.right() <= l.panel.right());
+            assert!(f.bottom() <= l.panel.bottom());
+        }
+    }
+
+    #[test]
+    fn grid_layout_wraps_chips_and_keeps_them_inside_the_panel() {
         let labels: Vec<String> = ["All", "Log", "Granite", "Sandstone", "Iron ore"]
             .iter()
             .map(|s| (*s).to_owned())
             .collect();
-        let l = grid_layout((0.0, 0.0), "Accepts", &labels, 200.0);
+        let l = grid_layout((0.0, 0.0), "Stockpile", &labels, 200.0);
         assert_eq!(l.buttons.len(), 5);
         assert!(l.buttons[4].y > l.buttons[0].y, "the row wrapped");
         for r in &l.buttons {
             assert!(r.x >= l.panel.x && r.x + r.w <= l.panel.x + l.panel.w);
             assert!(r.y + r.h <= l.panel.y + l.panel.h);
         }
-        let empty = grid_layout((0.0, 0.0), "Accepts", &[], 200.0);
+        assert!(l.close.bottom() <= l.buttons[0].y);
+        let empty = grid_layout((0.0, 0.0), "Stockpile", &[], 200.0);
         assert!(empty.buttons.is_empty());
     }
 
     #[test]
     fn work_layout_has_one_row_and_one_cell_for_each_colonist_and_job_type() {
         let names: Vec<String> = (0..3).map(|i| format!("Colonist {i}")).collect();
-        let l = work_layout((8.0, 100.0), &names, "hint");
+        let l = work_layout((8.0, 100.0), &names);
         assert_eq!(l.names.len(), 3);
         assert_eq!(l.headers.len(), JobKind::COUNT);
         for (row, cells) in l.cells.iter().enumerate() {
@@ -915,19 +1145,7 @@ mod tests {
         assert!(l.names[1].y > l.names[0].y);
         assert_eq!(l.cells[0][1].x, l.cells[0][0].x + CELL_W + GAP);
         assert!(l.names[0].x + l.names[0].w < l.cells[0][0].x);
-    }
-
-    #[test]
-    fn a_column_toolbar_stacks_equal_buttons_inside_its_panel() {
-        let l = column_layout((8.0, 100.0), &["Select (V)", "Remove (X)", "Work (P)"]);
-        assert_eq!(l.buttons.len(), 3);
-        assert!(l.buttons.iter().all(|b| b.w == l.buttons[0].w));
-        assert_eq!(l.buttons[1].y, l.buttons[0].y + BUTTON_H + GAP);
-        for b in &l.buttons {
-            assert!(b.x >= l.panel.x && b.right() <= l.panel.right());
-            assert!(b.bottom() <= l.panel.bottom());
-        }
-        assert!(column_layout((0.0, 0.0), &[]).panel.h == 0.0);
+        assert!(l.close.right() <= l.panel.right());
     }
 
     #[test]
@@ -940,26 +1158,18 @@ mod tests {
     }
 
     #[test]
-    fn build_layout_wraps_both_button_groups_inside_the_panel() {
+    fn build_layout_wraps_both_chip_groups_inside_the_panel() {
         let to_strings =
             |list: &[&str]| -> Vec<String> { list.iter().map(|s| (*s).to_owned()).collect() };
         let buildings = to_strings(&["Wall", "Door", "Floor", "Roof", "Bed", "Hearth", "Workshop"]);
-        let materials = to_strings(&["Granite 3", "Limestone 0", "Log 12"]);
+        let materials = to_strings(&["Granite", "Limestone", "Log"]);
         let lines = to_strings(&["Drag a line", "4 x Log, 3.0 h"]);
-        let l = build_layout(
-            (10.0, 10.0),
-            "Build",
-            &buildings,
-            "Material",
-            &materials,
-            &lines,
-            300.0,
-        );
+        let l = build_layout((10.0, 10.0), "Build", &buildings, &materials, &lines, 300.0);
         assert_eq!(l.buildings.len(), 7);
         assert_eq!(l.materials.len(), 3);
         assert!(l.buildings[6].y > l.buildings[0].y, "the buildings wrap");
-        assert!(l.material_header.1 > l.buildings[6].bottom());
-        assert!(l.materials[0].y > l.material_header.1);
+        assert!(l.rule_y > l.buildings[6].bottom());
+        assert!(l.materials[0].y > l.rule_y);
         assert!(l.lines[0].1 >= l.materials[0].bottom());
         for r in l.buildings.iter().chain(&l.materials) {
             assert!(r.x >= l.panel.x && r.right() <= l.panel.right());
@@ -969,18 +1179,17 @@ mod tests {
     }
 
     #[test]
-    fn build_layout_without_materials_keeps_the_lines_below_the_header() {
+    fn build_layout_without_materials_keeps_the_lines_below_the_rule() {
         let l = build_layout(
             (0.0, 0.0),
             "Build",
             &["Wall".to_owned()],
-            "Material",
             &[],
             &["x".to_owned()],
             300.0,
         );
         assert!(l.materials.is_empty());
-        assert!(l.lines[0].1 >= l.material_header.1 + ROW_H);
+        assert!(l.lines[0].1 >= l.rule_y);
     }
 
     #[test]
@@ -1003,12 +1212,22 @@ mod tests {
     }
 
     #[test]
+    fn a_tooltip_stays_inside_the_window() {
+        let view = (400.0, 300.0);
+        let near_top = tooltip_rect(Rect::new(10.0, 4.0, 40.0, 40.0), "Pause (Space)", view);
+        assert!(near_top.y >= 0.0 && near_top.x >= 0.0);
+        let near_right = tooltip_rect(Rect::new(380.0, 200.0, 40.0, 40.0), "Remove (X)", view);
+        assert!(near_right.right() <= view.0);
+        let target = Rect::new(100.0, 200.0, 40.0, 40.0);
+        assert!(!tooltip_rect(target, "Cut (T)", view).intersects(&target));
+    }
+
+    #[test]
     fn time_text_shows_year_season_day_and_clock() {
         assert_eq!(
             format_time(&GameTime::from_tick(0)),
             "Year 1, Spring, day 1, 00:00"
         );
-        // Day 2 (tick 2400), hour 7, half an hour in.
         assert_eq!(
             format_time(&GameTime::from_tick(2_400 + 750)),
             "Year 1, Spring, day 2, 07:30"
@@ -1017,5 +1236,12 @@ mod tests {
             format_time(&GameTime::from_tick(96_000 + 10 * 2_400)),
             "Year 2, Summer, day 1, 00:00"
         );
+    }
+
+    #[test]
+    fn the_top_bar_shows_the_clock_and_the_date_apart() {
+        let t = GameTime::from_tick(2_400 + 750);
+        assert_eq!(clock_text(&t), "07:30");
+        assert_eq!(date_text(&t), "Spring 2, Y1");
     }
 }

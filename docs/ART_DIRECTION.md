@@ -136,7 +136,7 @@ Rules:
 | `crates/game/src/bake.rs` | Pixel bake of each chunk: fringes, shore, wall faces, shadows, decor, trees |
 | `crates/game/src/actors.rs`, `overlay.rs`, `icons.rs` | Colonists, items and markers, icons |
 | `crates/game/src/structures.rs` | Building textures, blueprint ghosts, build preview, rooms overlay |
-| `crates/game/src/ui.rs`, `hud.rs`, `layout.rs`, `build_ui.rs` | Framed panels, icon buttons, text with shadow, panel placement, build panel |
+| `crates/game/src/ui.rs`, `hud.rs`, `layout.rs`, `build_ui.rs` | Framed panels, icon buttons, tooltips, folds, text with shadow, panel placement, build panel. The screen has a top bar, a bottom toolbar of icon buttons, and panels that show only when they are needed. The screen has no help text. Short tooltips show on hover. The tutorial (later sprint) gives the explanations. Two places stay free for Sprint 5: the temperature slot in the top bar and the alerts strip under it. |
 | `assets/sprites/*.png` | Generated sheets. `preview.png` is a contact sheet that the game does not load. |
 
 Run `cargo run -p tools -- assetgen` to make all files again. The tests check that the shipped files equal the generator output.
@@ -158,5 +158,5 @@ Run `cargo run -p tools -- assetgen` to make all files again. The tests check th
 - Wood walls and wood floors have a similar color. A wood wall is darker and has vertical planks, but it is hard to see under a roof tint.
 - The door is small at low zoom.
 - Rock plates and clay cracks are still busy at close zoom.
-- At 1280 x 720 the panels fit only if some are left out. The help panel and the work panel give way first. A test checks that no panels overlap.
+- At small window sizes the panels fit only if some are left out. A panel that does not fit does not show. The work panel stays and the colonist panel goes. A test checks that no panels overlap at 1280 x 720, 1920 x 1080, 1024 x 768, and 800 x 600. Frames are drawn in code on a 2 pixel grid. They are not a sprite nine-slice.
 - The ground texture of a class repeats every 8 tiles. A very large field of one class can show the repeat.

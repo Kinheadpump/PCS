@@ -461,6 +461,74 @@ fn speed_icons(img: &mut Image) {
     outline(img, ic::FAST, OUT, false);
 }
 
+fn close_icon(img: &mut Image) {
+    let mut pts = Vec::new();
+    for i in 0..8 {
+        pts.extend([
+            (4 + i, 4 + i),
+            (5 + i, 4 + i),
+            (11 - i, 4 + i),
+            (12 - i, 4 + i),
+        ]);
+    }
+    plot(img, ic::CLOSE, &pts, SPARK);
+    outline(img, ic::CLOSE, OUT, true);
+}
+
+fn chevron_icons(img: &mut Image) {
+    let mut down = Vec::new();
+    let mut right = Vec::new();
+    for i in 0..5 {
+        down.extend([
+            (3 + i, 5 + i),
+            (4 + i, 5 + i),
+            (12 - i, 5 + i),
+            (11 - i, 5 + i),
+        ]);
+        right.extend([
+            (5 + i, 3 + i),
+            (5 + i, 4 + i),
+            (5 + i, 12 - i),
+            (5 + i, 11 - i),
+        ]);
+    }
+    plot(img, ic::CHEVRON_DOWN, &down, SPARK);
+    outline(img, ic::CHEVRON_DOWN, OUT, true);
+    plot(img, ic::CHEVRON_RIGHT, &right, SPARK);
+    outline(img, ic::CHEVRON_RIGHT, OUT, true);
+}
+
+fn person_icon(img: &mut Image) {
+    for y in 2..6 {
+        for x in 6..10 {
+            g(img, ic::PERSON, x, y, SPARK);
+        }
+    }
+    for y in 7..13 {
+        for x in 4..12 {
+            g(
+                img,
+                ic::PERSON,
+                x,
+                y,
+                if x == 11 || y == 12 { 176 } else { SPARK },
+            );
+        }
+    }
+    outline(img, ic::PERSON, OUT, true);
+}
+
+fn fastest_icon(img: &mut Image) {
+    for off in [0, 4, 8] {
+        for y in 4..13i32 {
+            for x in 2 + off..2 + off + (4 - (y - 8).abs()).max(0) {
+                g(img, ic::FASTEST, x, y, SPARK);
+            }
+        }
+    }
+    outline(img, ic::FASTEST, OUT, false);
+}
+
 /// A 9 x 9 badge at the top right of its cell: a dark plate with a white glyph.
 fn badge(img: &mut Image, cell: usize, glyph: &[(i32, i32)]) {
     for y in 0..9 {
@@ -584,6 +652,10 @@ pub fn make_icons() -> Image {
     cancel_icon(&mut img, ic::CANCEL);
     work_icon(&mut img, ic::WORK);
     speed_icons(&mut img);
+    close_icon(&mut img);
+    chevron_icons(&mut img);
+    person_icon(&mut img);
+    fastest_icon(&mut img);
     badges(&mut img);
     brackets(&mut img);
     img
