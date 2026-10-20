@@ -1,12 +1,13 @@
 //! Content of the inspector panels and the work panel. Pure: it reads `&Sim` and builds
 //! rows of text. Each value that the player sees is a sum of named parts (why chain).
 
+use crate::build_ui;
 use crate::tools::priority_text;
 use crate::ui::Row;
 use sim::skill::Skill;
 use sim::{
-    AbortReason, ColonistId, ItemFilter, ItemLoc, JobEvent, JobKind, JobStep, Reject, Sim,
-    SpeedCause, SpeedPart, StockpileId, WorkSpeed,
+    AbortReason, BuildLayer, Building, ColonistId, ItemFilter, ItemLoc, JobEvent, JobKind, JobStep,
+    Sim, SpeedCause, SpeedPart, StockpileId, WorkSpeed,
 };
 
 /// Display name of a colonist.
@@ -200,6 +201,7 @@ pub fn tile_rows(sim: &Sim, x: u16, y: u16, haulable: &[u16]) -> Vec<Row> {
         None => "-".to_owned(),
     };
     rows.push(Row::Pair("Designation".to_owned(), designation));
+    building_rows(sim, x, y, &mut rows);
 
     let items: Vec<_> = sim
         .items()
@@ -244,7 +246,201 @@ pub fn tile_rows(sim: &Sim, x: u16, y: u16, haulable: &[u16]) -> Vec<Row> {
         }
         None => rows.push(Row::Pair("Stockpile".to_owned(), "-".to_owned())),
     }
+    room_rows(sim, x, y, &mut rows);
     rows
+}
+
+/// Name of a finished building: its material and its type, for example `Granite wall`.
+pub fn building_label(sim: &Sim, building: &Building) -> String {
+    let kind = sim
+        .rules()
+        .building(building.def)
+        .map_or_else(|| "building".to_owned(), |d| d.name.to_lowercase());
+    capitalise(&format!(
+        "{} {kind}",
+        material_name(sim, building.material).to_lowercase()
+    ))
+}
+
+/// The layers of a tile with the row name of each.
+const LAYER_ROWS: [(BuildLayer, &str); 3] = [
+    (BuildLayer::Object, "Building"),
+    (BuildLayer::Floor, "Floor"),
+    (BuildLayer::Roof, "Roof"),
+];
+
+/// Rows for the buildings and blueprints of a tile: one row for each layer that has one.
+pub fn building_rows(sim: &Sim, x: u16, y: u16, rows: &mut Vec<Row>) {
+    let buildings = sim.buildings();
+    for (layer, name) in LAYER_ROWS {
+        if let Some(b) = buildings.get(x, y, layer) {
+            let mut text = building_label(sim, b);
+            if build_ui::deconstruct_ordered(sim, x, y, layer) {
+                text.push_str(", taken down");
+            }
+            rows.push(Row::Pair(name.to_owned(), text));
+        }
+        if let Some(bp) = buildings.blueprint(x, y, layer) {
+            let def = sim.rules().building(bp.building);
+            let cost = def.map_or(0, |d| d.cost);
+            let pct = build_ui::blueprint_progress(sim, x, y, layer).unwrap_or(0);
+            rows.push(Row::Pair(
+                "Blueprint".to_owned(),
+                format!(
+                    "{} {}, {}/{} units, {pct}%",
+                    capitalise(&material_name(sim, bp.material).to_lowercase()),
+                    def.map_or("building".to_owned(), |d| d.name.to_lowercase()),
+                    bp.delivered,
+                    cost
+                ),
+            ));
+        }
+    }
+    if let Some(b) = buildings.object_at(x, y)
+        && build_ui::is_workshop(sim.rules(), b.def)
+    {
+        for order in &b.orders {
+            let name = sim
+                .rules()
+                .recipe(order.recipe)
+                .map_or("?", |r| r.name.as_str());
+            rows.push(Row::Line(format!("  Order: {name} x{}", order.remaining)));
+        }
+    }
+}
+
+/// Rows for the room that holds the tile: its size, the insulation and the beauty with
+/// their named parts (why chains), and the roof support. Nothing if the tile is not in a room.
+pub fn room_rows(sim: &Sim, x: u16, y: u16, rows: &mut Vec<Row>) {
+    let Some(room) = sim.room_at(x, y) else {
+        return;
+    };
+    let (insulation, beauty) = (&room.insulation, &room.beauty);
+    rows.push(Row::Section("Room".to_owned()));
+    rows.push(Row::Pair("Tiles".to_owned(), room.tiles.len().to_string()));
+    rows.push(Row::Pair(
+        "Insulation".to_owned(),
+        format!("{} of 100", insulation.total),
+    ));
+    for part in &insulation.parts {
+        rows.push(Row::Line(format!(
+            "  {} {} x{} @{}",
+            part.kind.name(),
+            material_name(sim, part.material),
+            part.tiles,
+            part.each
+        )));
+    }
+    rows.push(Row::Pair(
+        "Beauty".to_owned(),
+        format!("{} ({:+} per tile)", beauty.total, beauty.per_tile),
+    ));
+    for part in &beauty.parts {
+        let what = part
+            .building
+            .and_then(|b| sim.rules().building(b))
+            .map_or(part.cause.name().to_owned(), |d| d.name.clone());
+        rows.push(Row::Line(format!(
+            "  {} {} x{} {:+}",
+            what,
+            material_name(sim, part.material),
+            part.tiles,
+            part.each
+        )));
+    }
+    let supported = room
+        .tiles
+        .iter()
+        .filter(|&&(tx, ty)| sim.roof_supported(tx, ty))
+        .count();
+    rows.push(Row::Pair(
+        "Roof support".to_owned(),
+        format!("{supported} of {} tiles", room.tiles.len()),
+    ));
+    if room.rock_border > 0 {
+        rows.push(Row::Pair(
+            "Rock border".to_owned(),
+            format!("{} tiles", room.rock_border),
+        ));
+    }
+}
+
+/// One recipe line of the workshop panel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecipeInfo {
+    /// Recipe index (`recipes.ron` order).
+    pub recipe: u16,
+    /// Name and the number of runs ordered.
+    pub label: String,
+    /// Inputs, outputs, and work time.
+    pub detail: String,
+}
+
+/// The building type index of the workshop on a tile, if there is one.
+pub fn workshop_at(sim: &Sim, x: u16, y: u16) -> Option<u16> {
+    sim.buildings()
+        .object_at(x, y)
+        .map(|b| b.def)
+        .filter(|&d| build_ui::is_workshop(sim.rules(), d))
+}
+
+fn units_text(sim: &Sim, list: &[(u16, u32)]) -> String {
+    list.iter()
+        .map(|&(m, n)| format!("{n} {}", material_name(sim, m)))
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// The text lines of the workshop panel: the name and the input bin.
+pub fn workshop_lines(sim: &Sim, x: u16, y: u16) -> Vec<String> {
+    let Some(b) = sim.buildings().object_at(x, y) else {
+        return Vec::new();
+    };
+    let bin = if b.bin.is_empty() {
+        "empty".to_owned()
+    } else {
+        units_text(sim, &b.bin)
+    };
+    vec![
+        format!("{} at ({x}, {y})", building_label(sim, b)),
+        format!("Input bin: {bin}"),
+    ]
+}
+
+/// The recipes that the workshop on a tile can make, with the orders now.
+pub fn workshop_recipes(sim: &Sim, x: u16, y: u16) -> Vec<RecipeInfo> {
+    let Some(b) = sim.buildings().object_at(x, y) else {
+        return Vec::new();
+    };
+    sim.rules()
+        .recipes
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.workshop == b.def)
+        .filter_map(|(i, r)| {
+            let recipe = u16::try_from(i).ok()?;
+            let ordered = b
+                .orders
+                .iter()
+                .find(|o| o.recipe == recipe)
+                .map_or(0, |o| o.remaining);
+            let label = if ordered > 0 {
+                format!("{} (ordered {ordered})", r.name)
+            } else {
+                r.name.clone()
+            };
+            Some(RecipeInfo {
+                recipe,
+                label,
+                detail: format!(
+                    "{} to {}, {}",
+                    units_text(sim, &r.inputs),
+                    units_text(sim, &r.outputs),
+                    build_ui::hours_text(r.work_ticks)
+                ),
+            })
+        })
+        .collect()
 }
 
 /// Text for the status panel about a job event. `None` for events that need no message.
@@ -265,21 +461,9 @@ pub fn job_event_text(event: &JobEvent) -> Option<String> {
                 AbortReason::NoMaterial => "no material",
             }
         )),
-        JobEvent::Rejected(reject) => Some(format!(
-            "Order refused: {}",
-            match reject {
-                Reject::OutOfMap => "outside the map",
-                Reject::NothingToCut => "no tree there",
-                Reject::NothingToMine => "no rock there",
-                Reject::NoItems => "no items there",
-                Reject::BadZone => "bad zone corners",
-                Reject::ZoneOverlap => "the zone overlaps another zone",
-                Reject::UnknownTarget => "unknown target",
-                Reject::BadPriority => "bad priority",
-                // Building rejects have no interface yet (Sprint 4 game side).
-                _ => "not possible here",
-            }
-        )),
+        JobEvent::Rejected(reject) => {
+            Some(format!("Order refused: {}", build_ui::reject_text(*reject)))
+        }
     }
 }
 
@@ -420,6 +604,95 @@ mod tests {
         let none = tile_rows(&sim, 0, 0, &all);
         assert_eq!(pair(&none, "Stockpile"), Some("-"));
         assert_eq!(pair(&none, "Items"), Some("-"));
+    }
+
+    fn index(sim: &Sim, key: &str) -> u16 {
+        sim.rules().building_index(key).unwrap()
+    }
+
+    #[test]
+    fn tile_rows_name_the_building_its_material_and_a_blueprint() {
+        let mut sim = sim_from_ascii("....\n....", 1).unwrap();
+        let granite = sim.rules().material_index("granite").unwrap();
+        let wall = index(&sim, "wall");
+        assert!(sim.debug_build(wall, 1, 0, granite));
+        let rows = tile_rows(&sim, 1, 0, &[]);
+        assert_eq!(pair(&rows, "Building"), Some("Granite wall"));
+        sim.step(&[Command::PlaceBlueprint {
+            building: wall,
+            material: granite,
+            x: 2,
+            y: 0,
+        }]);
+        let rows = tile_rows(&sim, 2, 0, &[]);
+        let text = pair(&rows, "Blueprint").unwrap_or_default();
+        assert!(text.starts_with("Granite wall, 0/"), "{text}");
+        assert!(text.ends_with("0%"), "{text}");
+    }
+
+    #[test]
+    fn a_workshop_lists_its_recipes_and_orders() {
+        let mut sim = sim_from_ascii("....", 1).unwrap();
+        let workshop = index(&sim, "workshop");
+        let granite = sim.rules().material_index("granite").unwrap();
+        assert!(sim.debug_build(workshop, 1, 0, granite));
+        assert_eq!(workshop_at(&sim, 1, 0), Some(workshop));
+        assert_eq!(workshop_at(&sim, 0, 0), None);
+        let recipes = workshop_recipes(&sim, 1, 0);
+        assert_eq!(recipes.len(), sim.rules().recipes.len());
+        assert_eq!(recipes[0].label, "Make planks");
+        assert_eq!(recipes[0].detail, "1 Log to 2 Plank, 2.0 h");
+        sim.step(&[Command::OrderCraft {
+            x: 1,
+            y: 0,
+            recipe: recipes[0].recipe,
+            count: 3,
+        }]);
+        let recipes = workshop_recipes(&sim, 1, 0);
+        assert_eq!(recipes[0].label, "Make planks (ordered 3)");
+        let rows = tile_rows(&sim, 1, 0, &[]);
+        assert!(rows.contains(&Row::Line("  Order: Make planks x3".to_owned())));
+        assert_eq!(workshop_lines(&sim, 1, 0)[1], "Input bin: empty");
+    }
+
+    #[test]
+    fn a_closed_roofed_room_shows_its_tiles_insulation_beauty_and_roof_support() {
+        let mut sim = sim_from_ascii("......\n......\n......\n......\n......\n......", 1).unwrap();
+        let granite = sim.rules().material_index("granite").unwrap();
+        let (wall, roof) = (index(&sim, "wall"), index(&sim, "roof"));
+        for y in 0..4u16 {
+            for x in 0..4u16 {
+                if x == 0 || y == 0 || x == 3 || y == 3 {
+                    assert!(sim.debug_build(wall, x, y, granite));
+                }
+                assert!(sim.debug_build(roof, x, y, granite));
+            }
+        }
+        sim.step(&[]);
+        let mut rows = Vec::new();
+        room_rows(&sim, 1, 1, &mut rows);
+        assert_eq!(pair(&rows, "Tiles"), Some("4"));
+        assert_eq!(pair(&rows, "Roof support"), Some("4 of 4 tiles"));
+        let insulation = pair(&rows, "Insulation").unwrap_or_default();
+        assert!(insulation.ends_with(" of 100"), "{insulation}");
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r, Row::Line(l) if l.contains("Granite") && l.contains('@'))),
+            "the insulation parts must show: {rows:?}"
+        );
+        assert!(pair(&rows, "Beauty").is_some());
+        let mut outside = Vec::new();
+        room_rows(&sim, 5, 5, &mut outside);
+        assert!(outside.is_empty());
+    }
+
+    #[test]
+    fn building_rejects_have_their_own_text() {
+        let text = job_event_text(&JobEvent::Rejected(sim::Reject::NoRoofSupport));
+        assert_eq!(
+            text.as_deref(),
+            Some("Order refused: a roof needs a wall within 6 tiles")
+        );
     }
 
     #[test]

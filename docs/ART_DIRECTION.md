@@ -108,6 +108,19 @@ Rules:
 - A working colonist faces the job target. A walking colonist faces the move direction. An idle colonist faces south.
 - The ground point stays on row 13 in all frames.
 
+## 9a. Buildings
+
+- `buildings.png` is a gray sheet. The game tints each pixel by its alpha value: 255 material color, 254 cloth, 253 fire, 252 metal. A lower alpha is a black shadow.
+- A wall has a top (cap) and a front face of 5 rows. The face shows only below a wall that has no wall to the south. A wall cell has 16 variants: one for each set of connected sides. Doors join walls in the same way.
+- Stone walls show courses of bricks. Wood walls show vertical planks. A door shows two posts and a leaf. The door runs east to west if a wall is to its east or west.
+- A floor has no outline. A stone floor has flagstones. A wood floor has boards.
+- A roof is a tint over the tiles below it (alpha 0.30). It shows courses of shingles and an outline on the free edges only.
+- A bed has a cloth blanket. A hearth has a metal ring and 2 flame frames that change every 14 ticks. A workshop has a bench with a metal tool.
+- A blueprint is a ghost of the finished sprite: alpha 0.55, a light blue tint, and a blue frame. A bar at the bottom shows the progress at zoom 8 and above.
+- A build preview shows the ghost with a blue fill and a blue frame. A tile where the building cannot go gets a red fill.
+- The rooms overlay tints each closed room with one of 6 colors. None of the colors is yellow, because yellow marks the selection.
+- Light comes from the north west. The sprites have no dithering and no anti-aliasing.
+
 ## 10. Files
 
 | File | Content |
@@ -115,13 +128,15 @@ Rules:
 | `crates/tools/src/assetgen.rs` | Image type, PNG writer, `make_all`, tests |
 | `crates/tools/src/assetgen_terrain.rs` | Seamless ground textures (128 x 128 each) and ore sprites |
 | `crates/tools/src/assetgen_objects.rs` | Trees, wall pieces, other objects |
-| `crates/tools/src/assetgen_items.rs` | Item sprites and interface icons |
+| `crates/tools/src/assetgen_items.rs` | Item sprites and interface icons (with the Build and Remove icons) |
+| `crates/tools/src/assetgen_buildings.rs` | Wall, door, roof, floor, bed, hearth, and workshop sprites |
 | `crates/tools/src/assetgen_actors.rs` | Colonist sprites, written as text rows, 4 hair styles |
 | `crates/tools/src/assetgen_preview.rs` | Palette sheet, reference sheet, repeat sheet |
 | `crates/game/src/palette.rs`, `cells.rs` | Palette and sheet cell numbers. The tools include these files. |
 | `crates/game/src/bake.rs` | Pixel bake of each chunk: fringes, shore, wall faces, shadows, decor, trees |
 | `crates/game/src/actors.rs`, `overlay.rs`, `icons.rs` | Colonists, items and markers, icons |
-| `crates/game/src/ui.rs`, `hud.rs` | Framed panels, icon buttons, text with shadow |
+| `crates/game/src/structures.rs` | Building textures, blueprint ghosts, build preview, rooms overlay |
+| `crates/game/src/ui.rs`, `hud.rs`, `layout.rs`, `build_ui.rs` | Framed panels, icon buttons, text with shadow, panel placement, build panel |
 | `assets/sprites/*.png` | Generated sheets. `preview.png` is a contact sheet that the game does not load. |
 
 Run `cargo run -p tools -- assetgen` to make all files again. The tests check that the shipped files equal the generator output.
@@ -139,7 +154,9 @@ Run `cargo run -p tools -- assetgen` to make all files again. The tests check th
 
 - Water has no animation.
 - Colonists have one body type. Hair style, hair color, skin, and shirt differ.
-- Buildings and animals have no sprites yet.
+- Animals have no sprites yet.
+- Wood walls and wood floors have a similar color. A wood wall is darker and has vertical planks, but it is hard to see under a roof tint.
+- The door is small at low zoom.
 - Rock plates and clay cracks are still busy at close zoom.
-- The colonist panel and the toolbar overlap at 1280 x 720 when a colonist is selected.
+- At 1280 x 720 the panels fit only if some are left out. The help panel and the work panel give way first. A test checks that no panels overlap.
 - The ground texture of a class repeats every 8 tiles. A very large field of one class can show the repeat.

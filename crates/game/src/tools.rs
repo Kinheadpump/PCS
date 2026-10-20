@@ -19,17 +19,23 @@ pub enum Tool {
     Stockpile,
     /// Drag a rectangle to remove designations and haul orders.
     Cancel,
+    /// Drag a line or a rectangle to place blueprints of the chosen building.
+    Build,
+    /// Drag a rectangle to take buildings down and to remove blueprints.
+    Deconstruct,
 }
 
 impl Tool {
     /// All tools, in toolbar order.
-    pub const ALL: [Tool; 6] = [
+    pub const ALL: [Tool; 8] = [
         Tool::Select,
         Tool::Cut,
         Tool::Mine,
         Tool::Haul,
         Tool::Stockpile,
         Tool::Cancel,
+        Tool::Build,
+        Tool::Deconstruct,
     ];
 
     /// Name for the toolbar and the status text.
@@ -41,6 +47,8 @@ impl Tool {
             Tool::Haul => "Haul",
             Tool::Stockpile => "Zone",
             Tool::Cancel => "Cancel",
+            Tool::Build => "Build",
+            Tool::Deconstruct => "Remove",
         }
     }
 
@@ -54,6 +62,8 @@ impl Tool {
             Tool::Haul => 'H',
             Tool::Stockpile => 'Z',
             Tool::Cancel => 'C',
+            Tool::Build => 'B',
+            Tool::Deconstruct => 'X',
         }
     }
 
@@ -81,6 +91,8 @@ impl Tool {
             "haul" => Some(Tool::Haul),
             "zone" | "stockpile" => Some(Tool::Stockpile),
             "cancel" => Some(Tool::Cancel),
+            "build" => Some(Tool::Build),
+            "remove" | "deconstruct" => Some(Tool::Deconstruct),
             _ => None,
         }
     }
@@ -166,14 +178,14 @@ pub fn applies(sim: &Sim, tool: Tool, x: u16, y: u16) -> bool {
                         .is_some_and(|i| i.to_haul && matches!(i.loc, ItemLoc::Tile(..)))
                 })
         }
-        Tool::Stockpile | Tool::Select => false,
+        Tool::Stockpile | Tool::Select | Tool::Build | Tool::Deconstruct => false,
     }
 }
 
 /// Number of tiles of the area where the tool does something. A zone counts all its tiles.
 pub fn count_applicable(sim: &Sim, tool: Tool, area: Area) -> u32 {
     match tool {
-        Tool::Select => 0,
+        Tool::Select | Tool::Build | Tool::Deconstruct => 0,
         Tool::Stockpile => area.width() * area.height(),
         _ => area
             .tiles()
@@ -190,7 +202,7 @@ pub fn commands_for_drag(
     accepts: impl Fn(Tool, u16, u16) -> bool,
 ) -> Vec<Command> {
     match tool {
-        Tool::Select => Vec::new(),
+        Tool::Select | Tool::Build | Tool::Deconstruct => Vec::new(),
         Tool::Stockpile => vec![Command::CreateStockpile {
             x0: area.x0,
             y0: area.y0,

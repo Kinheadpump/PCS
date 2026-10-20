@@ -2,6 +2,7 @@
 
 mod actors;
 mod bake;
+mod build_ui;
 mod camera;
 mod cells;
 mod clock;
@@ -10,14 +11,17 @@ mod hud;
 mod icons;
 mod input;
 mod inspector;
+mod layout;
 mod overlay;
 mod palette;
 mod render;
 mod sprites;
+mod structures;
 mod tools;
 mod ui;
 
 use bake::Palette;
+use build_ui::BuildState;
 use camera::{Camera, View};
 use clock::Clock;
 use input::{Action, InputState};
@@ -26,6 +30,7 @@ use render::MapView;
 use sim::{ColonistId, Command, Event, JobEvent, JobKind, Sim};
 use sprites::Sprites;
 use std::collections::BTreeSet;
+use structures::Structures;
 use tools::{Area, Tool};
 use ui::{Ui, UiAction};
 use worldgen::{EmbarkSummary, LocalMapData, generate_local};
@@ -55,11 +60,26 @@ fn window_conf() -> Conf {
     }
 }
 
+/// The building, the material, and the tiles of a build ghost.
+type Ghost = (u16, u16, Vec<(u16, u16)>);
+
+/// Read `<building key>,<material key>,<numbers...>` of a debug setting.
+fn parse_build(rules: &sim::SimRules, text: &str) -> Option<(u16, u16, Vec<u16>)> {
+    let mut parts = text.split(',').map(str::trim);
+    let building = rules.building_index(parts.next()?)?;
+    let material = rules.material_index(parts.next()?)?;
+    let n: Vec<u16> = parts.filter_map(|p| p.parse().ok()).collect();
+    Some((building, material, n))
+}
+
 /// A loaded map with its textures.
 struct Loaded {
     map: LocalMapData,
     view: MapView,
 }
+
+/// One build order of the developer hook: finished or blueprint, building, material, tiles.
+type BuildJob = (bool, u16, u16, Vec<(u16, u16)>);
 
 struct App {
     palette: Palette,
@@ -85,6 +105,12 @@ struct App {
     selected_tile: Option<(u16, u16)>,
     /// True if the work panel is open.
     show_work: bool,
+    /// True if the rooms overlay is on.
+    show_rooms: bool,
+    /// The building and the material of the build tool.
+    build: BuildState,
+    /// The textures of the buildings.
+    structures: Structures,
     /// The panels of the last frame, so the mouse does not act through them.
     panels: Vec<ui::Rect>,
     /// Chunks of the baked map that must be baked again.
@@ -107,6 +133,7 @@ impl App {
         let loaded = Self::load_preset(&palette, &sprites, 0);
         let size = (loaded.map.ground.width(), loaded.map.ground.height());
         let sim = Sim::new(&loaded.map, SEED, content_hash);
+        let build = BuildState::new(sim.rules());
         Self {
             content_hash,
             sim,
@@ -118,6 +145,9 @@ impl App {
             drag_start: None,
             selected_tile: None,
             show_work: false,
+            show_rooms: false,
+            build,
+            structures: Structures::new(),
             panels: Vec::new(),
             dirty: BTreeSet::new(),
             preview_override: None,
@@ -147,6 +177,8 @@ impl App {
             self.tool = tool;
         }
         self.show_work = var("PCS_WORK").is_some_and(|v| v == "1");
+        self.show_rooms = var("PCS_ROOMS").is_some_and(|v| v == "1");
+        self.debug_build(&var);
         if let Some(slot) = var("PCS_SELECT").and_then(|v| v.parse::<usize>().ok()) {
             self.selected = self.sim.colonists().iter().nth(slot).map(|(id, _)| id);
         }
@@ -196,6 +228,7 @@ impl App {
         let ticks = var("PCS_TICKS")
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(0)
+            .max(if var("PCS_BUILD").is_some() { 2 } else { 0 })
             .max(u32::from(!self.pending.is_empty()));
         for _ in 0..ticks {
             let commands = std::mem::take(&mut self.pending);
@@ -203,6 +236,45 @@ impl App {
             self.note_events();
         }
         self.note_events();
+    }
+
+    /// Developer aid for the build tool. `PCS_BUILD=<building>,<material>,<x0>,<y0>,<x1>,<y1>;...`
+    /// builds finished buildings (like `Sim::debug_build`) on the tiles of the rectangle.
+    /// `PCS_BLUEPRINT` has the same form and places blueprints. `PCS_CHOICE=<building>,<material>`
+    /// sets the building and the material of the build tool.
+    fn debug_build(&mut self, var: &dyn Fn(&str) -> Option<String>) {
+        let parse = |text: &str| parse_build(self.sim.rules(), text);
+        let mut jobs: Vec<BuildJob> = Vec::new();
+        for (name, finished) in [("PCS_BUILD", true), ("PCS_BLUEPRINT", false)] {
+            for entry in var(name).iter().flat_map(|v| v.split(';')) {
+                if let Some((b, m, n)) = parse(entry)
+                    && let [x0, y0, x1, y1] = n[..]
+                {
+                    let tiles = build_ui::drag_tiles(build_ui::Shape::Rect, (x0, y0), (x1, y1));
+                    jobs.push((finished, b, m, tiles));
+                }
+            }
+        }
+        for (finished, b, m, tiles) in jobs {
+            for (x, y) in tiles {
+                if finished {
+                    self.sim.debug_build(b, x, y, m);
+                } else {
+                    self.pending.push(Command::PlaceBlueprint {
+                        building: b,
+                        material: m,
+                        x,
+                        y,
+                    });
+                }
+            }
+        }
+        if let Some(v) = var("PCS_CHOICE")
+            && let Some((b, m, _)) = parse_build(self.sim.rules(), &v)
+        {
+            self.build.pick_building(self.sim.rules(), usize::from(b));
+            self.build.pick_material(self.sim.rules(), m);
+        }
     }
 
     fn map_size(&self) -> (u32, u32) {
@@ -237,12 +309,18 @@ impl App {
                     self.selected = None;
                     self.selected_tile = None;
                     self.drag_start = None;
+                    self.build = BuildState::new(self.sim.rules());
                     self.dirty.clear();
                     self.pending.clear();
                     self.last_event.clear();
                 }
                 Action::SelectTool(tool) => self.set_tool(tool),
                 Action::ToggleWork => self.show_work = !self.show_work,
+                Action::ToggleRooms => self.show_rooms = !self.show_rooms,
+                Action::PickBuilding(n) => {
+                    self.set_tool(Tool::Build);
+                    self.build.pick_building(self.sim.rules(), n);
+                }
                 Action::TogglePause => self.clock.toggle_pause(),
                 Action::SetSpeed(speed) => self.clock.set_speed(speed),
                 Action::LeftClick(..) | Action::LeftRelease(..) | Action::RightClick(..) => {}
@@ -269,6 +347,9 @@ impl App {
     fn set_tool(&mut self, tool: Tool) {
         self.tool = tool;
         self.drag_start = None;
+        if matches!(tool, Tool::Build | Tool::Deconstruct) {
+            self.selected_tile = None;
+        }
     }
 
     fn note_events(&mut self) {
@@ -365,9 +446,13 @@ impl App {
                     if let (Some(start), Some(end)) = (start, self.drag_tile((x, y), view)) {
                         let area = Area::from_corners(start, end);
                         let sim = &self.sim;
-                        let commands = tools::commands_for_drag(self.tool, area, |t, tx, ty| {
-                            tools::applies(sim, t, tx, ty)
-                        });
+                        let commands = match self.tool {
+                            Tool::Build => self.build_commands(start, end),
+                            Tool::Deconstruct => build_ui::remove_commands(sim, area),
+                            _ => tools::commands_for_drag(self.tool, area, |t, tx, ty| {
+                                tools::applies(sim, t, tx, ty)
+                            }),
+                        };
                         self.pending.extend(commands);
                     }
                 }
@@ -391,13 +476,51 @@ impl App {
         }
     }
 
-    /// The area and tool of the drag preview, if there is one.
+    /// The tiles of the build drag from `start` to `end`.
+    fn build_tiles(&self, start: (u16, u16), end: (u16, u16)) -> Vec<(u16, u16)> {
+        let kind = self
+            .sim
+            .rules()
+            .building(self.build.building())
+            .map(|d| d.kind);
+        let shape = kind.map_or(build_ui::Shape::Point, build_ui::shape_of);
+        build_ui::drag_tiles(shape, start, end)
+    }
+
+    /// The blueprint commands of a finished build drag.
+    fn build_commands(&self, start: (u16, u16), end: (u16, u16)) -> Vec<Command> {
+        let Some(material) = self.build.material(&self.sim) else {
+            return Vec::new();
+        };
+        let tiles = self.build_tiles(start, end);
+        build_ui::place_commands(&self.sim, self.build.building(), material, &tiles)
+    }
+
+    /// The area and tool of the drag preview, if there is one. The build tool has its own preview.
     fn preview(&self, view: View) -> Option<(Tool, Area)> {
+        if self.tool == Tool::Build {
+            return None;
+        }
         if let (Some(start), true) = (self.drag_start, self.tool.drags()) {
             let end = self.drag_tile(mouse_position(), view)?;
             return Some((self.tool, Area::from_corners(start, end)));
         }
         self.preview_override
+    }
+
+    /// The ghost of the build tool: the building, the material, and the tiles of the drag, or
+    /// the tile under the mouse.
+    fn build_ghost(&self, view: View, hover: Option<(u16, u16)>) -> Option<Ghost> {
+        let material = self.build.material(&self.sim)?;
+        let tiles = if let Some((Tool::Build, a)) = self.preview_override {
+            self.build_tiles((a.x0, a.y0), (a.x1, a.y1))
+        } else if let Some(start) = self.drag_start {
+            let end = self.drag_tile(mouse_position(), view)?;
+            self.build_tiles(start, end)
+        } else {
+            vec![hover?]
+        };
+        Some((self.build.building(), material, tiles))
     }
 
     /// Draw one frame, then apply the UI actions and the clicks.
@@ -418,7 +541,9 @@ impl App {
             .selected_tile
             .and_then(|(x, y)| inspector::zone_at(&self.sim, x, y));
         overlay::draw_zones(&frame, selected_zone);
+        self.structures.draw_floors(&frame, &self.sprites);
         overlay::draw_items(&frame);
+        self.structures.draw_objects(&frame, &self.sprites);
         overlay::draw_designations(&frame);
         actors::draw(&self.sim, &self.camera, view, self.selected);
         let sprite_size = self.camera.zoom.max(12.0);
@@ -428,8 +553,10 @@ impl App {
                 overlay::draw_carried(&frame, p, sprite_size, id);
             }
         }
-        if let Some((tool, area)) = self.preview(view) {
-            overlay::draw_preview(&frame, tool, area);
+        self.structures.draw_roofs(&frame, &self.sprites);
+        self.structures.draw_blueprints(&frame, &self.sprites);
+        if self.show_rooms {
+            structures::draw_rooms(&frame);
         }
         let mouse = mouse_position();
         let hover_tile = if self.panels.iter().any(|r| r.contains(mouse)) {
@@ -437,6 +564,22 @@ impl App {
         } else {
             self.tile_under(mouse, view)
         };
+        if let Some((tool, area)) = self.preview(view) {
+            overlay::draw_preview(&frame, tool, area);
+        }
+        if self.tool == Tool::Build
+            && let Some((building, material, tiles)) = self.build_ghost(view, hover_tile)
+        {
+            self.structures
+                .draw_build_preview(&frame, &self.sprites, building, material, &tiles);
+            let ok = build_ui::place_commands(&self.sim, building, material, &tiles).len();
+            if tiles.len() > 1
+                && let Some(first) = tiles.iter().copied().min_by_key(|&(x, y)| (y, x))
+            {
+                let text = format!("{ok} of {} tiles", tiles.len());
+                structures::draw_build_label(&frame, first, &text);
+            }
+        }
         if let (Some(tile), true) = (hover_tile, self.tool.drags() && self.drag_start.is_none()) {
             overlay::draw_tile_outline(&frame, tile, overlay::hover_color());
         }
@@ -457,7 +600,9 @@ impl App {
             sim: &self.sim,
             view,
             tool: self.tool,
+            build: &self.build,
             show_work: self.show_work,
+            show_rooms: self.show_rooms,
             selected: self.selected,
             selected_tile: self.selected_tile,
             hover_tile,
@@ -478,6 +623,9 @@ impl App {
                 UiAction::SetSpeed(speed) => self.clock.set_speed(speed),
                 UiAction::SetTool(tool) => self.set_tool(tool),
                 UiAction::ToggleWork => self.show_work = !self.show_work,
+                UiAction::ToggleRooms => self.show_rooms = !self.show_rooms,
+                UiAction::PickBuilding(n) => self.build.pick_building(self.sim.rules(), n),
+                UiAction::PickMaterial(m) => self.build.pick_material(self.sim.rules(), m),
                 UiAction::SelectColonist(id) => {
                     self.selected = Some(id);
                     self.selected_tile = None;
