@@ -84,6 +84,9 @@ Work continues with the recommended choice until the owner answers.
 | D-047 | World steps 10 to 12 have their own seed and hash arrays (`LayerStage`, `RegionStage`). The hashes of steps 1 to 9 do not change when a step is added. The region repair writes a separate overlay and does not change the step 11 output. Game and UI code reads deposits from `Regions.deposits` to get at least 1 deposit type in each region. |
 | D-048 | A world cell holds at most one deposit. The mineral with the largest margin of probability over the roll wins. Ties go to the lowest mineral index. |
 | D-049 | The rock and mineral tables are in `assets/content/rocks.ron` and `deposits.ron`. `worldgen` embeds them with `include_str!` and parses them at the start of world generation. It does no file I/O at run time (owner decision). |
+| D-050 | Sprint 4 room rules: a door is a border tile, so rooms stop at doors. The flood fill is 4-connected. A room has at most 400 tiles and may not touch the map edge. Detection runs in the tick after a structural change. Rooms are a derived cache, recomputed on load. |
+| D-051 | Construction conserves material. Deconstruction returns `floor(units × return_pct / 100)` and the rest is lost by design. A cancelled blueprint returns delivered units. Save format version is 3. Sprint 4 changed the golden hashes `sim_ascii_600_ticks` and `sim_forest_seed1_1000_ticks`. |
+| D-052 | Game keys added in Sprint 4: B build, X remove, O rooms overlay, 1 to 7 pick a building. Developer env hooks: `PCS_BUILD`, `PCS_BLUEPRINT`, `PCS_CHOICE`, `PCS_ROOMS`. |
 
 ## 3. Assumptions
 

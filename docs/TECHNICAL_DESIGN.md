@@ -58,6 +58,7 @@ The module `chronicle::text` makes chronicle text from `chronicle_templates.ron`
 Inside `worldgen`, use modules: `world` (stage seeds, `WorldParams`, step order), `plates`, `height`, `hydro`, `climate`, `biome`, `geology`, `deposit`, `region`, `history`, `embark`, `local`.
 
 Inside `sim`, Sprint 3 added modules `item`, `job`, `skill`, `stockpile`, and `rules`. Job numbers are in `assets/content/jobs.ron`. The save `FORMAT_VERSION` is 2. `Sim::drain_job_events()` returns `JobEvent` values. The `game` crate has the modules `ui`, `hud`, `overlay`, `tools`, and `inspector`.
+Sprint 4 added the `sim` modules `build` and `room` and the content files `buildings.ron`, `recipes.ron`, and `rooms.ron`. The `game` crate added the modules `structures`, `layout`, and `build_ui`.
 
 ### 3.2 Data ownership
 
