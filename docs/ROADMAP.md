@@ -315,7 +315,7 @@ Risks: civilizations that grow or die without limit, local maps that are not dif
 | S16 Drought and wildfire | Make dry summers a crisis. | Dry-day counter in the ledger, drought effects, irrigation ditches, dry-soil crops, lightning. | R-025, R-026. A crop on an irrigated tile grows at normal speed in a drought. A ditch that does not touch water does not irrigate. Fire does not cross a firebreak of 2 soil tiles. |
 | S17 Disease and medicine | Make sickness a crisis that the player can manage. | Food poisoning, wound infection, winter fever, the medicine skill, herbal medicine, the doctor job, sick rooms, disease alerts. | R-060 to R-064. Winter fever does not spread between colonists in different rooms. Treatment decreases severity by the content value. |
 | S18 Rival colonies and raids | Add attacks by other colonies. | Rival colonies from history, hostility, scouts, raids, door and wall breaking, item theft, the tribute choice. | R-070 to R-072. A scout comes 1 game day before each raid. Paying the tribute removes goods of the correct value and the raiders leave. |
-| S19 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. An in-game tutorial that holds the explanations removed from the HUD (the HUD rework strips the long text). Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. A new player can finish the tutorial and see every explanation again from a help menu. |
+| S19 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. An in-game tutorial that holds the explanations removed from the HUD (the HUD rework strips the long text). Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. Second controls review (Q-017). A new player can finish the tutorial and see every explanation again from a help menu. |
 
 Risks: balance, scope pressure, playtest capacity.
 
@@ -324,7 +324,7 @@ Risks: balance, scope pressure, playtest capacity.
 | Milestone | After | Review questions | Exit rule |
 |---|---|---|---|
 | M0 Foundation | S0 | Do the checks run? Is the workspace clean? | All S0 criteria pass. |
-| M1 First winter | S7 | Does winter make real decisions? Do players understand deaths? Is the first year interesting? | 3 recorded playtests. A decision to continue, change the design, or cut scope, recorded in `DECISIONS.md`. Check A-001, A-005, A-006, A-008. |
+| M1 First winter | S7 | Does winter make real decisions? Do players understand deaths? Is the first year interesting? | 3 recorded playtests. A decision to continue, change the design, or cut scope, recorded in `DECISIONS.md`. Check A-001, A-005, A-006, A-008. First controls review (Q-017). |
 | M2 World and history | S11 | Does a site change a player decision in each playtest? Are the local maps different enough? | 3 recorded playtests on 3 seeds. The result is recorded. |
 | M3 MVP | S19 | Is the full loop interesting for 3 years or more? Is failure fair? | 5 recorded playtests. The performance results are recorded. |
 
@@ -367,7 +367,7 @@ The owner wants colonists with their own goals, who form relationships, start fa
 | L5 People of other colonies (S24) | Phase 4 | Friendship, partners, and enmity between colonists and people of rival colonies. Marriage and trade contacts across colonies. Old grudges after raids. | L2, S18, diplomacy (Phase 5) |
 | L6 Races (S25) | Phase 4 | Other peoples as colonists and migrants (see Q-015). Each race is a set of content values: age span, trait chances, comfort band. | L3, content files |
 
-The S20 to S25 numbers are proposed. They follow M3 and do not change S0 to S19.
+The S20 to S25 numbers are proposed. S26 (infinite world spike) is proposed in §7.3. They follow M3 and do not change S0 to S19.
 
 ### 7.2 Where each owner request goes
 
@@ -388,6 +388,11 @@ The S20 to S25 numbers are proposed. They follow M3 and do not change S0 to S19.
 | Mystical races | L6 | Needs the owner answer to Q-015. |
 
 Each step needs a rule ID, a content file, and a test before it goes into a sprint. Do not start a step before M3. The MVP slices C and D are small tasks in S12.
+
+### 7.3 Infinite world and controls review (proposal)
+
+- **S26 Infinite world spike (Phase 4, Q-016):** a design spike, not a feature. Output: a written design and a small prototype in `tools` that makes world chunks on demand from the seed. It answers how the zoom levels, the world map, history, and the embark choice work without a fixed world edge. It starts only after the owner answers Q-016. Worldgen steps 5 to 12 are not changed before then.
+- **Controls and game feel review (Q-017):** the `controls-reviewer` subagent checks how the controls feel and fit the gameplay. First review at M1 (S7 is the first sprint with real gameplay). Second review in S19, with the playtests. The review lists problems with camera, zoom, selection, and build input. The lead agent turns them into tasks.
 
 ## 8. Main project risks
 
