@@ -1,0 +1,17 @@
+// Text templates for the history events (S10). The events hold no strings (TECHNICAL_DESIGN 8.1).
+// Names in braces: {year} {civ} {culture} {civ2} {site} {region} {extra}.
+// There is one template for each event type. The order is the order of the EventKind type.
+(
+    templates: [
+        (kind: "FoundCiv",        text: "Year {year}: the {culture} people found {civ} in region {region}."),
+        (kind: "FoundSettlement", text: "Year {year}: {civ} founds a settlement in region {region}."),
+        (kind: "OpenMine",        text: "Year {year}: {civ} opens a mine in region {region}."),
+        (kind: "MineDepleted",    text: "Year {year}: the mine of {civ} in region {region} has no more ore."),
+        (kind: "BuildRoad",       text: "Year {year}: {civ} builds a road of {extra} cells from region {region}."),
+        (kind: "Battle",          text: "Year {year}: {civ} fights {civ2} in region {region}."),
+        (kind: "Raze",            text: "Year {year}: {civ} destroys a settlement of {civ2} in region {region}."),
+        (kind: "CivCollapse",     text: "Year {year}: {civ} collapses. Its settlements become ruins."),
+        (kind: "ArtifactLost",    text: "Year {year}: {civ} loses an artifact in region {region}."),
+        (kind: "Seal",            text: "Year {year}: {civ} seals a mine in region {region}. Something stays inside."),
+    ],
+)

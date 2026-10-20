@@ -79,6 +79,8 @@ pub struct Building {
     pub bin: Vec<(u16, u32)>,
     /// Workshop only: the orders, in the order they were made.
     pub orders: Vec<WorkOrder>,
+    /// Hearth only: the fuel, in burning hours (R-022).
+    pub fuel_hours: u32,
 }
 
 /// A planned building. Colonists bring the units, then build.
@@ -206,6 +208,13 @@ impl Buildings {
         }
         map.insert((x, y), building);
         true
+    }
+
+    /// Set the fuel of the hearth on a tile. Other buildings are not changed.
+    pub(crate) fn set_fuel(&mut self, x: u16, y: u16, hours: u32) {
+        if let Some(b) = self.objects.get_mut(&(x, y)) {
+            b.fuel_hours = hours;
+        }
     }
 
     /// Tiles of the objects that satisfy a test on the building type.
@@ -486,6 +495,7 @@ impl Sim {
                 units,
                 bin: Vec::new(),
                 orders: Vec::new(),
+                fuel_hours: 0,
             },
         );
         if !inserted {
@@ -514,7 +524,7 @@ impl Sim {
 
     /// The nearest passable tile next to or near a tile, not the tile itself. The order is
     /// fixed: the four neighbors, then the eight neighbors, then growing rings.
-    fn nearest_free_tile(&self, x: u16, y: u16) -> Option<(u16, u16)> {
+    pub(crate) fn nearest_free_tile(&self, x: u16, y: u16) -> Option<(u16, u16)> {
         let (cx, cy) = (i32::from(x), i32::from(y));
         for ring in 1..=4i32 {
             for dy in -ring..=ring {
@@ -594,7 +604,13 @@ impl Sim {
     }
 
     /// The nearest passable neighbor of a tile in a region, to stand on while working.
-    fn work_stand(&self, region: u32, from: (u16, u16), x: u16, y: u16) -> Option<(u16, u16)> {
+    pub(crate) fn work_stand(
+        &self,
+        region: u32,
+        from: (u16, u16),
+        x: u16,
+        y: u16,
+    ) -> Option<(u16, u16)> {
         let mut best: Option<((u16, u16), u32)> = None;
         for (dx, dy) in NEIGHBORS {
             let (nx, ny) = (i32::from(x) + dx, i32::from(y) + dy);
@@ -617,7 +633,12 @@ impl Sim {
 
     /// The unreserved stack of a material that is nearest to a tile, in the region.
     /// Stacks in a stockpile come first. The stack index breaks ties.
-    fn find_material(&self, region: u32, from: (u16, u16), material: u16) -> Option<ItemId> {
+    pub(crate) fn find_material(
+        &self,
+        region: u32,
+        from: (u16, u16),
+        material: u16,
+    ) -> Option<ItemId> {
         let mut best: Option<((u8, u32, u32), ItemId)> = None;
         for (id, item) in self.items.iter() {
             let ItemLoc::Tile(ix, iy) = item.loc else {
@@ -784,6 +805,9 @@ impl Sim {
 
     /// Units that the job still needs of the material of a stack.
     fn units_needed(&self, job: &Job, material: u16) -> u32 {
+        if job.is_refuel() {
+            return self.refuel_units_needed(job, material);
+        }
         match self.material_wanted(job) {
             Some((m, n)) if m == material => n,
             _ => 0,
@@ -1005,6 +1029,8 @@ impl Sim {
                     .is_some_and(|d| BuildLayer::of(d.kind) == layer)
                 && material_ok(b.material)
                 && b.units <= 1_000_000
+                && b.fuel_hours <= 1_000_000
+                && (b.fuel_hours == 0 || rules.is_kind(b.def, BuildingKind::Hearth))
                 && b.bin.iter().all(|&(m, n)| material_ok(m) && n <= 1_000_000)
                 && b.orders
                     .iter()

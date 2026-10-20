@@ -287,7 +287,10 @@ impl Sim {
         if self.rooms_dirty {
             self.rooms_dirty = false;
             self.room_detections += 1;
-            self.rooms = self.compute_rooms();
+            let new = self.compute_rooms();
+            let old = std::mem::replace(&mut self.rooms, new);
+            let old_temps = std::mem::take(&mut self.room_temps);
+            self.carry_room_temps(&old, &old_temps);
         }
     }
 
@@ -295,6 +298,7 @@ impl Sim {
     pub(crate) fn refresh_rooms(&mut self) {
         self.rooms_dirty = false;
         self.rooms = self.compute_rooms();
+        self.fill_room_temps();
     }
 
     /// What a tile is for the border of a room, if it is a border tile.

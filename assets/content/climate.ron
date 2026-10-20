@@ -1,0 +1,44 @@
+// Climate, weather, water, hearth, and alert numbers. Integers only (D-014).
+// Temperatures are in tenths of a degree Celsius (150 = 15.0 C).
+// season_curve: 40 values in per-mille, one for each day of the year (day 1 is the first day
+//   of spring). The warmest day is the middle of summer, the coldest is the middle of winter.
+// daily_curve: 24 values in tenths of a degree, one for each hour of the day (R-002).
+// weather_step_max: the daily change of the weather offset is from -step to +step (R-003).
+// weather_limit: the weather offset stays between -limit and +limit (R-003).
+// default_*: climate of a colony when the embark gives none. Annual mean, seasonal amplitude,
+//   and moisture (0 to 255).
+// rain_max_pct: chance of rain in percent at moisture 255 (R-003).
+// freeze_days: days of cold (or warm) mean that freeze (or thaw) shallow water (R-004).
+// deep_water_distance: a water tile with this many tiles to the nearest land is deep (A-nn).
+// hearth_heat: tenths of a degree times tiles for each burning hearth in each hour (R-022).
+// hearth_fuel_capacity_hours: fuel that a hearth holds, in burning hours.
+// refuel_below_hours: a hearth with this fuel or less gets a hauling job that refuels it.
+// fuel: materials that a hearth burns, with the burning hours of one unit (R-022).
+// low_fuel_alert_hours: a hearth with less fuel than this raises the low fuel alert.
+// cold_period_offset: a weather offset at or below this value is a cold period (R-003).
+(
+    season_curve: [
+        -649, -522, -383, -233, -78, 78, 233, 383, 522, 649,
+        760, 853, 924, 972, 997, 997, 972, 924, 853, 760,
+        649, 522, 383, 233, 78, -78, -233, -383, -522, -649,
+        -760, -853, -924, -972, -997, -997, -972, -924, -853, -760,
+    ],
+    daily_curve: [
+        -35, -43, -48, -50, -48, -43, -35, -25, -13, 0, 13, 25,
+        35, 43, 48, 50, 48, 43, 35, 25, 13, 0, -13, -25,
+    ],
+    weather_step_max: 30,
+    weather_limit: 120,
+    default_mean: 110,
+    default_amplitude: 160,
+    default_moisture: 128,
+    rain_max_pct: 50,
+    freeze_days: 3,
+    deep_water_distance: 3,
+    hearth_heat: 400,
+    hearth_fuel_capacity_hours: 48,
+    refuel_below_hours: 24,
+    fuel: [("firewood", 4), ("coal", 4)],
+    low_fuel_alert_hours: 12,
+    cold_period_offset: -60,
+)
