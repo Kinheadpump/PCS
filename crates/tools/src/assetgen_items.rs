@@ -518,6 +518,29 @@ fn person_icon(img: &mut Image) {
     outline(img, ic::PERSON, OUT, true);
 }
 
+fn snowflake_icon(img: &mut Image) {
+    let mut pts = Vec::new();
+    for i in 1..15 {
+        pts.extend([(i, 7), (i, 8), (7, i), (8, i)]);
+    }
+    for i in 3..13 {
+        pts.extend([(i, i), (15 - i, i)]);
+    }
+    // Small barbs at the ends of the four main arms.
+    pts.extend([
+        (5, 3),
+        (10, 3),
+        (5, 12),
+        (10, 12),
+        (3, 5),
+        (3, 10),
+        (12, 5),
+        (12, 10),
+    ]);
+    plot(img, ic::SNOWFLAKE, &pts, SPARK);
+    outline(img, ic::SNOWFLAKE, OUT, true);
+}
+
 fn fastest_icon(img: &mut Image) {
     for off in [0, 4, 8] {
         for y in 4..13i32 {
@@ -601,6 +624,63 @@ fn brackets(img: &mut Image) {
     }
 }
 
+const THERMOMETER: [&str; 16] = [
+    "................",
+    "......oooo......",
+    ".....owwwwo.....",
+    ".....owmddo.....",
+    ".....owmddo.....",
+    ".....owmwdo.....",
+    ".....owmwdo.....",
+    ".....owmwdo.....",
+    ".....owmwdo.....",
+    "....oowmwdoo....",
+    "...owwwwwwwmo...",
+    "...owwwwwwwdo...",
+    "...owwwwwwmdo...",
+    "....owwwwmdo....",
+    ".....oooooo.....",
+    "................",
+];
+
+const RAIN: [&str; 16] = [
+    "................",
+    ".......oo.......",
+    "......owwo......",
+    "......owwmo.....",
+    ".....owwwmo.....",
+    ".....owwwwmo....",
+    "....owwwwwmdo...",
+    "....owwwwwmdo...",
+    "...owwwwwwmddo..",
+    "...owwwwwmmddo..",
+    "...owwwwmmmddo..",
+    "...owmmmmmmddo..",
+    "....owmmmmddo...",
+    ".....oodddoo....",
+    ".......ooo......",
+    "................",
+];
+
+const FLAME: [&str; 16] = [
+    "................",
+    ".......oo.......",
+    "......owwo......",
+    "......owwwo.....",
+    ".....owwwwo.oo..",
+    ".....owwwwwowo..",
+    "....owwwwwwwwo..",
+    "....owwmwwwwwo..",
+    "...owwmmmwwwwo..",
+    "...owwmmmmwwwo..",
+    "...owmmmmmmwwo..",
+    "...owmmddmmmwo..",
+    "....owmmddmmo...",
+    ".....owmmmmo....",
+    "......oooooo....",
+    "................",
+];
+
 const BUILD: [&str; 16] = [
     "................",
     "......oooooo....",
@@ -656,6 +736,10 @@ pub fn make_icons() -> Image {
     chevron_icons(&mut img);
     person_icon(&mut img);
     fastest_icon(&mut img);
+    rows(&mut img, ic::THERMOMETER, &THERMOMETER);
+    rows(&mut img, ic::RAIN, &RAIN);
+    rows(&mut img, ic::FLAME, &FLAME);
+    snowflake_icon(&mut img);
     badges(&mut img);
     brackets(&mut img);
     img
