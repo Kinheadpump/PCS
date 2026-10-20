@@ -308,7 +308,7 @@ Risks: civilizations that grow or die without limit, local maps that are not dif
 
 | Sprint | Goal | Deliverable | Main acceptance criteria |
 |---|---|---|---|
-| S12 Production and knowledge | Add the production chains and knowledge. | Tool requirement and wear, tool crafting, charcoal, bricks, smoked food, smelting, iron tools. Lore fragment items, the excavate designation, and reading. | R-008, R-042, R-043. Each chain in `GAME_DESIGN.md` §11.3 works in a scenario test. A locked recipe cannot be ordered. |
+| S12 Production and knowledge | Add the production chains and knowledge. | Tool requirement and wear, tool crafting, charcoal, bricks, smoked food, smelting, iron tools. Lore fragment items, the excavate designation, and reading. Proposed (Q-014): job choice by colony need (§7.2) and a small injury chance at risky jobs. | R-008, R-042, R-043. Each chain in `GAME_DESIGN.md` §11.3 works in a scenario test. A locked recipe cannot be ordered. |
 | S13 Creatures and combat | Add creatures and melee combat. | Game animals, hunting, meat and leather, beasts, drafting, melee, the condition "wounded". | R-032. A drafted colonist obeys a move order in the same tick. Creatures use the path budget (P-04). |
 | S14 Notice, legends, and sealed sites | Make history dangerous and useful. | Notice and its overlay, beast spawns, lair beasts, dormant threats, legends with site markers. | R-030, R-031, R-044. Notice equals the sum of its contributions. Opening a sealed site wakes its threat. |
 | S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save. Proposed (Q-014): migrants with a short background line, and bonds (§7.1). | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. |
@@ -360,12 +360,34 @@ The owner wants colonists with their own goals, who form relationships, start fa
 |---|---|---|---|
 | MVP slice A | S6 (no new task) | Keep the mood modifier list open for social sources. Colonist age and sex stay in the data. | S6 mood |
 | MVP slice B | S15 | Migrants have a short background line. Colonists who work or sleep near each other get a bond. The modifier "friend died" scales with the bond. This makes the example in `GAME_DESIGN.md` §15 true. | S6, S15 |
-| L1 Wants | Phase 4 | Each colonist has 1 life goal and a few short wants. A met want adds a mood modifier. An unmet want adds a negative one. | MVP slice B |
-| L2 Relationships | Phase 4 | Opinion between two colonists. Friend, rival, and partner states. Each change is a named contribution (why chain). | L1 |
-| L3 Families | Phase 4 | Partners, pregnancy, birth, children, growth to adult, aging and death by age. Children do not work. | L2, beds and food from S6 |
-| L4 Colony growth | Phase 4 | The colony grows from inside and by migrants. Mood and bonds change the migrant chance (R-017). Colonists leave if the colony fails their goals. | L3 |
+| L1 Wants and personality (S20) | Phase 4 | Each colonist has 1 life goal and a few short wants. Social trait: introvert or extrovert. An extrovert wants company. An introvert wants time alone. A met want adds a mood modifier. An unmet want adds a negative one. | MVP slice B |
+| L2 Relationships (S21) | Phase 4 | Opinion between two colonists. Friend, rival, enemy, and partner states. Each change is a named contribution (why chain). | L1 |
+| L3 Families, ages, and homes (S22) | Phase 4 | Partners, pregnancy, birth, children, growth to adult, aging and death by age. Children do not work. Colonists and families live in assigned houses (rooms with beds). | L2, beds and food from S6 |
+| L4 Colony growth (S23) | Phase 4 | The colony grows from inside and by migrants. Mood and bonds change the migrant chance (R-017). Colonists leave if the colony fails their goals. | L3 |
+| L5 People of other colonies (S24) | Phase 4 | Friendship, partners, and enmity between colonists and people of rival colonies. Marriage and trade contacts across colonies. Old grudges after raids. | L2, S18, diplomacy (Phase 5) |
+| L6 Races (S25) | Phase 4 | Other peoples as colonists and migrants (see Q-015). Each race is a set of content values: age span, trait chances, comfort band. | L3, content files |
 
-Each step needs a rule ID, a content file, and a test before it goes into a sprint. Do not start a step before M3.
+The S20 to S25 numbers are proposed. They follow M3 and do not change S0 to S19.
+
+### 7.2 Where each owner request goes
+
+| Request | Sprint or step | Note |
+|---|---|---|
+| Each person wants a job. They pick jobs by colony need and by how many others do each job. | New task in S12 (MVP slice C) | Extends the job selection of D-040. A colonist without work gets the modifier "no work". The jobs from S12 and S13 give enough choices. |
+| Moods | S6 | Already planned. |
+| Different houses | S4 (rooms), S6 (beds), L3 | Rooms and beds exist. Assigning a house to a family is in L3. |
+| Introvert and extrovert | L1 | A trait with a need for company or solitude. |
+| Friendships, partners, enemies in the colony | L2 | |
+| Friendships and enemies between colonies | L5 | Uses S18 and Phase 5 diplomacy. |
+| Children, ages | L3 | |
+| Death from disease | S17 | Already planned. |
+| Death from natural disaster | S16 (drought, wildfire), S15 (fire) | Already planned. |
+| Death from accident | New task in S12 (MVP slice D) | A small chance of injury at risky jobs (mining, tree felling). It uses the condition "wounded". |
+| Death from war | S13 (melee), S18 (raids) | Already planned. |
+| Death by age | L3 | |
+| Mystical races | L6 | Needs the owner answer to Q-015. |
+
+Each step needs a rule ID, a content file, and a test before it goes into a sprint. Do not start a step before M3. The MVP slices C and D are small tasks in S12.
 
 ## 8. Main project risks
 
