@@ -164,6 +164,36 @@ pub fn alert_chips(sim: &Sim) -> Vec<AlertChip> {
                 tint: if hours == 0 { OUT_TINT } else { FUEL_TINT },
                 target: Some((x, y)),
             },
+            AlertKind::Hunger { x, y, starving, .. } => AlertChip {
+                icon: ic::FLAME,
+                text: if starving { "Starving" } else { "Hungry" }.to_owned(),
+                tint: OUT_TINT,
+                target: Some((x, y)),
+            },
+            AlertKind::Hypothermia { x, y, .. } => AlertChip {
+                icon: ic::SNOWFLAKE,
+                text: "Hypothermia".to_owned(),
+                tint: COLD_TINT,
+                target: Some((x, y)),
+            },
+            AlertKind::Heatstroke { x, y, .. } => AlertChip {
+                icon: ic::FLAME,
+                text: "Heatstroke".to_owned(),
+                tint: OUT_TINT,
+                target: Some((x, y)),
+            },
+            AlertKind::LowMood { x, y, .. } => AlertChip {
+                icon: ic::FLAME,
+                text: "Low mood".to_owned(),
+                tint: FUEL_TINT,
+                target: Some((x, y)),
+            },
+            AlertKind::Death { x, y, .. } => AlertChip {
+                icon: ic::SNOWFLAKE,
+                text: "Death".to_owned(),
+                tint: OUT_TINT,
+                target: Some((x, y)),
+            },
         })
         .collect();
     if chips.len() > MAX_CHIPS {
