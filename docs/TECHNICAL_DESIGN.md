@@ -277,7 +277,8 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 - Do not use `#[serde(skip)]` for data that affects the simulation. Derived caches are rebuilt on load.
 - The `game` crate writes to a temporary file and then renames it. It keeps one backup.
 - `tools dump-save` writes RON for comparison.
-- Ironman and free-save modes use the same format (Q-003). Ironman writes a save at 00:00 of each game day and at exit.
+- Ironman and free-save modes use the same format (Q-003). Ironman writes a save at 00:00 of each game day, on quit to menu, and at exit.
+- Files (proposal, `ROADMAP.md` §7.5): `worlds/<id>.ron` is a world record. `saves/<id>.sav` is a run, and `saves/<id>.meta` is its list entry. `settings.ron` holds the settings. The base folder is `%APPDATA%/Ruinstead` on Windows, from `std::env`. `PCS_DATA_DIR` overrides it. Only `game` reads and writes these files. A bad file gives an error value, never a panic.
 
 ## 10. Content data (D-014)
 
