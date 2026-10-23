@@ -191,6 +191,10 @@ pub enum Command {
     },
     /// Fight the raiders while they wait (R-072).
     RaidFight,
+    /// Accept the migrants that wait at the map edge (R-017). They join as colonists.
+    AcceptMigrants,
+    /// Refuse the migrants that wait (R-017). They leave the map.
+    RefuseMigrants,
     /// The player abandons the colony. The run ends (R-050).
     Abandon,
 }

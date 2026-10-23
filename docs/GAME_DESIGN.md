@@ -387,7 +387,7 @@ Item durability and value come from the material and the item template.
 
 ### 8.8 Fire
 
-**R-023 Fire start:** Fire starts only from a burning hearth. Each game hour, each flammable item or structure within 1 tile of a burning hearth has a 1% chance to start burning.
+**R-023 Fire start:** Fire starts only from a burning hearth. Each game hour, each flammable item or object (bed, door, workshop) within 1 tile of a burning hearth has a 1% chance to start burning. Floors and roofs burn only when a fire spreads to them. The first 10 days of a run have no hearth fire.
 
 **R-024 Fire spread:** A burning tile has fire intensity from 1 to 10. Each 10 ticks, it has a chance to spread to each adjacent flammable tile. The chance is `flammability × intensity / 10` percent. A burning tile uses its fuel. When the fuel is 0, the fire stops. Stone and soil do not burn. Rain stops all outdoor fire. A colonist with an extinguish job decreases intensity by 2 each game hour.
 

@@ -1,0 +1,32 @@
+// Migrant numbers (S15, R-017). Integers only (D-014).
+// quiet_days: no migrants in the first days of the run.
+// min_food_days: migrants come only when the food lasts at least this many days.
+// base_pct, wealth_per_pct, max_pct: the daily chance is base_pct plus 1 for each wealth_per_pct
+//   of wealth, to max_pct (percent).
+// group_max: a group has 1 to group_max migrants.
+// decision_ticks: time that the player has to answer. After it the migrants leave. The
+//   interface pauses the game, so this limit only serves headless runs.
+// main_level_min, main_level_max: level of the one main skill of a migrant. Other skills have
+//   level 0.
+// backgrounds: the short background line of a migrant (Q-014). A colonist keeps the index.
+(
+    quiet_days: 3,
+    min_food_days: 10,
+    base_pct: 5,
+    wealth_per_pct: 1000,
+    max_pct: 20,
+    group_max: 2,
+    decision_ticks: 2400,
+    main_level_min: 2,
+    main_level_max: 5,
+    backgrounds: [
+        "Lost a farm to a bad harvest.",
+        "Walked here after a village burned.",
+        "Left a quarrelsome family.",
+        "Used to carry stone for a mine.",
+        "Served as a guard in a rival colony.",
+        "Followed a rumor of a safe valley.",
+        "Mended nets by a river.",
+        "Wants a quiet life.",
+    ],
+)
