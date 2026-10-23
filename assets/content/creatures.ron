@@ -1,0 +1,61 @@
+// Creature and melee numbers (S13, R-031, R-032, R-071). Integers only (D-014).
+// Game animals: game_per_1000 for each 1000 passable tiles at the start, from game_min to game_max.
+//   game_safe_distance: no game animal starts nearer than this to a colonist. One new animal comes
+//   every regrow_days game days while the count is below the start count.
+// Lairs: lair_count lairs, each at least lair_min_distance tiles from the colonists, with
+//   lair_beasts beasts. They sleep until Notice reaches lair_active (notice.ron) and the quiet days
+//   have passed. beast_quiet_days: no beast arrives and no lair wakes in the first days.
+// Beasts: the level of a beast is 1 + Notice / beast_level_div. A group has 1 + level / group_div
+//   beasts, to group_max.
+// Movement: wander_radius tiles around the home, a new step every wander_ticks, flee_ticks of
+//   fleeing after a hit. think_ticks: ticks between the decisions of a creature. repath_ticks:
+//   ticks before a chasing creature asks for a new path. active_sight: sight of a driven beast.
+// Melee (R-032): fist_damage is the base damage of a colonist with no weapon. The damage is
+//   base * (100 + level_pct * combat level) / 100 plus a roll from 0 to roll_pct percent of the base.
+//   A hit of wound_damage or more adds the condition "wounded".
+// colonist_attack_ticks: ticks between the blows of a colonist. combat_xp and hunting_xp:
+//   experience for a hit and for a kill of a game animal. leave_ticks: time that raiders have to
+//   leave the map after they get the order.
+// meat and hide: the materials that a dead creature leaves.
+// Kinds: health, damage (0 = harmless), attack_ticks, speed (progress each tick, a colonist has
+//   100), sight in tiles, min_level for beasts, meat and hide units.
+(
+    game_per_1000: 4,
+    game_min: 4,
+    game_max: 30,
+    game_safe_distance: 10,
+    regrow_days: 2,
+    lair_count: 2,
+    lair_min_distance: 30,
+    lair_beasts: 2,
+    beast_quiet_days: 8,
+    beast_level_div: 25,
+    group_div: 3,
+    group_max: 4,
+    wander_radius: 6,
+    wander_ticks: 60,
+    flee_ticks: 200,
+    think_ticks: 10,
+    repath_ticks: 20,
+    active_sight: 80,
+    fist_damage: 6,
+    level_pct: 10,
+    roll_pct: 20,
+    wound_damage: 10,
+    colonist_attack_ticks: 60,
+    combat_xp: 3,
+    hunting_xp: 20,
+    leave_ticks: 1800,
+    meat: "meat",
+    hide: "hide",
+    kinds: [
+        (id: "hare", name: "Hare", role: Game, health: 6, damage: 0, attack_ticks: 0, speed: 170, sight: 8, min_level: 0, meat: 1, hide: 0),
+        (id: "deer", name: "Deer", role: Game, health: 18, damage: 0, attack_ticks: 0, speed: 150, sight: 10, min_level: 0, meat: 5, hide: 2),
+        (id: "boar", name: "Boar", role: Game, health: 28, damage: 8, attack_ticks: 80, speed: 120, sight: 8, min_level: 0, meat: 6, hide: 2),
+        (id: "wolf", name: "Wolf", role: Beast, health: 22, damage: 9, attack_ticks: 70, speed: 140, sight: 14, min_level: 1, meat: 3, hide: 1),
+        (id: "bear", name: "Bear", role: Beast, health: 50, damage: 11, attack_ticks: 90, speed: 115, sight: 10, min_level: 3, meat: 8, hide: 3),
+        (id: "shade", name: "Shade", role: Horror, health: 40, damage: 10, attack_ticks: 80, speed: 110, sight: 30, min_level: 1, meat: 0, hide: 0),
+        (id: "tomb_horror", name: "Tomb horror", role: Horror, health: 90, damage: 14, attack_ticks: 80, speed: 100, sight: 30, min_level: 3, meat: 0, hide: 0),
+        (id: "raider", name: "Raider", role: Raider, health: 24, damage: 10, attack_ticks: 70, speed: 100, sight: 25, min_level: 0, meat: 0, hide: 0),
+    ],
+)

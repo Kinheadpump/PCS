@@ -478,12 +478,12 @@ Each crisis must have a cause in the simulation, a warning sign that the player 
 **R-031 Notice effects:**
 
 - Each game day, a beast enters the map with a chance of Notice / 4 percent, to a maximum of 50%.
-- Beasts in lairs on the map become active when Notice is 30 or more.
+- Beasts in lairs on the map become active when Notice is 30 or more. No beast arrives and no lair wakes in the first 8 game days of the run.
 - An awake dormant threat gets 1 strength level for each 25 Notice.
 
 ### 10.3 Creatures
 
-- Game animals walk around the map. Colonists with a hunt designation hunt them. They give meat and leather.
+- Game animals walk around the map. The player orders a colonist to hunt one (an attack order). A dead animal leaves meat and hide. A workshop makes leather from hide, and clothes from leather.
 - Beasts attack colonists. They come from the map edge or from lairs.
 - Rival colonies send raids (§10.5).
 - Dormant threats wake up when colonists open a sealed site.

@@ -1039,7 +1039,7 @@ fn needs_state_after_a_death_survives_a_save() {
 
 #[test]
 fn the_save_format_version_is_7() {
-    assert_eq!(save::FORMAT_VERSION, 10);
+    assert_eq!(save::FORMAT_VERSION, 11);
 }
 
 #[test]
@@ -1055,7 +1055,7 @@ fn a_changed_colonist_state_that_breaks_a_range_is_refused_by_the_loader() {
 fn the_repository_needs_and_traits_files_load_and_link() {
     let rules = SimRules::builtin();
     assert!(rules.needs.enabled);
-    assert_eq!(rules.needs.foods.len(), 4);
+    assert_eq!(rules.needs.foods.len(), 5);
     assert!(
         rules
             .needs

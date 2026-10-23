@@ -11,9 +11,9 @@
 // pay_hostility, win_hostility, loot_hostility: hostility change after a tribute, a won fight,
 //   and a raid that carried away items (R-072).
 // wealth_div, notice_div: hostility from the wealth of the colony and its Notice (R-070).
-// loot_interval_ticks, loot_per_raider, stay_ticks: until combat exists (S13) the raiders carry
-//   away one stack every loot_interval_ticks, at most loot_per_raider stacks for each raider,
-//   and leave after stay_ticks.
+// loot_per_raider, stay_ticks: the raiders carry away at most loot_per_raider stacks for each
+//   raider, and they leave the map after stay_ticks of the fight (S13: they are creatures
+//   that walk, fight, and carry the stacks).
 // break_ticks_per_hardness: time for one raider to break a door or a wall, for each unit of the
 //   hardness of its material.
 (
@@ -30,8 +30,7 @@
     loot_hostility: 10,
     wealth_div: 1000,
     notice_div: 2,
-    loot_interval_ticks: 300,
     loot_per_raider: 2,
-    stay_ticks: 1800,
+    stay_ticks: 4800,
     break_ticks_per_hardness: 20,
 )

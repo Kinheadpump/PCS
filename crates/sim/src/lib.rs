@@ -10,7 +10,9 @@ pub mod build;
 pub mod chronicle;
 pub mod climate;
 pub mod colonist;
+pub mod combat;
 pub mod command;
+pub mod creature;
 pub mod drought;
 pub mod event;
 pub mod farm;
@@ -52,7 +54,11 @@ pub use climate::{
     TempPlace, TileTemperature,
 };
 pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex};
+pub use combat::melee_damage;
 pub use command::Command;
+pub use creature::{
+    CombatEvent, CombatReject, Creature, CreatureId, CreatureKind, CreatureRules, Mode, Role,
+};
 pub use drought::{DIG_ARG, DroughtEvent, Fire, Growth, GrowthCause, GrowthPart};
 pub use event::Event;
 pub use farm::{
@@ -166,6 +172,8 @@ pub struct Sim {
     raid: raid::RaidState,
     /// Migrant offer and counts (S15).
     migrants: migrant::MigrantState,
+    /// Creatures, lairs, and kill counts (S13).
+    creature: creature::CreatureState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -184,6 +192,9 @@ pub struct Sim {
     /// Migrant events for the caller. Not part of the state.
     #[serde(skip)]
     migrant_events: Vec<MigrantEvent>,
+    /// Combat and creature events for the caller. Not part of the state.
+    #[serde(skip)]
+    combat_events: Vec<CombatEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -233,6 +244,7 @@ impl Sim {
         sim.roll_colonists(seed);
         sim.roll_start_skills(seed);
         sim.place_start_stock();
+        sim.creature_start();
         sim
     }
 
@@ -276,6 +288,8 @@ impl Sim {
             raid_events: Vec::new(),
             migrants: migrant::MigrantState::new(seed),
             migrant_events: Vec::new(),
+            creature: creature::CreatureState::new(seed),
+            combat_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),
             events: Vec::new(),
@@ -323,7 +337,8 @@ impl Sim {
     }
 
     /// Run one tick. Order: room detection (only after a structural change), commands, jobs,
-    /// path requests, movement, the tick number increases, then the climate (each game hour).
+    /// combat, path requests, creatures, movement, the tick number increases, then the climate
+    /// (each game hour).
     pub fn step(&mut self, commands: &[Command]) {
         self.detect_rooms();
         for command in commands {
@@ -331,7 +346,9 @@ impl Sim {
         }
         self.update_needs();
         self.update_jobs();
+        self.combat_tick();
         self.process_path_queue();
+        self.creature_tick();
         self.move_colonists();
         self.tick += 1;
         self.climate_tick();
@@ -613,6 +630,7 @@ impl Sim {
             || !sim.drought_state_ok()
             || !sim.raid_state_ok()
             || !sim.migrant_state_ok()
+            || !sim.creature_state_ok()
         {
             return None;
         }

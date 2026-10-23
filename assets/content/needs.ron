@@ -25,7 +25,7 @@
     comfort_high: 260,
     start_clothes: "simple_clothes",
     // Clothes: (material, insulation in tenths of a degree that the lower limit drops).
-    clothes: [("simple_clothes", 50), ("winter_coat", 120)],
+    clothes: [("simple_clothes", 50), ("winter_coat", 120), ("leather_clothes", 90)],
     // R-013 warmth.
     hazard_margin: 100,
     hazard_step: 10,
@@ -40,7 +40,7 @@
     wounded_health_loss: 1,
     wounded_bed_hours: 8,
     // Foods, best first: (material, nutrition, mood memory key).
-    foods: [("meal", 50, "ate_meal"), ("berries", 25, "ate_raw"), ("turnips", 20, "ate_raw"), ("wild_roots", 20, "ate_raw")],
+    foods: [("meal", 50, "ate_meal"), ("berries", 25, "ate_raw"), ("turnips", 20, "ate_raw"), ("wild_roots", 20, "ate_raw"), ("meat", 15, "ate_raw")],
     // R-014 mood.
     mood_base: 50,
     mood_min: 0,
