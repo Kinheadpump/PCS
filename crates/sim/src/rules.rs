@@ -14,8 +14,9 @@ use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
 use base::content::{
     BuildingDef, BuildingKind, ContentError, ContentIssue, DroughtRules, JobRules, MaterialDef,
-    NoticeRules, RecipeDef, RoomRules, load_buildings, load_drought_rules, load_job_rules,
-    load_materials, load_notice_rules, load_recipes, load_room_rules,
+    NoticeRules, RaidRules, RecipeDef, RoomRules, load_buildings, load_drought_rules,
+    load_job_rules, load_materials, load_notice_rules, load_raid_rules, load_recipes,
+    load_room_rules,
 };
 use std::sync::Arc;
 use worldgen::{Ore, RockKind};
@@ -36,6 +37,7 @@ const LEDGER_TEXT: &str = include_str!("../../../assets/content/ledger.ron");
 const CHRONICLE_TEXT: &str = include_str!("../../../assets/content/chronicle_templates.ron");
 const NOTICE_TEXT: &str = include_str!("../../../assets/content/notice.ron");
 const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
+const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
@@ -115,6 +117,8 @@ pub struct SimRules {
     pub notice: NoticeRules,
     /// Drought, irrigation, and fire numbers.
     pub drought: DroughtRules,
+    /// Rival colony and raid numbers.
+    pub raid: RaidRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -156,6 +160,7 @@ impl Default for SimRules {
             traits: Vec::new(),
             notice: NoticeRules::default(),
             drought: DroughtRules::default(),
+            raid: RaidRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -301,6 +306,7 @@ impl SimRules {
         let traits = load_traits("traits.ron", traits_text)?;
         let notice = load_notice_rules("notice.ron", NOTICE_TEXT)?;
         let drought = load_drought_rules("drought.ron", DROUGHT_TEXT)?;
+        let raid = load_raid_rules("raid.ron", RAID_TEXT)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -355,6 +361,7 @@ impl SimRules {
             traits,
             notice,
             drought,
+            raid,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),

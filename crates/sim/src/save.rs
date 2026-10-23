@@ -11,7 +11,7 @@ use std::fmt;
 /// Magic bytes at the start of a save.
 pub const MAGIC: [u8; 8] = *b"COLSAVE1";
 /// Version of the payload layout. Before version 1.0 a different version is refused.
-pub const FORMAT_VERSION: u32 = 8;
+pub const FORMAT_VERSION: u32 = 9;
 /// Size of the header in bytes.
 pub const HEADER_LEN: usize = 8 + 4 + 8 + 8;
 
@@ -133,10 +133,10 @@ mod tests {
         bad[0] = b'X';
         assert_eq!(from_bytes(&bad).unwrap_err(), SaveError::BadMagic);
         let mut bad = bytes.clone();
-        bad[8] = 9;
+        bad[8] = 99;
         assert!(matches!(
             from_bytes(&bad).unwrap_err(),
-            SaveError::UnsupportedVersion { found: 9, .. }
+            SaveError::UnsupportedVersion { found: 99, .. }
         ));
         assert!(from_bytes(&bytes).is_ok());
     }

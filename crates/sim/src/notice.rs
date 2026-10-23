@@ -213,7 +213,7 @@ impl Sim {
         NoticeReport { total, parts }
     }
 
-    fn material_value(&self, material: u16) -> u64 {
+    pub(crate) fn material_value(&self, material: u16) -> u64 {
         self.rules
             .materials
             .get(usize::from(material))
@@ -238,7 +238,7 @@ impl Sim {
     }
 
     /// Notice now, for the daily rolls and the strength of threats.
-    fn notice_total(&self) -> u32 {
+    pub(crate) fn notice_total(&self) -> u32 {
         self.notice().total
     }
 

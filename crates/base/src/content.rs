@@ -957,6 +957,79 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
     }
     finish(file_name, r, issues)
 }
+/// Numbers for rival colonies and raids (`raid.ron`, R-070 to R-072).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RaidRules {
+    /// A raid can start on a day after this one.
+    pub quiet_days: u32,
+    /// The daily raid chance in percent is hostility divided by this.
+    pub chance_div: u32,
+    /// Largest daily raid chance, in percent.
+    pub max_pct: u32,
+    /// Days that a rival colony waits after a raid.
+    pub cooldown_days: u32,
+    /// Fewest raiders.
+    pub min_fighters: u32,
+    /// Ticks between the scout and the raiders.
+    pub scout_lead_ticks: u32,
+    /// Ticks that the player has to answer when the raiders arrive.
+    pub decision_ticks: u32,
+    /// Value of the tribute for each raider.
+    pub tribute_per_raider: u32,
+    /// Hostility that a tribute removes.
+    pub pay_hostility: u32,
+    /// Hostility that a won fight removes.
+    pub win_hostility: u32,
+    /// Hostility that a raid adds when the raiders carry away items.
+    pub loot_hostility: u32,
+    /// Wealth units for 1 hostility.
+    pub wealth_div: u32,
+    /// Notice is divided by this for the hostility.
+    pub notice_div: u32,
+    /// Ticks between two thefts.
+    pub loot_interval_ticks: u32,
+    /// Most stacks that one raider carries away.
+    pub loot_per_raider: u32,
+    /// Ticks that the raiders stay in a fight.
+    pub stay_ticks: u32,
+    /// Ticks to break a door or a wall, for each unit of hardness.
+    pub break_ticks_per_hardness: u32,
+}
+
+/// Load and validate the raid numbers.
+pub fn load_raid_rules(file_name: &str, text: &str) -> Result<RaidRules, ContentError> {
+    let r: RaidRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    for (value, name) in [
+        (r.chance_div, "chance_div"),
+        (r.min_fighters, "min_fighters"),
+        (r.scout_lead_ticks, "scout_lead_ticks"),
+        (r.decision_ticks, "decision_ticks"),
+        (r.wealth_div, "wealth_div"),
+        (r.notice_div, "notice_div"),
+        (r.loot_interval_ticks, "loot_interval_ticks"),
+        (r.stay_ticks, "stay_ticks"),
+    ] {
+        if value == 0 {
+            issues.push(issue(name, "must be 1 or more"));
+        }
+    }
+    if r.max_pct > 100 {
+        issues.push(issue("max_pct", "must be 100 or less"));
+    }
+    for (value, name) in [
+        (r.pay_hostility, "pay_hostility"),
+        (r.win_hostility, "win_hostility"),
+        (r.loot_hostility, "loot_hostility"),
+    ] {
+        if value > 100 {
+            issues.push(issue(name, "must be 100 or less"));
+        }
+    }
+    finish(file_name, r, issues)
+}
+
 /// A geological setting with its pool of rocks (rocks.ron).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingDef {
@@ -1457,6 +1530,20 @@ pub struct EmbarkRules {
     pub legend_rumor_true_pct: u32,
     /// A false rumor points to a tile at least this far from every site, in tiles.
     pub legend_min_gap: u32,
+    /// A rival colony is a living settlement within this many world cells (R-070).
+    pub rival_radius: u32,
+    /// Most rival colonies of one embark.
+    pub max_rivals: u32,
+    /// Fewest fighters of a rival colony.
+    pub rival_strength_min: u32,
+    /// Most fighters of a rival colony.
+    pub rival_strength_max: u32,
+    /// The aggression of the civilization is divided by this for the base hostility.
+    pub rival_aggression_div: u32,
+    /// Base hostility for each battle of the rival civilization in the embark area.
+    pub rival_battle_hostility: u32,
+    /// Base hostility for each settlement razed in the embark area in which the rival civilization took part.
+    pub rival_raze_hostility: u32,
 }
 
 /// Load and validate the embark numbers. `biome_names` holds the world biome names in order.
@@ -1561,6 +1648,28 @@ pub fn load_embark_rules(
         r.legend_min_gap <= 64,
         "legend_min_gap",
         "must be 64 or less",
+    );
+    check(r.rival_radius <= 20, "rival_radius", "must be 20 or less");
+    check(r.max_rivals <= 8, "max_rivals", "must be 8 or less");
+    check(
+        1 <= r.rival_strength_min && r.rival_strength_min <= r.rival_strength_max,
+        "rival_strength_min",
+        "must satisfy 1 <= rival_strength_min <= rival_strength_max",
+    );
+    check(
+        r.rival_strength_max <= 100,
+        "rival_strength_max",
+        "must be 100 or less",
+    );
+    check(
+        r.rival_aggression_div >= 1,
+        "rival_aggression_div",
+        "must be 1 or more",
+    );
+    check(
+        r.rival_battle_hostility <= 100 && r.rival_raze_hostility <= 100,
+        "rival_battle_hostility",
+        "hostility values must be 100 or less",
     );
     finish(file_name, r, issues)
 }
