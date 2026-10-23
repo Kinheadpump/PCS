@@ -45,6 +45,8 @@ pub struct CropDef {
     pub yield_units: u32,
     /// Seed units that a harvest gives.
     pub seed_yield: u32,
+    /// True for a dry-soil crop: a drought does not slow it (R-025).
+    pub dry_soil: bool,
 }
 
 /// One wild plant type (`wild_plants.ron`).
@@ -135,6 +137,8 @@ struct RawCrop {
     growth_days: u16,
     yield_units: u32,
     seed_yield: u32,
+    #[serde(default)]
+    dry_soil: bool,
 }
 
 #[derive(Deserialize)]
@@ -211,6 +215,7 @@ pub fn load_farm_rules(
             growth_days: c.growth_days,
             yield_units: c.yield_units,
             seed_yield: c.seed_yield,
+            dry_soil: c.dry_soil,
         });
     }
     let mut wild = Vec::new();
@@ -666,8 +671,12 @@ impl Sim {
                 self.farm.killed_today += 1;
             } else if (crop.min_temp..=crop.max_temp).contains(&temp) {
                 let needed = u32::from(crop.growth_days) * 24;
+                let pct = u64::try_from(self.growth_pct(tile.0, tile.1, crop.dry_soil).total)
+                    .unwrap_or(0);
+                let hour = self.tick / TICKS_PER_HOUR;
+                let step = u32::from(hour * pct / 100 != hour.saturating_sub(1) * pct / 100);
                 if let Some(p) = self.farm.plants.get_mut(&tile) {
-                    p.hours = (p.hours + 1).min(needed);
+                    p.hours = (p.hours + step).min(needed);
                 }
             }
         }
@@ -732,7 +741,7 @@ impl Sim {
     /// Each game day: wild plants grow again (not in winter), and the frost report.
     fn farm_daily(&mut self) {
         let ended = GameTime::from_tick(self.tick.saturating_sub(1));
-        if ended.season != Season::Winter {
+        if ended.season != Season::Winter && self.wild_plants_regrow() {
             for days in self.farm.regrow.values_mut() {
                 *days = days.saturating_sub(1);
             }

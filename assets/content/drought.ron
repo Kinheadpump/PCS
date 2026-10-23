@@ -1,0 +1,23 @@
+// Drought, irrigation, wildfire, and fire spread numbers (R-024, R-025, R-026). Integers only (D-014).
+// drought_days: days in a row without rain that start a drought.
+// dry_growth_pct: crop growth speed in percent on a tile that is not irrigated during a drought.
+// irrigation_radius: a tile this near a water tile or a connected ditch tile is irrigated.
+// fire_drought_pct: fire spread chance during a drought, in percent of the normal chance.
+// lightning_pct, lightning_intensity: chance of lightning on a summer drought day, and the
+//   intensity of the fire it starts.
+// fire_step_ticks: ticks between two fire steps.
+// tree_flammability: spread chance of a tree tile in percent is this times the intensity / 10.
+// tree_fuel: fire steps that a burning tree lasts.
+// dig_ticks: work time to dig one ditch tile at 100% work speed.
+(
+    drought_days: 5,
+    dry_growth_pct: 50,
+    irrigation_radius: 4,
+    fire_drought_pct: 200,
+    lightning_pct: 10,
+    lightning_intensity: 5,
+    fire_step_ticks: 10,
+    tree_flammability: 10,
+    tree_fuel: 60,
+    dig_ticks: 300,
+)

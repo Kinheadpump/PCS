@@ -32,6 +32,15 @@ pub enum Command {
         /// Tile row.
         y: u16,
     },
+    /// Order a ditch on a tile. A colonist digs it as a mine job and nobody walks on a ditch
+    /// after that. The tile needs soil, sand, or clay with no tree, rock, building, or item. A
+    /// refused command gives `JobEvent::Rejected`. `CancelDesignation` cancels the order.
+    DigDitch {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+    },
     /// Remove the cut or mine designation of a tile, and the haul order of its items that
     /// no colonist carries yet.
     CancelDesignation {
