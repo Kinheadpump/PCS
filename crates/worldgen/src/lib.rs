@@ -20,7 +20,7 @@ pub mod world;
 pub use biome::WorldBiome;
 pub use deposit::{Deposits, Mineral};
 pub use embark::{
-    Biome, EmbarkSite, EmbarkSites, EmbarkSummary, LOCAL_SIZE,
+    Biome, EmbarkRival, EmbarkSite, EmbarkSites, EmbarkSummary, LOCAL_SIZE,
     check_content as check_embark_content, embark_from_world, is_habitable,
 };
 pub use geology::{Geology, Rock, Setting};

@@ -412,6 +412,8 @@ impl Sim {
                 self.apply_farm_command(command);
             }
             Command::SetKeep { .. } => self.apply_keep_command(command),
+            Command::RaidPay { goods } => self.raid_pay(goods),
+            Command::RaidFight => self.raid_fight(),
             Command::Abandon => self.abandon(),
         }
     }

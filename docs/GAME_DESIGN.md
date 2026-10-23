@@ -494,7 +494,7 @@ Each crisis must have a cause in the simulation, a warning sign that the player 
 
 ### 10.5 Rival colonies and raids
 
-**R-070 Rival colonies:** Local generation selects up to 3 living settlements of historical civilizations near the embark cell. Each one has a strength (3 to 12 fighters) and a hostility from 0 to 100. Hostility is the base value from history (wars with the owner of the embark area) + wealth / 1,000 + Notice / 2, to a maximum of 100. The lore panel shows each rival colony with its strength and hostility.
+**R-070 Rival colonies:** Local generation selects up to 3 living settlements of historical civilizations near the embark cell. Each one has a strength (3 to 12 fighters) and a hostility from 0 to 100. Hostility is the base value from history (the aggression of its civilization, and the battles and razed settlements of that civilization in the embark area) + wealth / 1,000 + Notice / 2 + the result of earlier raids, from 0 to 100. The lore panel shows each rival colony with its strength and hostility.
 
 **R-071 Raid:** Each game day after day 20 of the run, each rival colony raids with a chance of hostility / 20 percent, to a maximum of 5%. The raid has `strength × hostility / 100` fighters, to a minimum of 2. A scout comes to the map edge 1 game day before the raid and makes a warning alert. Raiders use melee combat (R-032). They attack colonists, break doors and walls (time from material hardness), and carry away items. They leave when half of the raiders are dead or down.
 
