@@ -26,6 +26,7 @@ pub mod needs;
 pub mod notice;
 pub mod path;
 pub mod production;
+pub mod raid;
 pub mod region;
 pub mod room;
 pub mod rules;
@@ -69,6 +70,10 @@ pub use map::LocalMap;
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
 pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;
+pub use raid::{
+    Hostility, HostilityCause, HostilityPart, Raid, RaidEvent, RaidOutcome, RaidPhase, RaidRecord,
+    RaidReject, RaidWarning, RivalColony, TributeGood,
+};
 pub use region::Regions;
 pub use room::{
     BeautyCause, BeautyPart, BorderKind, BorderTile, InsulationPart, Room, RoomBeauty,
@@ -153,6 +158,8 @@ pub struct Sim {
     threats: Vec<Threat>,
     /// Dry days, ditches, and fires (S16).
     drought: drought::DroughtState,
+    /// Rival colonies and raids (S18).
+    raid: raid::RaidState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -165,6 +172,9 @@ pub struct Sim {
     /// Drought and fire events for the caller. Not part of the state.
     #[serde(skip)]
     drought_events: Vec<DroughtEvent>,
+    /// Raid events for the caller. Not part of the state.
+    #[serde(skip)]
+    raid_events: Vec<RaidEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -210,6 +220,7 @@ impl Sim {
         let spawns = center_spawns(&map, &regions, START_COLONISTS);
         let mut sim = Self::from_map(map, seed, content_hash, &spawns);
         sim.threats = notice::threats_of(&data.placed, &data.site);
+        sim.raid = raid::RaidState::with_rivals(seed, &data.rivals);
         sim.roll_colonists(seed);
         sim.roll_start_skills(seed);
         sim.place_start_stock();
@@ -252,6 +263,8 @@ impl Sim {
             notice: notice::NoticeState::default(),
             threats: Vec::new(),
             drought: drought::DroughtState::default(),
+            raid: raid::RaidState::new(seed),
+            raid_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),
             events: Vec::new(),
@@ -318,6 +331,7 @@ impl Sim {
         self.colony_daily_tick();
         self.notice_tick();
         self.drought_tick();
+        self.raid_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -583,7 +597,7 @@ impl Sim {
         if !colonists_ok || !queue_ok {
             return None;
         }
-        if !sim.buildings_state_ok() || !sim.drought_state_ok() {
+        if !sim.buildings_state_ok() || !sim.drought_state_ok() || !sim.raid_state_ok() {
             return None;
         }
         sim.rebuild_caches();

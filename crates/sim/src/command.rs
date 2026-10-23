@@ -2,6 +2,7 @@
 
 use crate::build::BuildLayer;
 use crate::colonist::ColonistId;
+use crate::item::ItemId;
 use crate::job::JobKind;
 use crate::stockpile::{ItemFilter, StockpileId};
 use serde::{Deserialize, Serialize};
@@ -182,6 +183,14 @@ pub enum Command {
         /// Units to keep in stock.
         target: u32,
     },
+    /// Pay the tribute with these stacks and units while the raiders wait (R-072). Hostility
+    /// falls and the raiders leave. A refused command gives `RaidEvent::Rejected`.
+    RaidPay {
+        /// The stacks and the units of each one that the colony gives.
+        goods: Vec<(ItemId, u32)>,
+    },
+    /// Fight the raiders while they wait (R-072).
+    RaidFight,
     /// The player abandons the colony. The run ends (R-050).
     Abandon,
 }

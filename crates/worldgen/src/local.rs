@@ -81,6 +81,8 @@ pub struct LocalMapData {
     pub placed: Vec<PlacedSite>,
     /// Tiles with salvage in ruins (S11).
     pub salvage: Vec<(u16, u16)>,
+    /// Rival colonies near the embark cell (S18, R-070). Not part of `hash`.
+    pub rivals: Vec<crate::embark::EmbarkRival>,
 }
 
 impl LocalMapData {
@@ -201,6 +203,7 @@ pub fn generate_local(embark: &EmbarkSummary) -> LocalMapData {
         road: Grid::new(w, h, false),
         placed: Vec::new(),
         salvage: Vec::new(),
+        rivals: Vec::new(),
     }
 }
 
@@ -237,5 +240,6 @@ pub fn generate_local_with_sites(embark: &EmbarkSummary, sites: &EmbarkSites) ->
     if let Ok(rules) = embark_rules() {
         stamp(&mut map, sites, rules);
     }
+    map.rivals = sites.rivals.clone();
     map
 }

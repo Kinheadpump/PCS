@@ -70,4 +70,17 @@
     legend_certain_pct: 50,
     legend_rumor_true_pct: 50,
     legend_min_gap: 8,
+    // Rival colonies (S18, R-070). A rival is a living settlement within rival_radius world
+    // cells of the embark cell. At most max_rivals count: the nearest first. Strength goes from
+    // rival_strength_min to rival_strength_max with the prosperity (0 to 100) of its civilization.
+    // Base hostility = aggression / rival_aggression_div + hostility for each battle and each
+    // razed settlement of the rival civilization in the 3 by 3 cells of the embark area (R-070),
+    // to 100.
+    rival_radius: 3,
+    max_rivals: 3,
+    rival_strength_min: 3,
+    rival_strength_max: 12,
+    rival_aggression_div: 4,
+    rival_battle_hostility: 15,
+    rival_raze_hostility: 25,
 )
