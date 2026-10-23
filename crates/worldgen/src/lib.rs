@@ -9,6 +9,7 @@ pub mod geology;
 pub mod height;
 pub mod history;
 pub mod hydro;
+pub mod legend;
 pub mod local;
 pub mod noise;
 pub mod plates;
@@ -26,6 +27,7 @@ pub use geology::{Geology, Rock, Setting};
 pub use history::{
     Event, EventKind, History, check_content as check_history_content, generate_history,
 };
+pub use legend::{Legend, LegendKind, Reliability, make_legends};
 pub use local::{Ground, LocalMapData, Ore, RockKind, generate_local, generate_local_with_sites};
 pub use region::{RegionEdge, RegionInfo, RegionLink, Regions};
 pub use stamp::{PlacedSite, SiteTile};

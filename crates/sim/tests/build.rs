@@ -735,7 +735,7 @@ fn buildings_blueprints_and_bins_are_in_the_hash_and_the_save() {
         sim.state_hash(),
         "same run after a load"
     );
-    assert_eq!(save::FORMAT_VERSION, 5);
+    assert_eq!(save::FORMAT_VERSION, 6);
 }
 
 #[test]

@@ -1,0 +1,21 @@
+// Notice numbers (R-030, R-031). Integers only (D-014).
+// wealth_div: wealth units for 1 Notice. per_colonist: Notice of each colonist.
+// noise_per_job: Notice of a completed mining or construction job. noise_decay_pct: share of the
+// noise that goes away each game day (the loss rounds up).
+// excavation, relic, sealed_open: site disturbance. disturbance_decay: loss each game day.
+// beast_div, beast_max_pct: the daily beast chance is Notice / beast_div percent, up to the maximum.
+// lair_active: Notice where lair beasts wake. threat_per_level: Notice for 1 strength level.
+(
+    wealth_div: 1000,
+    per_colonist: 2,
+    noise_per_job: 1,
+    noise_decay_pct: 10,
+    excavation: 20,
+    relic: 10,
+    sealed_open: 50,
+    disturbance_decay: 1,
+    beast_div: 4,
+    beast_max_pct: 50,
+    lair_active: 30,
+    threat_per_level: 25,
+)

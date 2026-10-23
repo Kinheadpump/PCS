@@ -59,6 +59,9 @@ pub struct PlacedSite {
     pub age: u32,
     /// True for the ruin that R-041 adds because the history gave no site.
     pub fallback: bool,
+    /// Threat of a sealed site, or richness of a mine (1 to 3). 0 for other sites. The hash
+    /// `site_hash` does not include it.
+    pub level: u8,
 }
 
 fn roll(seed: u64, a: u64, b: u64) -> u64 {
@@ -201,6 +204,11 @@ fn place(map: &mut LocalMapData, s: &EmbarkSite, fallback: bool, rules: &EmbarkR
         height: 0,
         age: s.age,
         fallback,
+        level: if matches!(s.kind, SiteKind::Sealed | SiteKind::Mine) {
+            s.level
+        } else {
+            0
+        },
     };
     match s.kind {
         SiteKind::Settlement | SiteKind::Ruin => {
