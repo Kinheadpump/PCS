@@ -18,6 +18,7 @@ pub mod life;
 pub mod map;
 pub mod needact;
 pub mod needs;
+pub mod notice;
 pub mod path;
 pub mod region;
 pub mod room;
@@ -47,6 +48,7 @@ pub use life::{
 };
 pub use map::LocalMap;
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
+pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;
 pub use region::Regions;
 pub use room::{
@@ -114,12 +116,19 @@ pub struct Sim {
     room_temps: BTreeMap<(u16, u16), i32>,
     /// The dead, oldest first (R-016).
     graveyard: Vec<life::Grave>,
+    /// Noise and site disturbance by tile (S14).
+    notice: notice::NoticeState,
+    /// Dormant threats of the sealed sites (S14).
+    threats: Vec<Threat>,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
     /// Life events for the caller. Not part of the state.
     #[serde(skip)]
     life_events: Vec<LifeEvent>,
+    /// Notice events for the caller. Not part of the state.
+    #[serde(skip)]
+    notice_events: Vec<notice::NoticeEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -161,6 +170,7 @@ impl Sim {
         let regions = Regions::build(&map);
         let spawns = center_spawns(&map, &regions, START_COLONISTS);
         let mut sim = Self::from_map(map, seed, content_hash, &spawns);
+        sim.threats = notice::threats_of(&data.placed, &data.site);
         sim.roll_colonists(seed);
         sim.place_start_food();
         sim
@@ -194,6 +204,9 @@ impl Sim {
             climate: climate::ClimateState::new(&rules.climate, seed),
             room_temps: BTreeMap::new(),
             graveyard: Vec::new(),
+            notice: notice::NoticeState::default(),
+            threats: Vec::new(),
+            notice_events: Vec::new(),
             events: Vec::new(),
             life_events: Vec::new(),
             needs_off: false,
@@ -248,6 +261,7 @@ impl Sim {
         self.tick += 1;
         self.climate_tick();
         self.life_tick();
+        self.notice_tick();
     }
 
     /// Take the job events that the last ticks made.
