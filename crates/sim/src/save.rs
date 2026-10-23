@@ -133,10 +133,10 @@ mod tests {
         bad[0] = b'X';
         assert_eq!(from_bytes(&bad).unwrap_err(), SaveError::BadMagic);
         let mut bad = bytes.clone();
-        bad[8] = 9;
+        bad[8] = 99;
         assert!(matches!(
             from_bytes(&bad).unwrap_err(),
-            SaveError::UnsupportedVersion { found: 9, .. }
+            SaveError::UnsupportedVersion { found: 99, .. }
         ));
         assert!(from_bytes(&bytes).is_ok());
     }
