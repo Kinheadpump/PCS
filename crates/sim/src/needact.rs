@@ -12,6 +12,9 @@ use crate::job::{AbortReason, Leg, octile};
 use crate::life::MILLI;
 use base::content::BuildingKind;
 
+/// A colonist rests in the shelter for this many retry periods before it looks again.
+const SHELTER_REST: u64 = 6;
+
 /// Sort key of a food stack: rank, rot bucket, distance, item index.
 type FoodKey = (usize, u32, u32, u32);
 
@@ -129,6 +132,11 @@ impl Sim {
                     Leg::Failed => self.cancel_act(id, retry),
                 }
             }
+            NeedAct::Shelter { stand } => match self.leg_state(id, stand) {
+                Leg::Arrived => self.cancel_act(id, retry * SHELTER_REST),
+                Leg::Walking => {}
+                Leg::Failed => self.cancel_act(id, retry),
+            },
             NeedAct::Sleep { bed, asleep } => {
                 if asleep {
                     return;
@@ -243,6 +251,14 @@ impl Sim {
             self.begin_item_act(id, item, stand, NeedAct::Wear { item, stand });
             return;
         }
+        if self.wants_shelter(id)
+            && let Some(stand) = self.find_shelter(id)
+        {
+            self.abort_job(id, AbortReason::JobGone, false);
+            self.set_act(id, NeedAct::Shelter { stand });
+            self.start_leg(id, stand);
+            return;
+        }
         if let Some(c) = self.colonists.get_mut(id) {
             c.need_next = self.tick + retry;
         }
@@ -349,6 +365,63 @@ impl Sim {
             best = Some((key, item_id, (x, y)));
         }
         best.map(|(_, i, t)| (i, t))
+    }
+
+    /// True if the colonist stands outdoors in a temperature outside its comfort band, and
+    /// has no job or already suffers from it.
+    fn wants_shelter(&self, id: ColonistId) -> bool {
+        let Some(c) = self.colonists.get(id) else {
+            return false;
+        };
+        if self.rooms.index_at(c.x, c.y).is_some() {
+            return false;
+        }
+        let band = crate::life::comfort_band(&self.rules, c);
+        let outdoor = i32::from(self.outdoor_temp());
+        if outdoor >= band.low && outdoor <= band.high {
+            return false;
+        }
+        let n = &self.rules.needs;
+        let suffers =
+            c.hypothermia.max(c.heatstroke) >= i32::try_from(n.hazard_limit / 2).unwrap_or(0);
+        c.job.is_none() || suffers
+    }
+
+    /// The nearest walkable tile of the room that is nearest to the comfort band of the
+    /// colonist and better than the open air, in its region. Ties by distance, row, column.
+    fn find_shelter(&self, id: ColonistId) -> Option<(u16, u16)> {
+        let c = self.colonists.get(id)?;
+        let from = c.tile();
+        let band = crate::life::comfort_band(&self.rules, c);
+        let off = |t: i32| (band.low - t).max(t - band.high).max(0);
+        let outside = off(i32::from(self.outdoor_temp()));
+        let mut best: Option<(i32, u32, u16, u16)> = None;
+        for room in self.rooms.iter() {
+            let Some(&(rx, ry)) = room.tiles.first() else {
+                continue;
+            };
+            // A room helps if it is nearer to the comfort band than the open air.
+            let miss = off(i32::from(self.room_temp(rx, ry).unwrap_or(0)));
+            if miss >= outside {
+                continue;
+            }
+            for &(x, y) in &room.tiles {
+                if !self.map.passable(i32::from(x), i32::from(y)) {
+                    continue;
+                }
+                let key = (miss, octile(from, (x, y)), y, x);
+                if best.is_some_and(|b| b <= key) {
+                    continue;
+                }
+                if self.regions.connected(
+                    (i32::from(from.0), i32::from(from.1)),
+                    (i32::from(x), i32::from(y)),
+                ) {
+                    best = Some(key);
+                }
+            }
+        }
+        best.map(|(_, _, y, x)| (x, y))
     }
 
     /// The nearest free bed in the region of the colonist, ties by row then column.

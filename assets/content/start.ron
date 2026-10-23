@@ -6,13 +6,17 @@
 // first ones in the crops.ron order). seed_units: seed units for each crop.
 // A crop grows in the climate when the season curve gives at least growth_days days with a day
 // mean temperature in the band of the crop.
+// camp: a closed cabin with a floor, a roof, 7 beds, and a hearth with fuel_hours of fuel, and a
+// stockpile in front of its door. It stands within radius tiles of the first colonist. The
+// start stock lies in the stockpile.
 (
     main_skills: 2,
     main_level_min: 3,
     main_level_max: 5,
     other_level_min: 0,
     other_level_max: 2,
-    stock: [("meal", 420), ("log", 20), ("stone_axe", 3), ("stone_pick", 2)],
+    stock: [("meal", 420), ("log", 20), ("firewood", 60), ("stone_axe", 3), ("stone_pick", 2)],
     seed_crops: 2,
     seed_units: 30,
+    camp: (radius: 24, wood: "log", stone: "granite", fuel_hours: 48, preheat_hours: 48),
 )

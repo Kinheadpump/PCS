@@ -595,6 +595,7 @@ impl Sim {
         self.rebuild_wild_cache();
         if self.tick == 0 {
             self.place_start_seeds();
+            self.preheat_start_camp();
         }
     }
 
@@ -788,13 +789,13 @@ impl Sim {
 
     /// Each game hour (R-022):
     /// `room += (reference - room) x (100 - insulation) / 400 + hearth_heat / room_tiles`.
-    fn update_room_temperatures(&mut self) {
+    pub(crate) fn update_room_temperatures(&mut self) {
         let outdoor = i64::from(self.outdoor_temp()) * MILLI_PER_TENTH;
         let ground = i64::from(self.climate.params.mean) * MILLI_PER_TENTH;
         let heat = i64::from(self.rules.climate.hearth_heat) * MILLI_PER_TENTH;
         let mut burning = vec![0i64; self.rooms.len()];
         for (x, y) in self.hearth_tiles() {
-            if self.hearth_fuel(x, y) > 0
+            if self.hearth_lit(x, y)
                 && let Some(i) = self.rooms.index_at(x, y)
             {
                 burning[i] += 1;
@@ -819,7 +820,7 @@ impl Sim {
     pub(crate) fn burning_hearths_in(&self, room: usize) -> u32 {
         self.hearth_tiles()
             .into_iter()
-            .filter(|&(x, y)| self.hearth_fuel(x, y) > 0 && self.rooms.index_at(x, y) == Some(room))
+            .filter(|&(x, y)| self.hearth_lit(x, y) && self.rooms.index_at(x, y) == Some(room))
             .count() as u32
     }
 
