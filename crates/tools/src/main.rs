@@ -42,7 +42,7 @@ fn parse_seed(args: &[String]) -> Result<u64, String> {
     }
 }
 
-const USAGE: &str = "usage: tools hash --seed <n> | dump-layers <preset> <out_dir> [--seed <n>] | validate-content <file> | assetgen [--seed <n>] [--out <dir>] | gen-world --seed <n> [--out <dir>] [--history [--years <n>]] | dump-save <file> | bench [--ticks <n>] | soak [--ticks <n>]";
+const USAGE: &str = "usage: tools hash --seed <n> | dump-layers <preset> <out_dir> [--seed <n>] | validate-content <file> | assetgen [--seed <n>] [--out <dir>] [--sounds <dir>] | gen-world --seed <n> [--out <dir>] [--history [--years <n>]] | dump-save <file> | bench [--ticks <n>] | soak [--ticks <n>]";
 
 /// Pick a test preset by name.
 fn preset(name: &str) -> Result<EmbarkSummary, String> {

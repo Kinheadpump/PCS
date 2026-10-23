@@ -24,6 +24,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Install the ALSA headers (macroquad audio)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - name: Show toolchain
         run: rustc --version
       - name: Format
