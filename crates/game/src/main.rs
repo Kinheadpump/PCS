@@ -609,10 +609,25 @@ impl App {
                 Action::ToggleDebug => self.ui_state.debug = !self.ui_state.debug,
                 Action::ToggleWorld => self.open_world(),
                 Action::Preset(_) => {}
-                Action::Close => return false,
+                Action::Close if self.ui_state.menu => self.close_menu(),
+                Action::Close => {
+                    self.ui_state.menu = true;
+                    if self.clock.speed() != sim::Speed::Paused {
+                        self.clock.toggle_pause();
+                        self.ui_state.menu_paused = true;
+                    }
+                }
             }
         }
         true
+    }
+
+    /// Close the pause menu. A pause that the menu made ends with it.
+    fn close_menu(&mut self) {
+        self.ui_state.menu = false;
+        if std::mem::take(&mut self.ui_state.menu_paused) {
+            self.clock.toggle_pause();
+        }
     }
 
     /// Run the ticks of one frame. Pending commands go into the first tick.
@@ -995,6 +1010,8 @@ impl App {
                 UiAction::ToggleColony => self.ui_state.colony = !self.ui_state.colony,
                 UiAction::PickCrop(n) => self.ui_state.crop = n,
                 UiAction::NewColony => self.open_world(),
+                UiAction::Resume => self.close_menu(),
+                UiAction::Quit => self.ui_state.quit = true,
                 UiAction::JumpTo(x, y) => {
                     self.camera.center = (f32::from(x) + 0.5, f32::from(y) + 0.5);
                     self.camera.clamp_center(size);
@@ -1098,7 +1115,8 @@ async fn main() {
         match &mut state {
             Ok(app) => {
                 app.typed = typed;
-                if !app.apply(&actions, render::view_size(), get_frame_time()) {
+                if !app.apply(&actions, render::view_size(), get_frame_time()) || app.ui_state.quit
+                {
                     break;
                 }
                 app.update((get_frame_time() * 1_000_000.0) as u64);

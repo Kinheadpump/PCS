@@ -45,6 +45,16 @@ impl Sim {
         self.hearth_fuel(x, y) > 0
     }
 
+    /// True if the hearth burns now: it has fuel, and its room is below the upper comfort
+    /// limit. A hearth in a room that is too warm is banked: it keeps its fuel and gives no
+    /// heat. A hearth outdoors always burns.
+    pub fn hearth_lit(&self, x: u16, y: u16) -> bool {
+        self.hearth_fuel(x, y) > 0
+            && self
+                .room_temp(x, y)
+                .is_none_or(|t| i32::from(t) < i32::from(self.rules.needs.comfort_high))
+    }
+
     /// Put fuel in a hearth at once, in burning hours. For scenario tests and debug tools.
     /// The value can be above the capacity. Return true if there is a hearth.
     pub fn debug_set_hearth_fuel(&mut self, x: u16, y: u16, hours: u32) -> bool {
@@ -64,7 +74,7 @@ impl Sim {
         let hearths = self.hearth_tiles();
         for &(x, y) in &hearths {
             let fuel = self.hearth_fuel(x, y);
-            if fuel > 0 {
+            if self.hearth_lit(x, y) {
                 self.buildings.set_fuel(x, y, fuel - 1);
             }
         }

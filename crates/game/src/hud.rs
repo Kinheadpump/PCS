@@ -59,6 +59,12 @@ pub struct UiState {
     pub fertility: bool,
     /// The crop of the farm tool (index in `farm.ron`).
     pub crop: u16,
+    /// True if the pause menu shows.
+    pub menu: bool,
+    /// True if the menu paused the clock (so closing it resumes).
+    pub menu_paused: bool,
+    /// True if the player chose to quit.
+    pub quit: bool,
 }
 
 impl UiState {
@@ -1016,6 +1022,27 @@ fn draw_end(ui: &mut Ui, rows: &[Row], view: (f32, f32)) -> Vec<UiAction> {
     actions
 }
 
+/// The pause menu: resume or quit.
+fn draw_menu(ui: &mut Ui, view: (f32, f32)) -> Vec<UiAction> {
+    let w = 160.0;
+    let gap = layout::MARGIN;
+    let total_h = ui::BUTTON_H * 2.0 + gap;
+    let x = ((view.0 - w) / 2.0).round();
+    let y = ((view.1 - total_h) / 2.0).round();
+    let resume = ui::Rect::new(x, y, w, ui::BUTTON_H);
+    let quit = ui::Rect::new(x, y + ui::BUTTON_H + gap, w, ui::BUTTON_H);
+    ui.panel(resume);
+    ui.panel(quit);
+    let mut actions = Vec::new();
+    if ui.button(resume, "Resume", true) {
+        actions.push(UiAction::Resume);
+    }
+    if ui.button(quit, "Quit", false) {
+        actions.push(UiAction::Quit);
+    }
+    actions
+}
+
 fn draw_filter(
     ui: &mut Ui,
     origin: (f32, f32),
@@ -1125,6 +1152,9 @@ pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
     }
     if let Some(rows) = &content.end {
         actions.extend(draw_end(ui, rows, h.view));
+    }
+    if h.state.menu {
+        actions.extend(draw_menu(ui, h.view));
     }
     ui.finish(h.view);
     actions
