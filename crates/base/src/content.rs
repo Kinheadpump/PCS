@@ -925,6 +925,137 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
     }
     finish(file_name, r, issues)
 }
+/// The numbers of one disease type (`disease.ron`, R-060).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DiseaseDef {
+    /// Severity at the start (1 to 100).
+    pub start: u32,
+    /// Severity change each game day with no bed and no treatment.
+    pub untreated: i32,
+    /// Severity change each game day after a night in a bed.
+    pub bed: i32,
+    /// Severity change each game day with treatment.
+    pub treated: i32,
+    /// Work speed change in percent points. Negative or 0.
+    pub speed_pct: i32,
+    /// True if a colonist can infect other colonists of the same room.
+    pub contagious: bool,
+}
+
+/// Numbers for disease and medicine (`disease.ron`, R-060 to R-064).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DiseaseRules {
+    /// Game days at the start of a colony with no new disease.
+    pub grace_days: u32,
+    /// A disease above this severity harms health.
+    pub health_loss_above: u32,
+    /// Health points lost each game hour above the limit.
+    pub health_loss_per_hour: u32,
+    /// Material keys of raw food.
+    pub raw_foods: Vec<String>,
+    /// Material key of the medicine.
+    pub medicine: String,
+    /// Chance of food poisoning from raw food, in percent.
+    pub food_raw_pct: u32,
+    /// Chance of food poisoning from cooked food, in percent.
+    pub food_cooked_pct: u32,
+    /// The cooked food chance falls by this much (permille) for each cook skill level.
+    pub food_cook_skill_permille: u32,
+    /// A food with this rot value or more has an extra chance.
+    pub food_rot_value: u32,
+    /// The extra chance of rotten food, in percent.
+    pub food_rot_pct: u32,
+    /// Daily chance of wound infection with no bed, in percent.
+    pub wound_pct_no_bed: u32,
+    /// Daily chance of wound infection after a night in a bed, in percent.
+    pub wound_pct_bed: u32,
+    /// Daily chance of wound infection with treatment, in percent.
+    pub wound_pct_treated: u32,
+    /// Chance in permille each game hour to catch winter fever below the comfort band.
+    pub cold_catch_permille: u32,
+    /// Chance in percent that a sick colonist infects a room mate for a night.
+    pub infect_pct: u32,
+    /// The same chance when the room temperature is inside the comfort band.
+    pub infect_comfort_pct: u32,
+    /// Game days of immunity after winter fever.
+    pub immune_days: u32,
+    /// Work time of a doctor job, in ticks at 100% work speed.
+    pub treat_ticks: u32,
+    /// Game days that a treatment lasts.
+    pub treat_days: u32,
+    /// Success chance of a treatment at skill level 0, in percent.
+    pub treat_base_pct: u32,
+    /// Success chance for each medicine skill level, in percent.
+    pub treat_per_level_pct: u32,
+    /// Food poisoning.
+    pub food_poisoning: DiseaseDef,
+    /// Wound infection.
+    pub wound_infection: DiseaseDef,
+    /// Winter fever.
+    pub winter_fever: DiseaseDef,
+}
+
+/// Load and validate the disease numbers.
+pub fn load_disease_rules(file_name: &str, text: &str) -> Result<DiseaseRules, ContentError> {
+    let r: DiseaseRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    for (value, name) in [
+        (r.food_raw_pct, "food_raw_pct"),
+        (r.food_cooked_pct, "food_cooked_pct"),
+        (r.food_rot_pct, "food_rot_pct"),
+        (r.wound_pct_no_bed, "wound_pct_no_bed"),
+        (r.wound_pct_bed, "wound_pct_bed"),
+        (r.wound_pct_treated, "wound_pct_treated"),
+        (r.infect_pct, "infect_pct"),
+        (r.infect_comfort_pct, "infect_comfort_pct"),
+        (r.treat_base_pct, "treat_base_pct"),
+        (r.treat_per_level_pct, "treat_per_level_pct"),
+    ] {
+        if value > 100 {
+            issues.push(issue(name, "must be 100 or less"));
+        }
+    }
+    for (value, name) in [
+        (r.treat_ticks, "treat_ticks"),
+        (r.treat_days, "treat_days"),
+        (r.health_loss_per_hour, "health_loss_per_hour"),
+    ] {
+        if value == 0 {
+            issues.push(issue(name, "must be 1 or more"));
+        }
+    }
+    if r.cold_catch_permille > 1000 || r.food_cook_skill_permille > 1000 {
+        issues.push(issue("cold_catch_permille", "must be 1000 or less"));
+    }
+    if r.health_loss_above > 100 {
+        issues.push(issue("health_loss_above", "must be 100 or less"));
+    }
+    if r.medicine.is_empty() || r.raw_foods.is_empty() {
+        issues.push(issue(
+            "medicine",
+            "the medicine and the raw foods need a key",
+        ));
+    }
+    for (def, name) in [
+        (&r.food_poisoning, "food_poisoning"),
+        (&r.wound_infection, "wound_infection"),
+        (&r.winter_fever, "winter_fever"),
+    ] {
+        if !(1..=100).contains(&def.start) {
+            issues.push(issue(name, "start must be from 1 to 100"));
+        }
+        if def.speed_pct > 0 || def.speed_pct < -100 {
+            issues.push(issue(name, "speed_pct must be from -100 to 0"));
+        }
+        if def.treated >= 0 {
+            issues.push(issue(name, "treated must be negative"));
+        }
+    }
+    finish(file_name, r, issues)
+}
+
 /// A geological setting with its pool of rocks (rocks.ron).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingDef {
@@ -1637,7 +1768,7 @@ mod tests {
         assert_eq!(buildings.len(), BuildingKind::ALL.len() + 1);
         let recipes =
             load_recipes("recipes.ron", RECIPES, &materials, &buildings).unwrap_or_default();
-        assert_eq!(recipes.len(), 7);
+        assert_eq!(recipes.len(), 8);
         let rooms = load_room_rules("rooms.ron", ROOMS);
         assert_eq!(rooms.map(|r| r.max_tiles).unwrap_or(0), 400);
     }

@@ -10,4 +10,5 @@
     (id: "berry_bush", name: "Berry bush", product: "berries", ground: "SC", density: 14, mean_min: 50, mean_max: 350, yield_units: 4, regrow_days: 8),
     (id: "wild_root", name: "Wild root", product: "wild_roots", ground: "SCD", density: 10, mean_min: -150, mean_max: 350, yield_units: 3, regrow_days: 10),
     (id: "wild_flax", name: "Wild flax", product: "fiber", ground: "SCD", density: 8, mean_min: 0, mean_max: 350, yield_units: 2, regrow_days: 12),
+    (id: "wild_herb", name: "Wild herb", product: "herbs", ground: "SCD", density: 6, mean_min: -50, mean_max: 350, yield_units: 2, regrow_days: 10),
 ]

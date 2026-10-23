@@ -11,6 +11,7 @@ pub mod chronicle;
 pub mod climate;
 pub mod colonist;
 pub mod command;
+pub mod disease;
 pub mod drought;
 pub mod event;
 pub mod farm;
@@ -50,6 +51,9 @@ pub use climate::{
 };
 pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex};
 pub use command::Command;
+pub use disease::{
+    DOCTOR_ARG, DiseaseEvent, DiseaseKind, Illness, IllnessCause, IllnessPart, IllnessReport,
+};
 pub use drought::{DIG_ARG, DroughtEvent, Fire, Growth, GrowthCause, GrowthPart};
 pub use event::Event;
 pub use farm::{
@@ -153,6 +157,8 @@ pub struct Sim {
     threats: Vec<Threat>,
     /// Dry days, ditches, and fires (S16).
     drought: drought::DroughtState,
+    /// Diseases, treatments, and sick rooms (S17).
+    disease: disease::DiseaseState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -165,6 +171,9 @@ pub struct Sim {
     /// Drought and fire events for the caller. Not part of the state.
     #[serde(skip)]
     drought_events: Vec<DroughtEvent>,
+    /// Disease events for the caller. Not part of the state.
+    #[serde(skip)]
+    disease_events: Vec<DiseaseEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -252,6 +261,8 @@ impl Sim {
             notice: notice::NoticeState::default(),
             threats: Vec::new(),
             drought: drought::DroughtState::default(),
+            disease: disease::DiseaseState::new(seed),
+            disease_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),
             events: Vec::new(),
@@ -318,6 +329,7 @@ impl Sim {
         self.colony_daily_tick();
         self.notice_tick();
         self.drought_tick();
+        self.disease_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -583,7 +595,7 @@ impl Sim {
         if !colonists_ok || !queue_ok {
             return None;
         }
-        if !sim.buildings_state_ok() || !sim.drought_state_ok() {
+        if !sim.buildings_state_ok() || !sim.drought_state_ok() || !sim.disease_state_ok() {
             return None;
         }
         sim.rebuild_caches();

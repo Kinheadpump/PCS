@@ -185,6 +185,9 @@ impl Sim {
         };
         let max = i32::try_from(n.hunger_max).unwrap_or(i32::MAX) * MILLI;
         let gain = i32::try_from(food.nutrition).unwrap_or(i32::MAX) * MILLI;
+        if let Some((material, rot)) = self.items.get(item).map(|i| (i.material, i.rot)) {
+            self.eat_disease_roll(id, material, rot);
+        }
         self.items.take_one(item);
         if let Some(c) = self.colonists.get_mut(id) {
             c.hunger = c.hunger.saturating_add(gain).min(max);
@@ -369,8 +372,9 @@ impl Sim {
                 .building(def)
                 .is_some_and(|d| d.kind == BuildingKind::Bed)
         });
-        beds.into_iter()
-            .filter(|t| !taken.contains(t))
+        let free: Vec<(u16, u16)> = beds.into_iter().filter(|t| !taken.contains(t)).collect();
+        self.sick_room_filter(id, free)
+            .into_iter()
             .filter(|t| {
                 self.regions.connected(
                     (i32::from(from.0), i32::from(from.1)),

@@ -41,6 +41,17 @@ pub enum Command {
         /// Tile row.
         y: u16,
     },
+    /// Mark the room that contains a tile as a sick room, or take the mark away. Sick
+    /// colonists sleep in a sick room if a bed is free there. A tile outside a room gives
+    /// `JobEvent::Rejected`.
+    SetSickRoom {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+        /// True: mark the room. False: unmark it.
+        on: bool,
+    },
     /// Remove the cut or mine designation of a tile, and the haul order of its items that
     /// no colonist carries yet.
     CancelDesignation {
