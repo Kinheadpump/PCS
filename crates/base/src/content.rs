@@ -812,6 +812,58 @@ pub fn load_room_rules(file_name: &str, text: &str) -> Result<RoomRules, Content
     finish(file_name, rules, issues)
 }
 
+/// Numbers for Notice, beasts, and dormant threats (`notice.ron`, R-030 and R-031). All integers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoticeRules {
+    /// Wealth units that give 1 Notice.
+    pub wealth_div: u32,
+    /// Notice of each colonist.
+    pub per_colonist: u32,
+    /// Notice of each completed mining or construction job.
+    pub noise_per_job: u32,
+    /// Share of the noise that goes away each game day, in percent. The loss rounds up.
+    pub noise_decay_pct: u32,
+    /// Notice of the excavation of a site.
+    pub excavation: u32,
+    /// Notice of each relic that a colonist takes from a site.
+    pub relic: u32,
+    /// Notice of opening a sealed site.
+    pub sealed_open: u32,
+    /// Site disturbance that goes away each game day.
+    pub disturbance_decay: u32,
+    /// Divisor of the daily beast chance: the chance in percent is Notice / `beast_div`.
+    pub beast_div: u32,
+    /// Largest daily beast chance, in percent.
+    pub beast_max_pct: u32,
+    /// Notice at which the beasts in lairs become active.
+    pub lair_active: u32,
+    /// Notice that adds 1 strength level to an awake dormant threat.
+    pub threat_per_level: u32,
+}
+
+/// Load and validate the Notice numbers.
+pub fn load_notice_rules(file_name: &str, text: &str) -> Result<NoticeRules, ContentError> {
+    let r: NoticeRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    for (value, name) in [
+        (r.wealth_div, "wealth_div"),
+        (r.beast_div, "beast_div"),
+        (r.threat_per_level, "threat_per_level"),
+    ] {
+        if value == 0 {
+            issues.push(issue(name, "must be 1 or more"));
+        }
+    }
+    if r.noise_decay_pct > 100 {
+        issues.push(issue("noise_decay_pct", "must be 100 or less"));
+    }
+    if r.beast_max_pct > 100 {
+        issues.push(issue("beast_max_pct", "must be 100 or less"));
+    }
+    finish(file_name, r, issues)
+}
+
 /// A geological setting with its pool of rocks (rocks.ron).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingDef {
@@ -1306,6 +1358,12 @@ pub struct EmbarkRules {
     pub seal_radius: u32,
     /// Largest sideways road shift.
     pub road_jitter: u32,
+    /// Share of the legends that are "certain" (R-044), in percent.
+    pub legend_certain_pct: u32,
+    /// Share of the "rumor" legends that point to a real site (R-044), in percent.
+    pub legend_rumor_true_pct: u32,
+    /// A false rumor points to a tile at least this far from every site, in tiles.
+    pub legend_min_gap: u32,
 }
 
 /// Load and validate the embark numbers. `biome_names` holds the world biome names in order.
@@ -1396,6 +1454,21 @@ pub fn load_embark_rules(
     check(r.debris_radius <= 40, "debris_radius", "must be 40 or less");
     check(r.seal_radius <= 20, "seal_radius", "must be 20 or less");
     check(r.road_jitter <= 100, "road_jitter", "must be 100 or less");
+    check(
+        r.legend_certain_pct <= 100,
+        "legend_certain_pct",
+        "must be 100 or less",
+    );
+    check(
+        r.legend_rumor_true_pct <= 100,
+        "legend_rumor_true_pct",
+        "must be 100 or less",
+    );
+    check(
+        r.legend_min_gap <= 64,
+        "legend_min_gap",
+        "must be 64 or less",
+    );
     finish(file_name, r, issues)
 }
 

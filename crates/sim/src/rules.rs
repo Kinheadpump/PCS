@@ -13,8 +13,9 @@ use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
 use base::content::{
-    BuildingDef, BuildingKind, ContentError, ContentIssue, JobRules, MaterialDef, RecipeDef,
-    RoomRules, load_buildings, load_job_rules, load_materials, load_recipes, load_room_rules,
+    BuildingDef, BuildingKind, ContentError, ContentIssue, JobRules, MaterialDef, NoticeRules,
+    RecipeDef, RoomRules, load_buildings, load_job_rules, load_materials, load_notice_rules,
+    load_recipes, load_room_rules,
 };
 use std::sync::Arc;
 use worldgen::{Ore, RockKind};
@@ -33,6 +34,7 @@ const WILD_TEXT: &str = include_str!("../../../assets/content/wild_plants.ron");
 const START_TEXT: &str = include_str!("../../../assets/content/start.ron");
 const LEDGER_TEXT: &str = include_str!("../../../assets/content/ledger.ron");
 const CHRONICLE_TEXT: &str = include_str!("../../../assets/content/chronicle_templates.ron");
+const NOTICE_TEXT: &str = include_str!("../../../assets/content/notice.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
@@ -108,6 +110,8 @@ pub struct SimRules {
     pub needs: NeedRules,
     /// Traits, in file order.
     pub traits: Vec<TraitDef>,
+    /// Notice, beast, and threat numbers.
+    pub notice: NoticeRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -147,6 +151,7 @@ impl Default for SimRules {
             climate: ClimateRules::empty(),
             needs: NeedRules::empty(),
             traits: Vec::new(),
+            notice: NoticeRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -290,6 +295,7 @@ impl SimRules {
         let climate = load_climate_rules("climate.ron", climate_text)?;
         let needs = load_need_rules("needs.ron", needs_text, &materials)?;
         let traits = load_traits("traits.ron", traits_text)?;
+        let notice = load_notice_rules("notice.ron", NOTICE_TEXT)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -342,6 +348,7 @@ impl SimRules {
             climate,
             needs,
             traits,
+            notice,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),

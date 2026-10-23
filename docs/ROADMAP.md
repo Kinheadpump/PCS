@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Sprint 5 is on `main`. Current sprint: Sprint 7 is complete in code and UI (food chain, ledger, chronicle, soak). The M1 playtests by a human are open (see §6.1 and D-074). Sprint 12 is next. Sprints 0 to 3 are on `main`. The world generation work of Sprints 8 and 9 (steps 1 to 12) is also on `main`. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
+Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Sprint 5 is on `main`. Current sprint: Sprint 7 is complete in code and UI (food chain, ledger, chronicle, soak). The M1 playtests by a human are open (see §6.1 and D-075). Sprint 12 is next. Sprints 0 to 3 are on `main`. The world generation work of Sprints 8 and 9 (steps 1 to 12) is also on `main`. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
 
 This document is the canonical source for phases, sprints, milestones, the Definition of Done, the playtest record, and the backlog. Game rules (`R-nnn`) are in `GAME_DESIGN.md`. Technical rules, required checks, and performance targets (`P-nn`) are in `TECHNICAL_DESIGN.md`.
 
@@ -284,7 +284,7 @@ A sprint is done when all of its tasks are done and its deliverable works.
 - The ledger "days remaining" value is correct within 10% for a constant use rate.
 - Each colonist death makes a chronicle entry with its cause.
 - `tools soak` runs 1,000,000 ticks on each test preset without an invariant failure.
-- 3 playtests of the first year are done and recorded (§6.1). Status: 3 scripted runs are in `docs/playtests/`. They are not human playtests. The owner must do the human playtests (D-074).
+- 3 playtests of the first year are done and recorded (§6.1). Status: 3 scripted runs are in `docs/playtests/`. They are not human playtests. The owner must do the human playtests (D-075).
 
 **Tests:** Crop unit tests. Spoilage unit tests. Production order scenario tests. Chronicle tests. Soak test.
 
@@ -311,7 +311,7 @@ Risks: civilizations that grow or die without limit, local maps that are not dif
 |---|---|---|---|
 | S12 Production and knowledge | Add the production chains and knowledge. | Tool requirement and wear, tool crafting, charcoal, bricks, smoked food, smelting, iron tools. Lore fragment items, the excavate designation, and reading. Proposed (Q-014): job choice by colony need (§7.2) and a small injury chance at risky jobs. | R-008, R-042, R-043. Each chain in `GAME_DESIGN.md` §11.3 works in a scenario test. A locked recipe cannot be ordered. |
 | S13 Creatures and combat | Add creatures and melee combat. | Game animals, hunting, meat and leather, beasts, drafting, melee, the condition "wounded". | R-032. A drafted colonist obeys a move order in the same tick. Creatures use the path budget (P-04). |
-| S14 Notice, legends, and sealed sites | Make history dangerous and useful. | Notice and its overlay, beast spawns, lair beasts, dormant threats, legends with site markers. | R-030, R-031, R-044. Notice equals the sum of its contributions. Opening a sealed site wakes its threat. |
+| S14 Notice, legends, and sealed sites | Make history dangerous and useful. | Notice and its overlay, beast spawns, lair beasts, dormant threats, legends with site markers. | R-030, R-031, R-044. Notice equals the sum of its contributions. Opening a sealed site wakes its threat. Status: the `sim` and `worldgen` part is done (D-074): Notice, the daily beast roll, dormant threats, and legends. Open: beast and lair creatures (S13), the Notice overlay and the legend list in the UI, excavation and relic hooks (S12). |
 | S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save, one music loop for each season, day and night lighting. Proposed (Q-014): migrants with a short background line, and bonds (§7.1). | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. |
 | S16 Drought and wildfire | Make dry summers a crisis. | Dry-day counter in the ledger, drought effects, irrigation ditches, dry-soil crops, lightning, weather ambience (rain, wind). | R-025, R-026. A crop on an irrigated tile grows at normal speed in a drought. A ditch that does not touch water does not irrigate. Fire does not cross a firebreak of 2 soil tiles. |
 | S17 Disease and medicine | Make sickness a crisis that the player can manage. | Food poisoning, wound infection, winter fever, the medicine skill, herbal medicine, the doctor job, sick rooms, disease alerts. | R-060 to R-064. Winter fever does not spread between colonists in different rooms. Treatment decreases severity by the content value. |

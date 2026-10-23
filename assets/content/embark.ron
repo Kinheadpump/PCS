@@ -65,4 +65,9 @@
     seal_radius: 3,
     // Largest sideways shift of a road in tiles.
     road_jitter: 24,
+    // Legends (R-044): share of certain legends, share of rumors that are true, and the
+    // distance of a false rumor from every site.
+    legend_certain_pct: 50,
+    legend_rumor_true_pct: 50,
+    legend_min_gap: 8,
 )

@@ -21,6 +21,7 @@ pub mod life;
 pub mod map;
 pub mod needact;
 pub mod needs;
+pub mod notice;
 pub mod path;
 pub mod production;
 pub mod region;
@@ -63,6 +64,7 @@ pub use life::{
 };
 pub use map::LocalMap;
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
+pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;
 pub use region::Regions;
 pub use room::{
@@ -142,12 +144,19 @@ pub struct Sim {
     chronicle: ChronicleState,
     /// The run: its state and the end numbers (R-050).
     run: RunInfo,
+    /// Noise and site disturbance by tile (S14).
+    notice: notice::NoticeState,
+    /// Dormant threats of the sealed sites (S14).
+    threats: Vec<Threat>,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
     /// Life events for the caller. Not part of the state.
     #[serde(skip)]
     life_events: Vec<LifeEvent>,
+    /// Notice events for the caller. Not part of the state.
+    #[serde(skip)]
+    notice_events: Vec<notice::NoticeEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -192,6 +201,7 @@ impl Sim {
         let regions = Regions::build(&map);
         let spawns = center_spawns(&map, &regions, START_COLONISTS);
         let mut sim = Self::from_map(map, seed, content_hash, &spawns);
+        sim.threats = notice::threats_of(&data.placed, &data.site);
         sim.roll_colonists(seed);
         sim.roll_start_skills(seed);
         sim.place_start_stock();
@@ -231,6 +241,9 @@ impl Sim {
             ledger: LedgerState::default(),
             chronicle: ChronicleState::default(),
             run: RunInfo::default(),
+            notice: notice::NoticeState::default(),
+            threats: Vec::new(),
+            notice_events: Vec::new(),
             events: Vec::new(),
             life_events: Vec::new(),
             needs_off: false,
@@ -291,6 +304,7 @@ impl Sim {
         self.farm_tick();
         self.production_tick();
         self.colony_daily_tick();
+        self.notice_tick();
     }
 
     /// Take the job events that the last ticks made.

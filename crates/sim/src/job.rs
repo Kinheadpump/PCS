@@ -1157,6 +1157,7 @@ impl Sim {
                 *xp = xp.saturating_add(rules.xp_per_job).min(cap);
             }
         }
+        self.notice_job_done(active.kind, x, y);
         self.job_events.push(JobEvent::Completed {
             colonist: id,
             kind: active.kind,
