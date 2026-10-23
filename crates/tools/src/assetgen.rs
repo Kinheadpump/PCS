@@ -21,6 +21,8 @@ pub mod items;
 pub mod objects;
 #[path = "assetgen_preview.rs"]
 pub mod preview;
+#[path = "assetgen_sound.rs"]
+pub mod sound;
 #[path = "assetgen_terrain.rs"]
 pub mod terrain;
 
@@ -209,10 +211,11 @@ pub fn encode_png(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Run `assetgen [--seed <n>] [--out <dir>]`. Returns a message.
+/// Run `assetgen [--seed <n>] [--out <dir>] [--sounds <dir>]`. Returns a message.
 pub fn run(args: &[String]) -> Result<String, String> {
     let mut seed = DEFAULT_SEED;
     let mut dir = "assets/sprites".to_owned();
+    let mut sounds_dir = "assets/sounds".to_owned();
     let mut it = args.iter();
     while let Some(flag) = it.next() {
         let value = it.next().ok_or_else(|| format!("{flag} needs a value"))?;
@@ -223,6 +226,7 @@ pub fn run(args: &[String]) -> Result<String, String> {
                     .map_err(|e| format!("bad seed {value:?}: {e}"))?
             }
             "--out" => dir = value.clone(),
+            "--sounds" => sounds_dir = value.clone(),
             _ => return Err(format!("unknown flag {flag:?}")),
         }
     }
@@ -235,7 +239,20 @@ pub fn run(args: &[String]) -> Result<String, String> {
         let path = std::path::Path::new(&dir).join(o.name);
         std::fs::write(&path, &png).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     }
-    Ok(format!("{} files in {dir} ({total} bytes)", outputs.len()))
+    std::fs::create_dir_all(&sounds_dir).map_err(|e| format!("cannot create {sounds_dir}: {e}"))?;
+    let sounds = sound::make_all(seed);
+    let mut sound_bytes = 0;
+    for s in &sounds {
+        let wav = sound::encode_wav(&s.samples);
+        sound_bytes += wav.len();
+        let path = std::path::Path::new(&sounds_dir).join(format!("{}.wav", s.name));
+        std::fs::write(&path, &wav).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    }
+    Ok(format!(
+        "{} files in {dir} ({total} bytes); {} sounds in {sounds_dir} ({sound_bytes} bytes)",
+        outputs.len(),
+        sounds.len()
+    ))
 }
 
 #[cfg(test)]

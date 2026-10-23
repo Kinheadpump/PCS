@@ -244,7 +244,7 @@ A sprint is done when all of its tasks are done and its deliverable works.
 6. Write mood, mood modifiers, and mood effects (R-014, R-015). Add room beauty as a modifier. (Depends on 1, 2, 4.)
 7. Write the MVP traits (`GAME_DESIGN.md` §7.2). (Depends on 6.)
 8. Add the alerts for hunger, hypothermia, low mood, and death. Add the why chains for mood and health. (Depends on 5, 6.)
-9. Proposed (Q-018): write the sound engine in `game` (play, volume, mixer for effects, ambience, and music). Make the first sound set with `tools assetgen` (`sound-designer` subagent): alert sounds, UI click, footsteps, tools at work. Each alert plays its sound. (Depends on 8.)
+9. Done (Q-018): write the sound engine in `game` (play, volume, mixer for effects, ambience, and music). Make the first sound set with `tools assetgen` (`sound-designer` subagent): alert sounds, UI click, footsteps, tools at work. Each alert plays its sound. (Depends on 8.)
 
 **Acceptance criteria:**
 

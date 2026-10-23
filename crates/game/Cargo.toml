@@ -11,4 +11,4 @@ workspace = true
 base.workspace = true
 worldgen.workspace = true
 sim.workspace = true
-macroquad.workspace = true
+macroquad = { workspace = true, features = ["audio"] }

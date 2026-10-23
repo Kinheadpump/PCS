@@ -103,7 +103,7 @@ Each value that the player can inspect (mood, Notice, room temperature, work spe
 - Do not use the async or coroutine features of `macroquad` for game logic.
 - Sprites are 16 × 16 pixels. Use nearest-neighbor filtering. Tint sprites with the material color.
 - Draw only visible tiles. Batch static tile layers by chunk (32 × 32 tiles).
-- Art and sound come from `tools assetgen` (D-034). It writes PNG files (our own writer with stored deflate, CRC32, and Adler-32) and 16-bit mono WAV files. Generated files are committed in `assets/`. Sound playback uses the `macroquad` audio feature. Enable it when the first sound exists.
+- Art and sound come from `tools assetgen` (D-034). It writes PNG files (our own writer with stored deflate, CRC32, and Adler-32) and 16-bit mono WAV files. Generated files are committed in `assets/`. Sound playback uses the `macroquad` audio feature (on in `game`; code in `crates/game/src/sound.rs`). `assetgen --sounds <dir>` writes the WAV files (default `assets/sounds`).
 
 ### 4.3 User interface (D-008)
 
