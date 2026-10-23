@@ -1077,7 +1077,7 @@ mod tests {
     fn work_text_lists_the_priorities_in_job_order() {
         let sim = sim_from_ascii("c", 1).unwrap();
         let rows = inspector::work_rows(&sim);
-        assert_eq!(work_text(&rows[0]), "Colonist 0 3 3 3 3 3 3");
+        assert_eq!(work_text(&rows[0]), "Colonist 0 3 3 3 3 3 3 3 3 3");
     }
 
     #[test]

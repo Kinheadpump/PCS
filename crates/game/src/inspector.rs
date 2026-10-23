@@ -970,7 +970,7 @@ mod tests {
         assert_eq!(workshop_at(&sim, 1, 0), Some(workshop));
         assert_eq!(workshop_at(&sim, 0, 0), None);
         let recipes = workshop_recipes(&sim, 1, 0);
-        assert_eq!(recipes.len(), sim.rules().recipes.len());
+        assert_eq!(recipes.len(), 2);
         assert_eq!(recipes[0].label, "Make planks");
         assert_eq!(recipes[0].detail, "1 Log to 2 Plank, 2.0 h");
         sim.step(&[Command::OrderCraft {
