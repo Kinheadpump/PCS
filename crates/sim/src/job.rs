@@ -347,6 +347,7 @@ impl Sim {
         match command {
             Command::Designate { kind, x, y } => self.designate(*kind, *x, *y),
             Command::CancelDesignation { x, y } => self.cancel_designation(*x, *y),
+            Command::DigDitch { x, y } => self.dig_ditch(*x, *y),
             Command::CreateStockpile {
                 x0,
                 y0,
@@ -813,6 +814,7 @@ impl Sim {
                 let (x, y) = (i32::from(j.x), i32::from(j.y));
                 match j.kind {
                     JobKind::Cut => !self.map.tree(x, y),
+                    JobKind::Mine if j.is_dig() => self.ditch_allowed(j.x, j.y).is_err(),
                     JobKind::Mine => self
                         .map
                         .rock(x, y)
@@ -838,8 +840,12 @@ impl Sim {
             .map(|(id, _)| id)
             .collect();
         for id in stale {
-            if let Some(job) = self.jobs.remove(id)
-                && job.kind == JobKind::Haul
+            let Some(job) = self.jobs.remove(id) else {
+                continue;
+            };
+            if job.is_dig() {
+                self.designations.remove(&(job.x, job.y));
+            } else if job.kind == JobKind::Haul
                 && let Some(item) = job.item
                 && self.is_stockpiled(item)
             {
@@ -952,6 +958,7 @@ impl Sim {
         let rules = &self.rules.jobs;
         match job.kind {
             JobKind::Cut => rules.cut_ticks,
+            JobKind::Mine if job.is_dig() => self.rules.drought.dig_ticks,
             JobKind::Mine => {
                 let rock = self
                     .map
@@ -974,6 +981,7 @@ impl Sim {
         let (x, y) = (i32::from(job.x), i32::from(job.y));
         let target_ok = match job.kind {
             JobKind::Cut => self.map.tree(x, y),
+            JobKind::Mine if job.is_dig() => self.ditch_allowed(job.x, job.y).is_ok(),
             JobKind::Mine => self
                 .map
                 .rock(x, y)
@@ -1000,6 +1008,21 @@ impl Sim {
             JobKind::Construct | JobKind::Deconstruct | JobKind::Craft
         ) {
             self.complete_build_work(id, active, &job);
+            return;
+        }
+        if job.is_dig() {
+            // A ditch tile is blocked for walking. It waits until the tile is free.
+            if self
+                .colonists
+                .iter()
+                .any(|(_, c)| c.x == job.x && c.y == job.y)
+            {
+                self.set_step(id, JobStep::Work { progress });
+                return;
+            }
+            self.finish_ditch(job.x, job.y);
+            self.designations.remove(&(job.x, job.y));
+            self.finish_job(id, active, job.x, job.y);
             return;
         }
         let rules = self.rules.clone();

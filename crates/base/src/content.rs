@@ -864,6 +864,67 @@ pub fn load_notice_rules(file_name: &str, text: &str) -> Result<NoticeRules, Con
     finish(file_name, r, issues)
 }
 
+/// Numbers for drought, irrigation, wildfire, and fire spread (`drought.ron`, R-024 to R-026).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DroughtRules {
+    /// Days in a row without rain that start a drought.
+    pub drought_days: u32,
+    /// Growth speed of a crop on a tile that is not irrigated during a drought, in percent.
+    pub dry_growth_pct: u32,
+    /// A tile this near a water tile or a connected ditch tile is irrigated.
+    pub irrigation_radius: u32,
+    /// Fire spread chance during a drought, in percent of the normal chance.
+    pub fire_drought_pct: u32,
+    /// Chance of lightning on a summer day with a drought, in percent.
+    pub lightning_pct: u32,
+    /// Intensity of a fire that lightning starts (1 to 10).
+    pub lightning_intensity: u32,
+    /// Ticks between two fire steps.
+    pub fire_step_ticks: u32,
+    /// Flammability of a tree tile: the spread chance in percent is this times the intensity
+    /// divided by 10.
+    pub tree_flammability: u32,
+    /// Fire steps that a burning tree lasts.
+    pub tree_fuel: u32,
+    /// Work time to dig one ditch tile, in ticks at 100% work speed.
+    pub dig_ticks: u32,
+}
+
+/// Load and validate the drought numbers.
+pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, ContentError> {
+    let r: DroughtRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    for (value, name) in [
+        (r.drought_days, "drought_days"),
+        (r.fire_step_ticks, "fire_step_ticks"),
+        (r.tree_fuel, "tree_fuel"),
+        (r.dig_ticks, "dig_ticks"),
+    ] {
+        if value == 0 {
+            issues.push(issue(name, "must be 1 or more"));
+        }
+    }
+    for (value, name) in [
+        (r.dry_growth_pct, "dry_growth_pct"),
+        (r.lightning_pct, "lightning_pct"),
+        (r.tree_flammability, "tree_flammability"),
+    ] {
+        if value > 100 {
+            issues.push(issue(name, "must be 100 or less"));
+        }
+    }
+    if !(100..=1000).contains(&r.fire_drought_pct) {
+        issues.push(issue("fire_drought_pct", "must be from 100 to 1000"));
+    }
+    if !(1..=10).contains(&r.lightning_intensity) {
+        issues.push(issue("lightning_intensity", "must be from 1 to 10"));
+    }
+    if r.irrigation_radius > 32 {
+        issues.push(issue("irrigation_radius", "must be 32 or less"));
+    }
+    finish(file_name, r, issues)
+}
 /// A geological setting with its pool of rocks (rocks.ron).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingDef {

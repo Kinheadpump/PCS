@@ -317,7 +317,7 @@ impl Sim {
             .map
             .rock(ix, iy)
             .is_none_or(|r| r != worldgen::RockKind::None);
-        if water || rock {
+        if water || rock || self.has_ditch(x, y) {
             return Err(Reject::TileBlocked);
         }
         if layer != BuildLayer::Roof && (self.map.tree(ix, iy) || self.map.wall(ix, iy)) {

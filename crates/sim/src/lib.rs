@@ -10,7 +10,9 @@ pub mod build;
 pub mod climate;
 pub mod colonist;
 pub mod command;
+pub mod drought;
 pub mod event;
+pub mod fire;
 pub mod hearth;
 pub mod item;
 pub mod job;
@@ -37,6 +39,7 @@ pub use climate::{
 };
 pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex};
 pub use command::Command;
+pub use drought::{DIG_ARG, DroughtEvent, Fire, Growth, GrowthCause, GrowthPart};
 pub use event::Event;
 pub use hearth::REFUEL_ARG;
 pub use item::{Item, ItemId, ItemLoc, Items};
@@ -120,6 +123,8 @@ pub struct Sim {
     notice: notice::NoticeState,
     /// Dormant threats of the sealed sites (S14).
     threats: Vec<Threat>,
+    /// Dry days, ditches, and fires (S16).
+    drought: drought::DroughtState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -129,6 +134,9 @@ pub struct Sim {
     /// Notice events for the caller. Not part of the state.
     #[serde(skip)]
     notice_events: Vec<notice::NoticeEvent>,
+    /// Drought and fire events for the caller. Not part of the state.
+    #[serde(skip)]
+    drought_events: Vec<DroughtEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -206,7 +214,9 @@ impl Sim {
             graveyard: Vec::new(),
             notice: notice::NoticeState::default(),
             threats: Vec::new(),
+            drought: drought::DroughtState::default(),
             notice_events: Vec::new(),
+            drought_events: Vec::new(),
             events: Vec::new(),
             life_events: Vec::new(),
             needs_off: false,
@@ -227,15 +237,17 @@ impl Sim {
 
     /// Rebuild the derived caches except the rooms. Call after a load.
     fn rebuild_caches(&mut self) {
-        let blocking = self
+        let mut blocking = self
             .buildings
             .object_tiles(|def| self.rules.building(def).is_some_and(|d| d.blocks_walking));
+        blocking.extend(self.drought.ditches.iter().copied());
         self.map.reset_solid(blocking.into_iter());
         self.map
             .rebuild_deep(u32::from(self.rules.climate.deep_water_distance));
         self.map.set_ice(self.climate.ice);
         self.regions.rebuild(&self.map);
         self.items.rebuild_index();
+        self.rebuild_ditches();
     }
 
     /// Replace the content rules. For tests that use their own content. Call before the
@@ -262,6 +274,7 @@ impl Sim {
         self.climate_tick();
         self.life_tick();
         self.notice_tick();
+        self.drought_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -527,7 +540,7 @@ impl Sim {
         if !colonists_ok || !queue_ok {
             return None;
         }
-        if !sim.buildings_state_ok() {
+        if !sim.buildings_state_ok() || !sim.drought_state_ok() {
             return None;
         }
         sim.rebuild_caches();
