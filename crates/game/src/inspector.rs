@@ -42,6 +42,7 @@ pub fn step_text(step: JobStep) -> &'static str {
     match step {
         JobStep::GoToWork => "going to the work tile",
         JobStep::Work { .. } => "working",
+        JobStep::GoToTool => "going to get a tool",
         JobStep::GoToItem => "going to the item",
         JobStep::GoToDest => "carrying to the stockpile",
     }
@@ -723,6 +724,15 @@ pub fn workshop_recipes(sim: &Sim, x: u16, y: u16) -> Vec<RecipeInfo> {
         .iter()
         .enumerate()
         .filter(|(_, r)| r.workshop == b.def)
+        .filter(|(i, r)| {
+            let known = u16::try_from(*i).is_ok_and(|n| sim.recipe_known(n));
+            // A block of a rock that the colony does not have is not on the list.
+            let rock_missing = r.key.starts_with("block_")
+                && r.inputs
+                    .iter()
+                    .all(|&(m, _)| sim.items().total_units(m) == 0);
+            known && !rock_missing
+        })
         .filter_map(|(i, r)| {
             let recipe = u16::try_from(i).ok()?;
             let ordered = b
@@ -983,7 +993,11 @@ mod tests {
         assert_eq!(workshop_at(&sim, 1, 0), Some(workshop));
         assert_eq!(workshop_at(&sim, 0, 0), None);
         let recipes = workshop_recipes(&sim, 1, 0);
-        assert_eq!(recipes.len(), 2);
+        assert_eq!(
+            recipes.len(),
+            4,
+            "locked recipes and unavailable blocks are hidden"
+        );
         assert_eq!(recipes[0].label, "Make planks");
         assert_eq!(recipes[0].detail, "1 Log to 2 Plank, 2.0 h");
         sim.step(&[Command::OrderCraft {

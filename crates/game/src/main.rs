@@ -907,7 +907,7 @@ impl App {
             .selected_tile
             .and_then(|(x, y)| inspector::zone_at(&self.sim, x, y));
         weather::draw_ice(&frame);
-        overlay::draw_zones(&frame, selected_zone);
+        overlay::draw_zones(&frame, selected_zone, self.tool == Tool::Stockpile);
         plants::draw_zones(&frame);
         if self.ui_state.fertility || self.tool == Tool::Farm {
             plants::draw_fertility(&frame);

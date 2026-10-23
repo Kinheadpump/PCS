@@ -13,6 +13,7 @@
 use crate::colonist::{ColonistId, NeedAct};
 use crate::item::{ItemId, ItemLoc};
 use crate::skill::{self, Skill, WorkSpeed};
+use crate::tools::ToolSource;
 use crate::{Command, PathRequest, Sim};
 use base::{Arena, Id};
 use serde::{Deserialize, Serialize};
@@ -123,6 +124,8 @@ pub enum JobStep {
         /// Work done so far, in tick-percent units.
         progress: u32,
     },
+    /// Walk to a tool item and take it (R-008).
+    GoToTool,
     /// Walk to the item (haul).
     GoToItem,
     /// Carry the item to the stockpile tile (haul).
@@ -144,6 +147,8 @@ pub struct ActiveJob {
     pub dest: Option<(u16, u16)>,
     /// The reserved item (haul).
     pub item: Option<ItemId>,
+    /// The reserved tool item that the colonist walks to before the work (R-008).
+    pub tool_item: Option<ItemId>,
 }
 
 /// The jobs and the reservations of destination tiles.
@@ -291,6 +296,8 @@ pub enum Reject {
     NoPlant,
     /// The crop does not exist.
     UnknownCrop,
+    /// The colony does not know the recipe yet (R-042).
+    RecipeLocked,
 }
 
 /// Why a job stopped before it was done.
@@ -340,6 +347,7 @@ struct Pick {
     stand: (u16, u16),
     dest: Option<(u16, u16)>,
     item: Option<ItemId>,
+    tool: Option<ToolSource>,
     key: (u8, u32, u32),
 }
 
@@ -668,6 +676,8 @@ impl Sim {
         if region == 0 {
             return (None, false);
         }
+        let mut sources: [Option<Option<ToolSource>>; base::content::ToolKind::COUNT] =
+            [None; base::content::ToolKind::COUNT];
         let mut best: Option<Pick> = None;
         for (job_id, job) in self.jobs.iter() {
             let priority = c.priorities[job.kind.index()];
@@ -685,12 +695,24 @@ impl Sim {
             let Some((stand, dest, item)) = self.evaluate(region, from, job) else {
                 continue;
             };
+            let mut tool = None;
+            if let Some(kind) = Self::tool_needed(job)
+                && c.tools[kind.index()].is_none()
+            {
+                let found = *sources[kind.index()]
+                    .get_or_insert_with(|| self.find_tool(kind, region, from));
+                match found {
+                    Some(source) => tool = Some(source),
+                    None => continue,
+                }
+            }
             let pick = Pick {
                 job: job_id,
                 kind: job.kind,
                 stand,
                 dest,
                 item,
+                tool,
                 key: (priority, octile(from, stand), job_id.index()),
             };
             if best.is_none_or(|b| pick.key < b.key) {
@@ -908,7 +930,12 @@ impl Sim {
         {
             self.jobs.dest_reservations.insert(dest, id);
         }
-        let step = if pick.item.is_some() {
+        if let Some(source) = pick.tool {
+            self.items.set_reserved(source.item, Some(id));
+        }
+        let step = if pick.tool.is_some() {
+            JobStep::GoToTool
+        } else if pick.item.is_some() {
             JobStep::GoToItem
         } else {
             JobStep::GoToWork
@@ -921,9 +948,10 @@ impl Sim {
                 stand: pick.stand,
                 dest: pick.dest,
                 item: pick.item,
+                tool_item: pick.tool.map(|s| s.item),
             });
         }
-        self.start_leg(id, pick.stand);
+        self.start_leg(id, pick.tool.map_or(pick.stand, |s| s.at));
     }
 
     /// Ask a path to a tile. A colonist who is already there does not move.
@@ -974,6 +1002,7 @@ impl Sim {
                 Leg::Failed => self.abort_job(id, AbortReason::NoPath, true),
             },
             JobStep::Work { progress } => self.do_work(id, active, progress),
+            JobStep::GoToTool => self.go_to_tool(id, active),
             JobStep::GoToItem => match self.leg_state(id, active.stand) {
                 Leg::Arrived => self.pick_up_item(id, active),
                 Leg::Walking => {}
@@ -1072,8 +1101,9 @@ impl Sim {
             return;
         }
         let rules = self.rules.clone();
-        // Hook for R-008 (tools): a later sprint checks the tool here and lowers its
-        // durability. Sprint 3 colonists work bare-handed.
+        if let Some(kind) = Self::tool_needed(&job) {
+            self.wear_tool(id, kind);
+        }
         match job.kind {
             JobKind::Cut => {
                 self.map.clear_tree(x, y);
@@ -1111,6 +1141,36 @@ impl Sim {
         }
         self.designations.remove(&(job.x, job.y));
         self.finish_job(id, active, job.x, job.y);
+    }
+
+    /// Walk to the reserved tool, take it, and go on to the work tile.
+    fn go_to_tool(&mut self, id: ColonistId, active: ActiveJob) {
+        let at = active.tool_item.and_then(|t| match self.items.get(t) {
+            Some(i) if i.reserved_by == Some(id) => match i.loc {
+                ItemLoc::Tile(x, y) => Some((x, y)),
+                ItemLoc::Carried(_) => None,
+            },
+            _ => None,
+        });
+        let (Some(tool), Some(at)) = (active.tool_item, at) else {
+            self.abort_job(id, AbortReason::JobGone, true);
+            return;
+        };
+        match self.leg_state(id, at) {
+            Leg::Walking => {}
+            Leg::Failed => self.abort_job(id, AbortReason::NoPath, true),
+            Leg::Arrived => {
+                if !self.take_tool(id, tool) {
+                    self.abort_job(id, AbortReason::JobGone, true);
+                    return;
+                }
+                if let Some(a) = self.colonists.get_mut(id).and_then(|c| c.job.as_mut()) {
+                    a.tool_item = None;
+                    a.step = JobStep::GoToWork;
+                }
+                self.start_leg(id, active.stand);
+            }
+        }
     }
 
     fn pick_up_item(&mut self, id: ColonistId, active: ActiveJob) {
@@ -1235,6 +1295,14 @@ impl Sim {
             {
                 self.items.set_reserved(item, None);
             }
+        }
+        if let Some(tool) = active.tool_item
+            && self
+                .items
+                .get(tool)
+                .is_some_and(|i| i.reserved_by == Some(id))
+        {
+            self.items.set_reserved(tool, None);
         }
         self.job_events.push(JobEvent::Aborted {
             colonist: id,

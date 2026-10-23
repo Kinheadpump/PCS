@@ -391,6 +391,13 @@ impl SimRules {
             .unwrap_or(NO_MATERIAL)
     }
 
+    /// The tool kind of a material, if the material is a tool.
+    pub fn tool_kind(&self, material: u16) -> Option<base::content::ToolKind> {
+        self.materials
+            .get(usize::from(material))
+            .and_then(|m| m.tool)
+    }
+
     /// Hardness of a material, 0 if unknown.
     pub fn hardness(&self, material: u16) -> u32 {
         self.materials
@@ -488,8 +495,8 @@ mod tests {
         assert_ne!(rules.log, NO_MATERIAL);
         assert_eq!(rules.materials[usize::from(rules.log)].key, "log");
         assert_eq!(SimRules::builtin().jobs, rules.jobs);
-        assert_eq!(rules.buildings.len(), 8);
-        assert_eq!(rules.recipes.len(), 7);
+        assert_eq!(rules.buildings.len(), 11);
+        assert_eq!(rules.recipes.len(), 23);
         assert_eq!(rules.rooms.max_tiles, 400);
         let wall = rules.building_index("wall").unwrap();
         let granite = rules.material_index("granite").unwrap();

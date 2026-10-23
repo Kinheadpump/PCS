@@ -885,6 +885,7 @@ impl Sim {
             sex: c.sex,
             cause,
         };
+        self.drop_tools(id);
         self.release_colonist(id);
         self.colonists.remove(id);
         self.graveyard.push(grave);

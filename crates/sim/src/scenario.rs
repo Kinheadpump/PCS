@@ -75,7 +75,19 @@ pub fn map_from_ascii(text: &str) -> Result<(LocalMap, Vec<(u16, u16)>), Scenari
 /// Make a `Sim` from an ASCII map. It has one colonist for each `c` and content hash 0.
 pub fn sim_from_ascii(text: &str, seed: u64) -> Result<Sim, ScenarioError> {
     let (map, spawns) = map_from_ascii(text)?;
-    Ok(Sim::from_map(map, seed, 0, &spawns))
+    let mut sim = Sim::from_map(map, seed, 0, &spawns);
+    // Scenario colonists start with a stone axe and a stone pick. Tests of R-008 clear them.
+    let (axe, pick) = (
+        sim.rules().material_index("stone_axe"),
+        sim.rules().material_index("stone_pick"),
+    );
+    let ids: Vec<_> = sim.colonists().iter().map(|(id, _)| id).collect();
+    for id in ids {
+        for material in [axe, pick].into_iter().flatten() {
+            sim.debug_set_tool(id, material, 400);
+        }
+    }
+    Ok(sim)
 }
 
 #[cfg(test)]

@@ -346,7 +346,7 @@ pub fn dashed_rect(x: f32, y: f32, w: f32, h: f32, t: f32, dash: f32, color: Col
 }
 
 /// Draw the stockpile zones: a checked floor tint and a dashed border.
-pub fn draw_zones(f: &Frame, selected: Option<StockpileId>) {
+pub fn draw_zones(f: &Frame, selected: Option<StockpileId>, editing: bool) {
     let Some(visible) = f.visible() else { return };
     let teal = tool_color(Tool::Stockpile);
     for (id, zone) in f.sim.stockpiles().iter() {
@@ -365,6 +365,10 @@ pub fn draw_zones(f: &Frame, selected: Option<StockpileId>) {
         let (x, y, w, h) = screen_rect(f.camera, f.view, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
         let t = thickness(f.camera.zoom);
         let is_selected = selected == Some(id);
+        if !editing && !is_selected {
+            draw_yard(f, zone.x0, zone.y0, zone.x1, zone.y1);
+            continue;
+        }
         let color = if is_selected {
             SELECT
         } else {
@@ -373,6 +377,43 @@ pub fn draw_zones(f: &Frame, selected: Option<StockpileId>) {
         let dash = (f.camera.zoom / 4.0).round().max(2.0);
         dashed_rect(x, y, w, h, t * 2.0, dash, rgb_color(pal::ui::INK, 150));
         dashed_rect(x, y, w, h, t, dash, color);
+    }
+}
+
+/// Draw a stockpile at rest as a storage yard: a floor of planks with a dark rim and a post at
+/// each corner. The teal zone look shows only with the stockpile tool or a selected zone.
+fn draw_yard(f: &Frame, x0: u16, y0: u16, x1: u16, y1: u16) {
+    let Some(visible) = f.visible() else { return };
+    let (wood, dark, post) = ([128, 92, 58], [70, 48, 34], [52, 36, 30]);
+    let (x0, y0, x1, y1) = (i32::from(x0), i32::from(y0), i32::from(x1), i32::from(y1));
+    for ty in y0.max(visible.min_y)..=y1.min(visible.max_y) {
+        for tx in x0.max(visible.min_x)..=x1.min(visible.max_x) {
+            let (rx, ry, rw, rh) = screen_rect(f.camera, f.view, tx, ty, 1, 1);
+            let shade = if (tx + ty) % 2 == 0 { 200 } else { 170 };
+            draw_rectangle(rx, ry, rw, rh, rgb_color(wood, shade));
+            if rw >= 12.0 {
+                let line = (rh / 16.0).max(1.0);
+                for k in 1..3 {
+                    let ly = ry + rh * k as f32 / 3.0;
+                    draw_rectangle(rx, ly, rw, line, rgb_color(dark, 110));
+                }
+            }
+        }
+    }
+    let (x, y, w, h) = screen_rect(f.camera, f.view, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+    let t = thickness(f.camera.zoom);
+    draw_rectangle(x, y, w, t, rgb_color(dark, 255));
+    draw_rectangle(x, y + h - t, w, t, rgb_color(dark, 255));
+    draw_rectangle(x, y, t, h, rgb_color(dark, 255));
+    draw_rectangle(x + w - t, y, t, h, rgb_color(dark, 255));
+    let p = (f.camera.zoom / 5.0).round().max(2.0);
+    for (cx, cy) in [
+        (x, y),
+        (x + w - p, y),
+        (x, y + h - p),
+        (x + w - p, y + h - p),
+    ] {
+        draw_rectangle(cx, cy, p, p, rgb_color(post, 255));
     }
 }
 
