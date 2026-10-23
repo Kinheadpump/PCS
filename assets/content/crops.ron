@@ -4,7 +4,7 @@
 // A crop grows one hour for each game hour in which the tile temperature is from min_temp to
 // max_temp. It is ripe after growth_days x 24 growing hours. It dies when the temperature is
 // below kill_temp. Yield = yield_units x fertility / 1000 (at least 1). seed_yield: seed units
-// that a harvest gives back.
+// that a harvest gives back. dry_soil (optional, default false): a drought does not slow the crop (R-025).
 // Fertility (per-mille, limited to fertility_min..fertility_max) = ground base + variation +
 // water bonus. variation: from -variation to +variation by a tile hash. water: a tile within
 // water_radius tiles of a water tile gets water_bonus.
@@ -24,6 +24,6 @@
         (id: "barley", name: "Barley", seed: "barley_seeds", product: "barley", min_temp: 80, max_temp: 300, kill_temp: -20, growth_days: 12, yield_units: 6, seed_yield: 2),
         (id: "turnip", name: "Turnip", seed: "turnip_seeds", product: "turnips", min_temp: 40, max_temp: 280, kill_temp: -50, growth_days: 9, yield_units: 8, seed_yield: 2),
         (id: "rye", name: "Rye", seed: "rye_seeds", product: "rye", min_temp: 20, max_temp: 250, kill_temp: -150, growth_days: 14, yield_units: 6, seed_yield: 2),
-        (id: "sorghum", name: "Sorghum", seed: "sorghum_seeds", product: "sorghum", min_temp: 150, max_temp: 400, kill_temp: 20, growth_days: 14, yield_units: 7, seed_yield: 2),
+        (id: "sorghum", name: "Sorghum", seed: "sorghum_seeds", product: "sorghum", min_temp: 150, max_temp: 400, kill_temp: 20, growth_days: 14, yield_units: 7, seed_yield: 2, dry_soil: true),
     ],
 )

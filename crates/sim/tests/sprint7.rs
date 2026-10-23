@@ -230,6 +230,10 @@ fn wild_tile(sim: &Sim, w: u16, h: u16) -> (u16, u16) {
 #[test]
 fn r007_gathering_gives_food_and_the_plant_grows_back_in_days() {
     let mut sim = flat_sim(&open_map(40, 40, &[(0, 0)]), 150);
+    // A drought stops the regrowth (R-025). This test is about the normal count.
+    let mut rules = sim.rules().clone();
+    rules.drought.drought_days = 1000;
+    sim.debug_set_rules(std::sync::Arc::new(rules));
     let (x, y) = wild_tile(&sim, 40, 40);
     let kind = sim.wild_plant_at(x, y).unwrap().kind;
     sim.step(&[Command::Designate {
