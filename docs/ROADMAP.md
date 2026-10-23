@@ -40,7 +40,7 @@ A sprint is done when all of its tasks are done and its deliverable works.
 | 0 | Foundation | S0 | Workspace, deterministic base library, checks. |
 | 1 | Colony prototype | S1 to S7 | Colonists survive or fail a first winter on a test map. This tests the core survival loop. |
 | 2 | World and history | S8 to S11 | World generation, history, and embark make the local map. |
-| 3 | MVP | S12 to S19 | The full scope in `GAME_DESIGN.md` §16.1. |
+| 3 | MVP | S12 to S19, and S11b, S11c, S15a, S18a | The full scope in `GAME_DESIGN.md` §16.1. The four lettered sprints are the game shell: main menu, worlds, settings, and saves (§7.5). |
 | 4 | External threats | Later | See §7. |
 | 5 | Society | Later | See §7. |
 | 6 | Scale and variety | Later | See §7. |
@@ -309,14 +309,18 @@ Risks: civilizations that grow or die without limit, local maps that are not dif
 
 | Sprint | Goal | Deliverable | Main acceptance criteria |
 |---|---|---|---|
+| S11b Main menu and new world | Give the game a start screen and a way to make worlds. | The game starts on a title screen. The player makes a world, lists the worlds, deletes a world, and goes to the embark screen. The pause menu has Resume, Settings, Save and quit to menu, and Quit to desktop. | The player enters a seed, or presses Random, and names the world (Q-019). The same seed makes the same world (golden world hash). A world record is a small file (name, seed, history length, worldgen version, creation date). The world is made again from the seed on load. The screen state machine is `Title`, `NewWorld`, `Worlds`, `WorldMap`, `Play`, `Pause`. The UI follows `ART_DIRECTION.md` and has no explanation text. Tests: record round trip, bad file gives an error and not a panic, name rules, seed parse. The first start has no world and opens `NewWorld`. Risks: the text widget (Q-019), the `main.rs` start-up flow (it starts a preset colony today). |
+| S11c Settings | Let the player change the game and keep the choice. | A settings screen from the title and from the pause menu, and a `settings.ron` file. | **Graphics:** window mode (windowed, borderless, fullscreen), resolution, vsync, frame rate limit, UI scale (100, 150, 200 percent). **Audio:** master, music, effects, and ambience volume (integers 0 to 100), mute when the window is not in focus. **Gameplay:** edge scroll on or off, scroll and zoom speed, auto-pause on a raid, a death, and a cold alert. A change applies at once, or after a restart if the engine needs it (the screen says "restart"). A resolution change reverts after 10 seconds if the player does not confirm it. A Defaults button. A bad or missing file gives the defaults and a note in the log. No setting changes `Sim`: the golden hashes stay. The sound engine (S6) gets four volume buses. Tests: round trip, clamp of wrong values, defaults. Risks: `macroquad` cannot change some window settings at run time. |
 | S12 Production and knowledge | Add the production chains and knowledge. | Tool requirement and wear, tool crafting, charcoal, bricks, smoked food, smelting, iron tools. Lore fragment items, the excavate designation, and reading. Proposed (Q-014): job choice by colony need (§7.2) and a small injury chance at risky jobs. | R-008, R-042, R-043. Each chain in `GAME_DESIGN.md` §11.3 works in a scenario test. A locked recipe cannot be ordered. |
 | S13 Creatures and combat | Add creatures and melee combat. | Game animals, hunting, meat and leather, beasts, drafting, melee, the condition "wounded". | R-032. A drafted colonist obeys a move order in the same tick. Creatures use the path budget (P-04). |
 | S14 Notice, legends, and sealed sites | Make history dangerous and useful. | Notice and its overlay, beast spawns, lair beasts, dormant threats, legends with site markers. | R-030, R-031, R-044. Notice equals the sum of its contributions. Opening a sealed site wakes its threat. Status: the `sim` and `worldgen` part is done (D-074): Notice, the daily beast roll, dormant threats, and legends. Open: beast and lair creatures (S13), the Notice overlay and the legend list in the UI, excavation and relic hooks (S12). |
-| S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save, one music loop for each season, day and night lighting. Proposed (Q-014): migrants with a short background line, and bonds (§7.1). | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. Status: the `sim` part is done (D-079): hearth fires, burning items and buildings, extinguish jobs, migrants with background lines, the legacy score, and the ironman hook. Open: bonds (Q-014 slice B), and all interface work (fire alert, migrant dialog, lore panel, end-of-run screen, music, day and night lighting). |
+| S15 Fire, migrants, and the full run | Complete the run from embark to collapse. | Fire, migrants, the lore panel, the end-of-run screen, the legacy score, ironman save, one music loop for each season, day and night lighting. Proposed (Q-014): migrants with a short background line, and bonds (§7.1). | R-017, R-023, R-024, R-050. Ironman writes a save at 00:00 each game day and at exit. Status: the `sim` part is done (D-080): hearth fires, burning items and buildings, extinguish jobs, migrants with background lines, the legacy score, and the ironman hook. Open: bonds (Q-014 slice B), and all interface work (fire alert, migrant dialog, lore panel, end-of-run screen, music, day and night lighting). |
+| S15a Saves and runs | Save, continue, and end runs under the ironman rules. | The file layer in `game` for the ironman save of S15. Continue, Load Game list, and graveyard list on the title screen. | A run is one colony on one world and has one save file (D-032, Q-020). The save is written to a temporary file, then renamed, and the old file stays as a backup (`TECHNICAL_DESIGN.md` §9). It is written at 00:00 each game day, on quit to menu, and on window close. A small `.meta` file next to the save holds world name, seed, day, year, colonists, and state, so the list needs no full load. If the `.meta` file is missing, the game makes it again. The list shows the runs of each world, newest first. A save of another format version, a corrupt save, or a missing file shows in the list with its reason and cannot be loaded. If the save is corrupt and a backup exists, the player can load the backup. There is no manual save slot and no load of an older state. When the run ends (R-050), the save is marked ended, becomes read-only, and moves to the graveyard list with its chronicle and score. A world can have 1 living run and many ended runs. Tests (temporary folder): save and load give the same `state_hash`; the old file stays if a write fails; backup rotation; corrupt file, empty file, and wrong magic bytes give an error and not a panic; an ended run cannot be loaded as living. The time to write a save is measured and recorded. Risks: write time at a large colony, antivirus locks on Windows (retry the rename 3 times). |
 | S16 Drought and wildfire | Make dry summers a crisis. | Dry-day counter in the ledger, drought effects, irrigation ditches, dry-soil crops, lightning, weather ambience (rain, wind). | R-025, R-026. A crop on an irrigated tile grows at normal speed in a drought. A ditch that does not touch water does not irrigate. Fire does not cross a firebreak of 2 soil tiles. Status: the `sim` part is done (D-076): dry-day counter, drought growth chain, irrigation, ditches, lightning, and fire on trees. Open: hearth fires and extinguish jobs (S15), the ledger counter, weather ambience, and the UI. |
 | S17 Disease and medicine | Make sickness a crisis that the player can manage. | Food poisoning, wound infection, winter fever, the medicine skill, herbal medicine, the doctor job, sick rooms, disease alerts. | R-060 to R-064. Winter fever does not spread between colonists in different rooms. Treatment decreases severity by the content value. |
 | S18 Rival colonies and raids | Add attacks by other colonies. | Rival colonies from history, hostility, scouts, raids, door and wall breaking, item theft, the tribute choice. | R-070 to R-072. A scout comes 1 game day before each raid. Paying the tribute removes goods of the correct value and the raiders leave. Status: the `sim` and `worldgen` part is done (D-078): rival colonies from history, hostility with its parts, the daily raid roll, the scout, the tribute and fight commands, and the S13 hooks. Open: raider creatures, combat, and damage to colonists (S13), door and wall breaking by raiders (only the time is ready), the warning alert, the tribute dialog, the rival list in the lore panel, and balance of the tribute value (S19). |
-| S19 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. A sound mix pass. An in-game tutorial that holds the explanations removed from the HUD (the HUD rework strips the long text). Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. Second controls review (Q-017). A new player can finish the tutorial and see every explanation again from a help menu. |
+| S18a Controls, credits, and menu polish | Finish the shell of a shipped game. | Key rebinding screen, credits, quit confirmation, title screen art and music, window title and icon, version string. | The rebinding screen uses the binding table of S1 and stores keys in `settings.ron`. A key that two actions use in the same context shows a conflict and is not saved. A Reset button for one action and for all. The credits screen reads `credits.ron` and a licence list that `tools licenses` writes from `cargo metadata` (no new crate). Quit to desktop asks to confirm only if a run is living and the last save is older than 1 game hour. The title screen has the menu music loop of S15 and the build version. The title menu has the entries Tutorial and Help as disabled placeholders that S19 enables. The `controls-reviewer` subagent reviews the rebinding flow. Tests: binding round trip, conflict detection, reset. Risks: key names on other keyboard layouts. |
+| S19 Balance and MVP review | Make the MVP fair and stable. | A scripted autoplayer in `tools run`. Balance changes. A sound mix pass. An in-game tutorial that holds the explanations removed from the HUD (the HUD rework strips the long text). The Tutorial and Help entries of the title menu (S18a) and of the pause menu open it. Milestone M3. | The autoplayer survival rate over 50 seeds is recorded. Each P-nn target is met, or each miss has a decision record. Soak test 1,000,000 ticks. 5 playtests of 3 years or more. Second controls review (Q-017). A new player can finish the tutorial and see every explanation again from a help menu. |
 
 Risks: balance, scope pressure, playtest capacity.
 
@@ -414,6 +418,31 @@ Each step needs a rule ID, a content file, and a test before it goes into a spri
 
 The `sound-designer` subagent writes the synthesizers in `tools assetgen` and makes the `.wav` files. The sound engine in `game` plays them. Generated files are committed (D-034). No new crate: use the `macroquad` audio feature (`TECHNICAL_DESIGN.md` §13). Sprint 5 scope does not change.
 
+### 7.5 Main menu and game shell (proposal, Q-019, Q-020)
+
+The owner asked for a main menu, world saving, new worlds, world seeds, and settings (2026-10-23). Today the game starts a preset colony. The world map and the embark screen exist (S9, S11). The pause menu has Resume and Quit (D-077). The save format and its header exist (S2). Nothing writes a save file in `game`. There is no settings file. The seed box accepts numbers only (D-027).
+
+**Model.** A *world* is a record: name, seed, history length. The game makes the world data again from the seed. A *run* is one colony in one world. A run has one ironman save file. A world has one living run and many ended runs. Phase 4 legacy worlds (D-033) use the ended runs of a world as sites.
+
+| Request | Sprint | Note |
+|---|---|---|
+| Main menu | S11b (S18a adds credits and polish) | Continue is disabled until S15a. |
+| New worlds, world seeds | S11b | Seed box (D-071), Random button, history length, optional name. |
+| World list, delete, rename | S11b | Delete asks to confirm. |
+| World saving and loading | S15a | Ironman only (D-032). Atomic writes, backup, list with reasons. |
+| Continue, load, graveyard | S15a | No manual slots. |
+| Settings (graphics, audio, gameplay) | S11c | A settings file. No effect on `Sim`. |
+| Key rebinding | S18a | Moved from the backlog. |
+| Credits, quit, window title and icon | S18a | |
+| Tutorial and help entries | S19 | Placeholders from S18a. |
+| Legacy world list | Phase 4 | Uses the graveyard of S15a. |
+
+**Order.** S11b and S11c touch only `game` screens, so they can run in parallel with S12 (`sim` work) on a different branch. They need S11 only. S15a needs S15 (ironman rules, end of run). S18a needs S15a and S11c. The `game` screen files belong to the UI thread: a `sim` sprint never edits them.
+
+**Files.** The game stores worlds in `worlds/`, runs in `saves/`, and settings in `settings.ron`. The base folder is `%APPDATA%/Ruinstead` on Windows. It comes from `std::env`, with no new crate. `PCS_DATA_DIR` overrides it for tests.
+
+**Not in this plan (backlog):** languages, gamepad, cloud saves, achievements, a mod menu.
+
 ## 8. Main project risks
 
 | Risk | Effect | Control |
@@ -449,7 +478,10 @@ These ideas are not in a sprint. Each item needs a reason and a phase before it 
 | Seasonal river floods | 4 | Moved to the Phase 4 sprint S27 (§7.4). |
 | History continues slowly after embark | 4 | Necessary for civilizations that change during play. |
 | Sound effects | 3 | Moved to S6 (sound engine), S16 (weather ambience), and S15 (music) (§7.4). |
-| Key rebinding UI | 3 or later | The binding table exists from S1. |
-| Free text input (save names, seed words) | 4 | D-027. |
+| Key rebinding UI | 3 (S18a) | Moved to S18a (§7.5). |
+| Free text input (seed words) | 4 | D-027. A small widget for world names is proposed in S11b (Q-019). |
 | Modding support beyond content files | 6 | Content files are already data. |
+| Languages (text tables) | 4 | The UI has little text. Decide before the Steam page. |
+| Gamepad support | 4 | Needs a new control scheme. |
+| Cloud saves | 4 | Only after the save folder is stable (S15a). |
 | Hierarchical pathfinding | 6 | Only if a benchmark shows a need. |
