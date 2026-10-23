@@ -7,29 +7,40 @@
 
 pub mod alert;
 pub mod build;
+pub mod chronicle;
 pub mod climate;
 pub mod colonist;
 pub mod command;
 pub mod event;
+pub mod farm;
 pub mod hearth;
 pub mod item;
 pub mod job;
+pub mod ledger;
 pub mod life;
 pub mod map;
 pub mod needact;
 pub mod needs;
 pub mod path;
+pub mod production;
 pub mod region;
 pub mod room;
 pub mod rules;
 pub mod save;
 pub mod scenario;
 pub mod skill;
+pub mod spoilage;
+pub mod start;
 pub mod stockpile;
 pub mod time;
 
+mod loader;
+
 pub use alert::{Alert, AlertKind, AlertLevel};
 pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
+pub use chronicle::{
+    ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, RunInfo, RunState,
+};
 pub use climate::{
     ClimateParams, ClimateRules, DayWeather, FORECAST_DAYS, OutdoorParts, TempCause, TempPart,
     TempPlace, TileTemperature,
@@ -37,9 +48,14 @@ pub use climate::{
 pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex};
 pub use command::Command;
 pub use event::Event;
+pub use farm::{
+    CropDef, FarmRules, FarmState, FertilityCause, FertilityPart, FertilityReport, Plant,
+    PlantReport, WildDef, WildStatus,
+};
 pub use hearth::REFUEL_ARG;
 pub use item::{Item, ItemId, ItemLoc, Items};
 pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, JobStep, Reject};
+pub use ledger::{Ledger, LedgerCause, LedgerLine, LedgerPart, LedgerRules, LedgerState};
 pub use life::{
     ComfortBand, ComfortCause, ComfortPart, Condition, DeathCause, EffectiveSpeed, Grave,
     HealthCause, HealthPart, HealthReport, LifeEvent, Mood, MoodCause, MoodPart, SpeedMod,
@@ -56,6 +72,8 @@ pub use room::{
 pub use rules::SimRules;
 pub use save::SaveError;
 pub use skill::{Skill, SpeedCause, SpeedPart, WorkSpeed};
+pub use spoilage::{RotCause, RotPart, RotReport, SpoilRules};
+pub use start::StartRules;
 pub use stockpile::{ItemFilter, Stockpile, StockpileId};
 pub use time::{GameTime, Season, Speed};
 
@@ -114,6 +132,16 @@ pub struct Sim {
     room_temps: BTreeMap<(u16, u16), i32>,
     /// The dead, oldest first (R-016).
     graveyard: Vec<life::Grave>,
+    /// Crops, farm zones, and wild plants (Sprint 7).
+    farm: FarmState,
+    /// "Keep N" orders by workshop tile and recipe.
+    keep: BTreeMap<(u16, u16, u16), u32>,
+    /// The ledger history.
+    ledger: LedgerState,
+    /// The chronicle.
+    chronicle: ChronicleState,
+    /// The run: its state and the end numbers (R-050).
+    run: RunInfo,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -129,6 +157,9 @@ pub struct Sim {
     /// Content for the job systems. Not part of the state.
     #[serde(skip)]
     rules: Arc<SimRules>,
+    /// Derived cache: fertility and wild plants.
+    #[serde(skip)]
+    farm_cache: farm::FarmCache,
     /// Derived cache: connectivity regions.
     #[serde(skip)]
     regions: Regions,
@@ -162,7 +193,8 @@ impl Sim {
         let spawns = center_spawns(&map, &regions, START_COLONISTS);
         let mut sim = Self::from_map(map, seed, content_hash, &spawns);
         sim.roll_colonists(seed);
-        sim.place_start_food();
+        sim.roll_start_skills(seed);
+        sim.place_start_stock();
         sim
     }
 
@@ -194,11 +226,17 @@ impl Sim {
             climate: climate::ClimateState::new(&rules.climate, seed),
             room_temps: BTreeMap::new(),
             graveyard: Vec::new(),
+            farm: FarmState::with_seed(base::rng::mix(seed ^ 0x4641_524d_5345_4544)),
+            keep: BTreeMap::new(),
+            ledger: LedgerState::default(),
+            chronicle: ChronicleState::default(),
+            run: RunInfo::default(),
             events: Vec::new(),
             life_events: Vec::new(),
             needs_off: false,
             job_events: Vec::new(),
             rules,
+            farm_cache: farm::FarmCache::default(),
             rooms: Rooms::default(),
             rooms_dirty: false,
             room_detections: 0,
@@ -223,6 +261,7 @@ impl Sim {
         self.map.set_ice(self.climate.ice);
         self.regions.rebuild(&self.map);
         self.items.rebuild_index();
+        self.rebuild_farm_cache();
     }
 
     /// Replace the content rules. For tests that use their own content. Call before the
@@ -248,6 +287,10 @@ impl Sim {
         self.tick += 1;
         self.climate_tick();
         self.life_tick();
+        self.spoil_tick();
+        self.farm_tick();
+        self.production_tick();
+        self.colony_daily_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -521,6 +564,9 @@ impl Sim {
             return None;
         }
         if !sim.life_state_ok() || !sim.jobs_state_ok() {
+            return None;
+        }
+        if !sim.farm_state_ok() || !sim.keep_state_ok() || !sim.chronicle_state_ok() {
             return None;
         }
         sim.refresh_rooms();

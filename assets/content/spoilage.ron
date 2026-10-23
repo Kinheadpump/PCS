@@ -1,0 +1,13 @@
+// Food spoilage (R-005). Integers only (D-014).
+// rotten_at: the rot value at which food is rotten, in thousandths. R-005 says "100".
+// The rot of a stack grows each game hour by: rot_rate of the material (materials.ron, per-mille
+// of rotten_at for each game day at factor 1000) x rate factor / 1000.
+// bands: (upper limit in tenths of a degree, exclusive; rate factor in per-mille). The first band
+// whose limit is above the temperature gives the factor. top_factor is the factor above all limits.
+// smoked_pct: smoked food rots at this percent of the normal rate. A later sprint (smoking) uses it.
+(
+    rotten_at: 100000,
+    bands: [(0, 0), (80, 250), (250, 1000)],
+    top_factor: 2000,
+    smoked_pct: 10,
+)

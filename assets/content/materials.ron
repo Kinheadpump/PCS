@@ -1,5 +1,7 @@
 // Materials. Integers only (D-014).
-// hardness, density, value, beauty: whole units. insulation, flammability, rot_rate: per-mille.
+// hardness, density, value, beauty: whole units. insulation, flammability: per-mille.
+// rot_rate: per-mille of the rot limit that the food gains each game day at rate factor 1 (R-005).
+// 100 = rotten after 10 days at factor 1. 0 = the item does not rot.
 // melts_at: tenths of a degree Celsius. color: (red, green, blue).
 #![enable(implicit_some)]
 [
@@ -22,7 +24,19 @@
     (id: "plank", name: "Plank", category: Wood, hardness: 25, density: 50, value: 3, insulation: 480, flammability: 500, beauty: 4, color: (176, 134, 84)),
     (id: "firewood", name: "Firewood", category: Fuel, hardness: 20, density: 50, value: 2, insulation: 400, flammability: 700, beauty: 1, color: (140, 96, 60)),
     (id: "berries", name: "Berries", category: Food, hardness: 0, density: 10, value: 2, insulation: 0, flammability: 0, beauty: 0, rot_rate: 100, color: (170, 40, 80)),
-    (id: "meal", name: "Simple meal", category: Food, hardness: 0, density: 30, value: 5, insulation: 0, flammability: 0, beauty: 0, rot_rate: 60, color: (200, 150, 90)),
+    (id: "meal", name: "Simple meal", category: Food, hardness: 0, density: 30, value: 5, insulation: 0, flammability: 0, beauty: 0, rot_rate: 25, color: (200, 150, 90)),
     (id: "simple_clothes", name: "Simple clothes", category: Cloth, hardness: 0, density: 20, value: 6, insulation: 0, flammability: 300, beauty: 1, color: (150, 140, 120)),
     (id: "winter_coat", name: "Winter coat", category: Cloth, hardness: 0, density: 40, value: 15, insulation: 0, flammability: 300, beauty: 2, color: (110, 90, 70)),
+    (id: "barley_seeds", name: "Barley seeds", category: Plant, hardness: 0, density: 10, value: 1, insulation: 0, flammability: 600, beauty: 0, color: (214, 190, 110)),
+    (id: "turnip_seeds", name: "Turnip seeds", category: Plant, hardness: 0, density: 10, value: 1, insulation: 0, flammability: 600, beauty: 0, color: (200, 170, 200)),
+    (id: "rye_seeds", name: "Rye seeds", category: Plant, hardness: 0, density: 10, value: 1, insulation: 0, flammability: 600, beauty: 0, color: (170, 150, 110)),
+    (id: "sorghum_seeds", name: "Sorghum seeds", category: Plant, hardness: 0, density: 10, value: 1, insulation: 0, flammability: 600, beauty: 0, color: (190, 90, 60)),
+    (id: "barley", name: "Barley", category: Food, hardness: 0, density: 20, value: 2, insulation: 0, flammability: 600, beauty: 0, rot_rate: 15, color: (222, 200, 120)),
+    (id: "turnips", name: "Turnips", category: Food, hardness: 0, density: 30, value: 2, insulation: 0, flammability: 100, beauty: 0, rot_rate: 30, color: (210, 190, 220)),
+    (id: "rye", name: "Rye", category: Food, hardness: 0, density: 20, value: 2, insulation: 0, flammability: 600, beauty: 0, rot_rate: 15, color: (180, 160, 120)),
+    (id: "sorghum", name: "Sorghum", category: Food, hardness: 0, density: 20, value: 2, insulation: 0, flammability: 600, beauty: 0, rot_rate: 15, color: (200, 100, 70)),
+    (id: "wild_roots", name: "Wild roots", category: Food, hardness: 0, density: 30, value: 1, insulation: 0, flammability: 100, beauty: 0, rot_rate: 40, color: (160, 120, 80)),
+    (id: "fiber", name: "Plant fiber", category: Plant, hardness: 0, density: 10, value: 1, insulation: 0, flammability: 800, beauty: 0, color: (170, 180, 110)),
+    (id: "stone_axe", name: "Stone axe", category: Stone, hardness: 40, density: 100, value: 4, insulation: 0, flammability: 0, beauty: 0, color: (130, 120, 110)),
+    (id: "stone_pick", name: "Stone pick", category: Stone, hardness: 40, density: 100, value: 4, insulation: 0, flammability: 0, beauty: 0, color: (120, 120, 130)),
 ]

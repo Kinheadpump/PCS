@@ -33,6 +33,19 @@ pub struct Item {
     pub reserved_by: Option<ColonistId>,
     /// True if a hauling job must bring this stack to a stockpile.
     pub to_haul: bool,
+    /// Rot value in thousandths (R-005). 0 is fresh. At the rotten limit of `spoilage.ron`
+    /// the stack is rotten. Only food gains rot. Stacks that merge keep the weighted mean.
+    pub rot: u32,
+}
+
+/// The rot value of two merged stacks: the mean weighted by the units, rounded up.
+fn mean_rot(rot_a: u32, count_a: u32, rot_b: u32, count_b: u32) -> u32 {
+    let total = u64::from(count_a) + u64::from(count_b);
+    if total == 0 {
+        return 0;
+    }
+    let sum = u64::from(rot_a) * u64::from(count_a) + u64::from(rot_b) * u64::from(count_b);
+    u32::try_from(sum.div_ceil(total)).unwrap_or(u32::MAX)
 }
 
 /// All items of the colony.
@@ -63,6 +76,7 @@ impl Items {
             loc: ItemLoc::Tile(x, y),
             reserved_by: None,
             to_haul,
+            rot: 0,
         });
         self.by_tile.entry((x, y)).or_default().push(id);
         Some(id)
@@ -153,12 +167,12 @@ impl Items {
         y: u16,
         stack_max: u32,
     ) -> Option<ItemId> {
-        let (material, count) = {
+        let (material, count, rot) = {
             let item = self.arena.get(id)?;
             if !matches!(item.loc, ItemLoc::Carried(_)) {
                 return None;
             }
-            (item.material, item.count)
+            (item.material, item.count, item.rot)
         };
         let target = self.at_tile(x, y).iter().copied().find(|&other| {
             self.arena.get(other).is_some_and(|o| {
@@ -169,6 +183,7 @@ impl Items {
         });
         if let Some(other) = target {
             if let Some(o) = self.arena.get_mut(other) {
+                o.rot = mean_rot(o.rot, o.count, rot, count);
                 o.count += count;
             }
             self.arena.remove(id);
@@ -203,8 +218,23 @@ impl Items {
             return None;
         }
         item.count -= count;
-        let (material, to_haul) = (item.material, item.to_haul);
-        self.spawn(material, count, x, y, to_haul)
+        let (material, to_haul, rot) = (item.material, item.to_haul, item.rot);
+        let new = self.spawn(material, count, x, y, to_haul)?;
+        if let Some(n) = self.arena.get_mut(new) {
+            n.rot = rot;
+        }
+        Some(new)
+    }
+
+    /// Set the rot value of a stack. Return false if the stack does not exist.
+    pub(crate) fn set_rot(&mut self, id: ItemId, rot: u32) -> bool {
+        match self.arena.get_mut(id) {
+            Some(item) => {
+                item.rot = rot;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Take one unit from a stack on a tile and free its reservation. A stack of 1 unit

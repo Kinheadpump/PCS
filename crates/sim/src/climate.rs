@@ -592,6 +592,10 @@ impl Sim {
             moisture,
         };
         self.reset_room_temps();
+        self.rebuild_wild_cache();
+        if self.tick == 0 {
+            self.place_start_seeds();
+        }
     }
 
     // ---- the hourly update ----

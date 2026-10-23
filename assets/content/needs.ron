@@ -40,9 +40,7 @@
     wounded_health_loss: 1,
     wounded_bed_hours: 8,
     // Foods, best first: (material, nutrition, mood memory key).
-    foods: [("meal", 50, "ate_meal"), ("berries", 25, "ate_raw")],
-    // Food that a new colony gets: (material, units).
-    start_food: [("meal", 40), ("berries", 40)],
+    foods: [("meal", 50, "ate_meal"), ("berries", 25, "ate_raw"), ("turnips", 20, "ate_raw"), ("wild_roots", 20, "ate_raw")],
     // R-014 mood.
     mood_base: 50,
     mood_min: 0,

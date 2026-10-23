@@ -134,4 +134,45 @@ pub enum Command {
         /// Recipe index.
         recipe: u16,
     },
+    /// Mark a rectangle as a farm zone for a crop. Colonists sow seeds on its free tiles
+    /// and harvest ripe plants. Tiles that cannot be farmed are skipped. The corners are
+    /// inclusive and can be in any order.
+    SetFarmZone {
+        /// First corner column.
+        x0: u16,
+        /// First corner row.
+        y0: u16,
+        /// Second corner column.
+        x1: u16,
+        /// Second corner row.
+        y1: u16,
+        /// Crop index (`crops.ron` order).
+        crop: u16,
+    },
+    /// Remove the farm zone from a rectangle. Plants stay on the tiles.
+    ClearFarmZone {
+        /// First corner column.
+        x0: u16,
+        /// First corner row.
+        y0: u16,
+        /// Second corner column.
+        x1: u16,
+        /// Second corner row.
+        y1: u16,
+    },
+    /// Set the "keep N" order of a recipe at a workshop. The workshop makes the recipe until
+    /// `target` units are in stock, and again when the stock falls below. A target of 0
+    /// removes the order.
+    SetKeep {
+        /// Workshop tile column.
+        x: u16,
+        /// Workshop tile row.
+        y: u16,
+        /// Recipe index.
+        recipe: u16,
+        /// Units to keep in stock.
+        target: u32,
+    },
+    /// The player abandons the colony. The run ends (R-050).
+    Abandon,
 }

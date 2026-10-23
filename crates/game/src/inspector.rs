@@ -754,8 +754,8 @@ mod tests {
         let rows = work_rows(&sim);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].name, "Colonist 0");
-        assert_eq!(rows[0].priorities, [3, 1, 3, 3, 3, 3]);
-        assert_eq!(rows[1].priorities, [3, 3, 3, 3, 3, 3]);
+        assert_eq!(rows[0].priorities, [3, 1, 3, 3, 3, 3, 3, 3, 3]);
+        assert_eq!(rows[1].priorities, [3, 3, 3, 3, 3, 3, 3, 3, 3]);
     }
 
     #[test]
