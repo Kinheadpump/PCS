@@ -254,8 +254,9 @@ impl Sim {
                         self.debug_build(wall, x, y, camp.stone);
                     }
                 } else {
-                    self.debug_build(floor, x, y, camp.wood);
-                    self.debug_build(roof, x, y, camp.wood);
+                    // Stone floor and roof: a hearth fire cannot spread over the cabin (R-023).
+                    self.debug_build(floor, x, y, camp.stone);
+                    self.debug_build(roof, x, y, camp.stone);
                 }
             }
         }

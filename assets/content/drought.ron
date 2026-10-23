@@ -9,6 +9,16 @@
 // tree_flammability: spread chance of a tree tile in percent is this times the intensity / 10.
 // tree_fuel: fire steps that a burning tree lasts.
 // dig_ticks: work time to dig one ditch tile at 100% work speed.
+// Fire from hearths (S15, R-023, R-024):
+// hearth_fire_pct: chance in percent each game hour that one flammable item or object (bed,
+//   door, workshop) within 1 tile of a burning hearth starts to burn.
+// hearth_fire_grace_days: no hearth fire in these first days of the run, so the start camp is safe.
+// hearth_fire_intensity: intensity of a fire that a hearth starts.
+// thing_fuel: fire steps that a burning item or building lasts (a tree uses tree_fuel).
+// extinguish_ticks, extinguish_drop: one extinguish job takes this long and removes this much
+//   intensity (2 each game hour, R-024). extinguish_radius: colonists fight only fires with an
+//   item or a building within this many tiles.
+// fire_health_loss: health that a colonist on a burning tile loses each game hour.
 (
     drought_days: 5,
     dry_growth_pct: 50,
@@ -20,4 +30,12 @@
     tree_flammability: 10,
     tree_fuel: 60,
     dig_ticks: 300,
+    hearth_fire_pct: 1,
+    hearth_fire_grace_days: 10,
+    hearth_fire_intensity: 3,
+    thing_fuel: 30,
+    extinguish_ticks: 100,
+    extinguish_drop: 2,
+    extinguish_radius: 2,
+    fire_health_loss: 10,
 )

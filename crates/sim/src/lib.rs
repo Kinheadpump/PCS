@@ -21,6 +21,7 @@ pub mod job;
 pub mod ledger;
 pub mod life;
 pub mod map;
+pub mod migrant;
 pub mod needact;
 pub mod needs;
 pub mod notice;
@@ -43,7 +44,8 @@ mod loader;
 pub use alert::{Alert, AlertKind, AlertLevel};
 pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
 pub use chronicle::{
-    ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, RunInfo, RunState,
+    ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, Legacy, RunInfo,
+    RunState,
 };
 pub use climate::{
     ClimateParams, ClimateRules, DayWeather, FORECAST_DAYS, OutdoorParts, TempCause, TempPart,
@@ -57,6 +59,7 @@ pub use farm::{
     CropDef, FarmRules, FarmState, FertilityCause, FertilityPart, FertilityReport, Plant,
     PlantReport, WildDef, WildStatus,
 };
+pub use fire::EXTINGUISH_ARG;
 pub use hearth::REFUEL_ARG;
 pub use item::{Item, ItemId, ItemLoc, Items};
 pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, JobStep, Reject};
@@ -67,6 +70,7 @@ pub use life::{
     SpeedModCause,
 };
 pub use map::LocalMap;
+pub use migrant::{MigrantBlocker, MigrantEvent, MigrantOffer, MigrantProfile, MigrantRules};
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
 pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;
@@ -160,6 +164,8 @@ pub struct Sim {
     drought: drought::DroughtState,
     /// Rival colonies and raids (S18).
     raid: raid::RaidState,
+    /// Migrant offer and counts (S15).
+    migrants: migrant::MigrantState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -175,6 +181,9 @@ pub struct Sim {
     /// Raid events for the caller. Not part of the state.
     #[serde(skip)]
     raid_events: Vec<RaidEvent>,
+    /// Migrant events for the caller. Not part of the state.
+    #[serde(skip)]
+    migrant_events: Vec<MigrantEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -265,6 +274,8 @@ impl Sim {
             drought: drought::DroughtState::default(),
             raid: raid::RaidState::new(seed),
             raid_events: Vec::new(),
+            migrants: migrant::MigrantState::new(seed),
+            migrant_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),
             events: Vec::new(),
@@ -332,6 +343,7 @@ impl Sim {
         self.notice_tick();
         self.drought_tick();
         self.raid_tick();
+        self.migrant_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -597,7 +609,11 @@ impl Sim {
         if !colonists_ok || !queue_ok {
             return None;
         }
-        if !sim.buildings_state_ok() || !sim.drought_state_ok() || !sim.raid_state_ok() {
+        if !sim.buildings_state_ok()
+            || !sim.drought_state_ok()
+            || !sim.raid_state_ok()
+            || !sim.migrant_state_ok()
+        {
             return None;
         }
         sim.rebuild_caches();

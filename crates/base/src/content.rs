@@ -889,6 +889,23 @@ pub struct DroughtRules {
     pub tree_fuel: u32,
     /// Work time to dig one ditch tile, in ticks at 100% work speed.
     pub dig_ticks: u32,
+    /// Chance in percent each game hour that one flammable item or object within 1 tile of a
+    /// burning hearth starts to burn (R-023).
+    pub hearth_fire_pct: u32,
+    /// No hearth fire starts in this many first game days of a run.
+    pub hearth_fire_grace_days: u32,
+    /// Intensity of a fire that a hearth starts (1 to 10).
+    pub hearth_fire_intensity: u32,
+    /// Fire steps that a burning item or building lasts.
+    pub thing_fuel: u32,
+    /// Work time of one extinguish job, in ticks at 100% work speed (one game hour).
+    pub extinguish_ticks: u32,
+    /// Intensity that one extinguish job removes (R-024).
+    pub extinguish_drop: u32,
+    /// Colonists put out a fire only if an item or a building is within this many tiles.
+    pub extinguish_radius: u32,
+    /// Health that a colonist on a burning tile loses each game hour.
+    pub fire_health_loss: u32,
 }
 
 /// Load and validate the drought numbers.
@@ -900,6 +917,9 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
         (r.fire_step_ticks, "fire_step_ticks"),
         (r.tree_fuel, "tree_fuel"),
         (r.dig_ticks, "dig_ticks"),
+        (r.thing_fuel, "thing_fuel"),
+        (r.extinguish_ticks, "extinguish_ticks"),
+        (r.extinguish_drop, "extinguish_drop"),
     ] {
         if value == 0 {
             issues.push(issue(name, "must be 1 or more"));
@@ -909,6 +929,7 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
         (r.dry_growth_pct, "dry_growth_pct"),
         (r.lightning_pct, "lightning_pct"),
         (r.tree_flammability, "tree_flammability"),
+        (r.hearth_fire_pct, "hearth_fire_pct"),
     ] {
         if value > 100 {
             issues.push(issue(name, "must be 100 or less"));
@@ -919,6 +940,12 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
     }
     if !(1..=10).contains(&r.lightning_intensity) {
         issues.push(issue("lightning_intensity", "must be from 1 to 10"));
+    }
+    if !(1..=10).contains(&r.hearth_fire_intensity) {
+        issues.push(issue("hearth_fire_intensity", "must be from 1 to 10"));
+    }
+    if r.extinguish_radius > 32 {
+        issues.push(issue("extinguish_radius", "must be 32 or less"));
     }
     if r.irrigation_radius > 32 {
         issues.push(issue("irrigation_radius", "must be 32 or less"));

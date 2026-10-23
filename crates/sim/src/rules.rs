@@ -9,6 +9,7 @@ use crate::chronicle::{ChronicleRules, load_chronicle_rules};
 use crate::climate::{ClimateRules, FuelDef, load_climate_rules};
 use crate::farm::{FarmRules, load_farm_rules};
 use crate::ledger::{LedgerRules, load_ledger_rules};
+use crate::migrant::{MigrantRules, load_migrant_rules};
 use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
@@ -37,6 +38,7 @@ const LEDGER_TEXT: &str = include_str!("../../../assets/content/ledger.ron");
 const CHRONICLE_TEXT: &str = include_str!("../../../assets/content/chronicle_templates.ron");
 const NOTICE_TEXT: &str = include_str!("../../../assets/content/notice.ron");
 const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
+const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
 
 /// Material index used when a material key is not in the content. It never happens
@@ -119,6 +121,8 @@ pub struct SimRules {
     pub drought: DroughtRules,
     /// Rival colony and raid numbers.
     pub raid: RaidRules,
+    /// Migrant numbers and background lines.
+    pub migrant: MigrantRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -161,6 +165,7 @@ impl Default for SimRules {
             notice: NoticeRules::default(),
             drought: DroughtRules::default(),
             raid: RaidRules::default(),
+            migrant: MigrantRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -307,6 +312,7 @@ impl SimRules {
         let notice = load_notice_rules("notice.ron", NOTICE_TEXT)?;
         let drought = load_drought_rules("drought.ron", DROUGHT_TEXT)?;
         let raid = load_raid_rules("raid.ron", RAID_TEXT)?;
+        let migrant = load_migrant_rules("migrants.ron", MIGRANT_TEXT)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -362,6 +368,7 @@ impl SimRules {
             notice,
             drought,
             raid,
+            migrant,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),

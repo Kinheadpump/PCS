@@ -472,7 +472,7 @@ impl Sim {
     }
 
     /// Value of all items on tiles or carried, and all buildings.
-    fn wealth_value(&self) -> u64 {
+    pub(crate) fn wealth_value(&self) -> u64 {
         let items: u64 = self
             .items
             .iter()
@@ -637,7 +637,7 @@ impl Sim {
 
     /// A passable edge tile in the region of the colonists. Start on the given edge at a random
     /// place and go on along the edge, then try the next edges.
-    fn raid_entry_tile(&mut self, edge: u8) -> Option<(u16, u16)> {
+    pub(crate) fn raid_entry_tile(&mut self, edge: u8) -> Option<(u16, u16)> {
         let (w, h) = (self.map.width() as i32, self.map.height() as i32);
         let home = self.colonists.iter().next().map(|(_, c)| c.tile())?;
         for k in 0..4u8 {
@@ -784,6 +784,7 @@ impl Sim {
         if let Some(rival) = self.raid.rivals.get_mut(index) {
             rival.adjust = (rival.adjust + change).clamp(-ADJUST_LIMIT, ADJUST_LIMIT);
         }
+        self.crisis_survived();
         let hostility = self.rival_hostility(index).map_or(0, |h| h.total);
         self.raid.log.push(RaidRecord {
             id: raid.id,

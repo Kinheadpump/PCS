@@ -64,6 +64,7 @@ Sprint 6 added the `sim` modules `needs`, `life`, and `needact`, and the content
 Sprint 14 added the `sim` module `notice` and the content file `notice.ron`, and the `worldgen` module `legend`. The save format version is 6. `Sim::notice()` returns the Notice parts, `Sim::threats()` the dormant threats, and `Sim::drain_notice_events()` the daily beast rolls and the threat wake events.
 Sprint 16 added the `sim` modules `drought` and `fire` and the content file `drought.ron`. The save format version is 8. `Command::DigDitch` makes a Mine job with `arg` 1. `Sim::growth_pct()` returns the growth parts, and `Sim::drain_drought_events()` returns the drought and fire events.
 Sprint 18 added the `sim` module `raid`, the content file `raid.ron`, and rival colonies in `worldgen` (`EmbarkRival`, `embark.ron`). The save format version is 9. `Sim::rivals()` and `Sim::rival_hostility()` give the rivals and the hostility parts, `Sim::raid_warning()` and `Sim::raid_choice_pending()` the raid state, `Command::RaidPay` and `Command::RaidFight` the answer, and `Sim::drain_raid_events()` the events.
+Sprint 15 added the `sim` module `migrant`, the content file `migrants.ron`, the fire rules for items and buildings in `fire.rs`, and the extinguish job (`Mine` job with `arg` 2). The save format version is 10. `Command::AcceptMigrants` and `Command::RefuseMigrants` answer a migrant offer, `Sim::drain_migrant_events()` gives the offer events, `Sim::legacy()` the legacy score, and `Sim::ironman_save_due()` the ironman save moment.
 
 ### 3.2 Data ownership
 

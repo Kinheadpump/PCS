@@ -129,6 +129,8 @@ pub struct Colonist {
     pub break_until: u64,
     /// Hours in a row with a breakdown mood (R-015).
     pub low_mood_hours: u32,
+    /// Background line index plus 1 (`migrants.ron`). 0: no line (S15).
+    pub background: u8,
 }
 
 impl Colonist {
@@ -162,6 +164,7 @@ impl Colonist {
             memories: Vec::new(),
             break_until: 0,
             low_mood_hours: 0,
+            background: 0,
         }
     }
 
