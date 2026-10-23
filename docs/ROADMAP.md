@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Sprint 5 is on `main`. Current sprint: Sprint 6 is complete except task 9 (sound engine). Sprint 7 is next. Sprints 0 to 3 are on `main`. The world generation work of Sprints 8 and 9 (steps 1 to 12) is also on `main`. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
+Status: Draft 0.1. The lead approved it. Open questions remain (see `DECISIONS.md` §1). Sprint 5 is on `main`. Current sprint: Sprint 7 is complete in code and UI (food chain, ledger, chronicle, soak). The M1 playtests by a human are open (see §6.1 and D-074). Sprint 12 is next. Sprints 0 to 3 are on `main`. The world generation work of Sprints 8 and 9 (steps 1 to 12) is also on `main`. P-03 (one path) is about 0.55 ms against the 0.5 ms target.
 
 This document is the canonical source for phases, sprints, milestones, the Definition of Done, the playtest record, and the backlog. Game rules (`R-nnn`) are in `GAME_DESIGN.md`. Technical rules, required checks, and performance targets (`P-nn`) are in `TECHNICAL_DESIGN.md`.
 
@@ -284,7 +284,7 @@ A sprint is done when all of its tasks are done and its deliverable works.
 - The ledger "days remaining" value is correct within 10% for a constant use rate.
 - Each colonist death makes a chronicle entry with its cause.
 - `tools soak` runs 1,000,000 ticks on each test preset without an invariant failure.
-- 3 playtests of the first year are done and recorded (§6.1).
+- 3 playtests of the first year are done and recorded (§6.1). Status: 3 scripted runs are in `docs/playtests/`. They are not human playtests. The owner must do the human playtests (D-074).
 
 **Tests:** Crop unit tests. Spoilage unit tests. Production order scenario tests. Chronicle tests. Soak test.
 

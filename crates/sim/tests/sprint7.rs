@@ -503,3 +503,121 @@ fn the_new_state_survives_a_save() {
     assert_eq!(loaded.state_hash(), sim.state_hash());
     assert_eq!(loaded.fertility_map(), sim.fertility_map());
 }
+
+// ---- scripted first-year runs (for the playtest record, run by hand) ----
+
+/// A scripted player: the commands for game day `day`, given the tile of the first colonist.
+fn script(strategy: u8, sim: &Sim, day: u64, out: &mut Vec<Command>) {
+    let Some((cx, cy)) = sim.colonists().iter().next().map(|(_, c)| c.tile()) else {
+        return;
+    };
+    let rules = sim.rules();
+    let (kitchen, hearth, log) = (
+        rules.building_index("kitchen"),
+        rules.building_index("hearth"),
+        rules.material_index("log"),
+    );
+    if strategy == 0 {
+        return;
+    }
+    if day == 0 {
+        if let (Some(b), Some(m)) = (kitchen, log) {
+            out.push(Command::PlaceBlueprint {
+                building: b,
+                x: cx + 3,
+                y: cy,
+                material: m,
+            });
+        }
+        if strategy == 2
+            && let (Some(b), Some(m)) = (hearth, log)
+        {
+            out.push(Command::PlaceBlueprint {
+                building: b,
+                x: cx + 3,
+                y: cy + 3,
+                material: m,
+            });
+        }
+        out.push(Command::SetFarmZone {
+            x0: cx + 5,
+            y0: cy,
+            x1: cx + 9,
+            y1: cy + 4,
+            crop: 0,
+        });
+    }
+    if day.is_multiple_of(10) {
+        for dx in 0..6u16 {
+            out.push(Command::Designate {
+                kind: JobKind::Cut,
+                x: cx.saturating_sub(10) + dx,
+                y: cy.saturating_sub(4) + (day % 7) as u16,
+            });
+            out.push(Command::Designate {
+                kind: JobKind::Gather,
+                x: cx + dx * 2,
+                y: cy + (day % 9) as u16,
+            });
+        }
+    }
+    if day == 1
+        && let Some(meal) = rules
+            .recipes
+            .iter()
+            .position(|r| r.name.to_lowercase().contains("meal"))
+    {
+        out.push(Command::SetKeep {
+            x: cx + 3,
+            y: cy,
+            recipe: meal as u16,
+            target: 30,
+        });
+    }
+}
+
+/// Run a scripted year on a preset and print what happened.
+#[test]
+#[ignore = "prints the data for the playtest record; run with --ignored --nocapture"]
+fn first_year_scripted_runs() {
+    for (name, preset) in [
+        ("temperate forest", EmbarkSummary::temperate_forest()),
+        ("cold hills", EmbarkSummary::cold_hills()),
+        ("dry plain", EmbarkSummary::dry_plain()),
+    ] {
+        for strategy in 0..3u8 {
+            let mut sim = started(preset);
+            let mut line = format!("{name} strategy {strategy}:");
+            for day in 0..360u64 {
+                let mut commands = Vec::new();
+                script(strategy, &sim, day, &mut commands);
+                sim.step(&commands);
+                for _ in 1..2400 {
+                    sim.step(&[]);
+                }
+                if matches!(day, 59 | 119 | 179 | 239 | 299 | 359) {
+                    let l = sim.ledger();
+                    line.push_str(&format!(
+                        " d{} pop {} food {:?} fuel {:?};",
+                        day + 1,
+                        sim.colonists().len(),
+                        l.food.days_remaining_tenths,
+                        l.fuel.days_remaining_tenths
+                    ));
+                }
+                if sim.run_state() != RunState::Running {
+                    line.push_str(&format!(" LOST on day {};", day + 1));
+                    break;
+                }
+            }
+            sim.check_invariants().unwrap();
+            let by_season = sim.chronicle_by_season();
+            let entries: usize = by_season.iter().map(|s| s.entries.len()).sum();
+            line.push_str(&format!(" chronicle entries {entries}"));
+            println!("{line}");
+            for e in sim.chronicle() {
+                println!("    {}", sim.chronicle_text(e));
+            }
+        }
+    }
+}
