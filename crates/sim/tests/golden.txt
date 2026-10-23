@@ -1,3 +1,3 @@
-sim_ascii_600_ticks=2c5b959086c5fb0d
-sim_forest_seed1_1000_ticks=87895667ae6d5d59
+sim_ascii_600_ticks=fa4b40d4321097af
+sim_forest_seed1_1000_ticks=565a7376a4faa873
 astar_forest_40_paths=9f2fa497c5aba583
