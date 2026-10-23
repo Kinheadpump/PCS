@@ -416,6 +416,9 @@ impl Sim {
             Command::RaidFight => self.raid_fight(),
             Command::AcceptMigrants => self.migrants_accept(),
             Command::RefuseMigrants => self.migrants_refuse(),
+            Command::Draft { .. } | Command::DraftMove { .. } | Command::Attack { .. } => {
+                self.combat_command(command);
+            }
             Command::Abandon => self.abandon(),
         }
     }
@@ -826,6 +829,8 @@ impl Sim {
             let idle = self.colonists.get(id).is_some_and(|c| {
                 c.job.is_none()
                     && c.act.is_none()
+                    && !c.drafted
+                    && c.foe.is_none()
                     && c.break_until <= self.tick
                     && c.next_search <= self.tick
             });

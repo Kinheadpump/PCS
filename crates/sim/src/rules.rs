@@ -7,6 +7,7 @@
 
 use crate::chronicle::{ChronicleRules, load_chronicle_rules};
 use crate::climate::{ClimateRules, FuelDef, load_climate_rules};
+use crate::creature::{CreatureRules, load_creature_rules};
 use crate::farm::{FarmRules, load_farm_rules};
 use crate::ledger::{LedgerRules, load_ledger_rules};
 use crate::migrant::{MigrantRules, load_migrant_rules};
@@ -40,6 +41,7 @@ const NOTICE_TEXT: &str = include_str!("../../../assets/content/notice.ron");
 const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
 const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
+const CREATURE_TEXT: &str = include_str!("../../../assets/content/creatures.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
@@ -123,6 +125,8 @@ pub struct SimRules {
     pub raid: RaidRules,
     /// Migrant numbers and background lines.
     pub migrant: MigrantRules,
+    /// Creatures and melee numbers.
+    pub creature: CreatureRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -166,6 +170,7 @@ impl Default for SimRules {
             drought: DroughtRules::default(),
             raid: RaidRules::default(),
             migrant: MigrantRules::default(),
+            creature: CreatureRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -313,6 +318,7 @@ impl SimRules {
         let drought = load_drought_rules("drought.ron", DROUGHT_TEXT)?;
         let raid = load_raid_rules("raid.ron", RAID_TEXT)?;
         let migrant = load_migrant_rules("migrants.ron", MIGRANT_TEXT)?;
+        let creature = load_creature_rules("creatures.ron", CREATURE_TEXT, &materials)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -369,6 +375,7 @@ impl SimRules {
             drought,
             raid,
             migrant,
+            creature,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -503,7 +510,7 @@ mod tests {
         assert_eq!(rules.materials[usize::from(rules.log)].key, "log");
         assert_eq!(SimRules::builtin().jobs, rules.jobs);
         assert_eq!(rules.buildings.len(), 8);
-        assert_eq!(rules.recipes.len(), 7);
+        assert_eq!(rules.recipes.len(), 10);
         assert_eq!(rules.rooms.max_tiles, 400);
         let wall = rules.building_index("wall").unwrap();
         let granite = rules.material_index("granite").unwrap();

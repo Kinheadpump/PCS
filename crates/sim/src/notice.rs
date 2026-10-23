@@ -4,8 +4,8 @@
 //! contribution has a tile for the Notice overlay. Noise and disturbance are kept for each tile.
 //! Each game day they decay and the sim rolls the chance of a beast. A dormant threat sits
 //! behind the seal tiles of a sealed site and wakes when a colonist mines one of them. The
-//! creatures of the beasts and threats come in a later sprint: this module gives the rolls, the
-//! events, and the strength numbers.
+//! creatures of the beasts and threats are in `creature.rs` (S13): this module gives the rolls,
+//! the events, and the strength numbers, and calls the spawn there.
 
 use crate::Sim;
 use crate::time::TICKS_PER_DAY;
@@ -221,7 +221,7 @@ impl Sim {
     }
 
     /// The average tile of the colonists, or the map center if there are none.
-    fn notice_home(&self) -> (u16, u16) {
+    pub(crate) fn notice_home(&self) -> (u16, u16) {
         let count = self.colonists.len() as u64;
         if count == 0 {
             return (
@@ -335,6 +335,7 @@ impl Sim {
         self.add_disturbance(x, y, self.rules.notice.sealed_open);
         self.notice_events
             .push(NoticeEvent::ThreatWoke { site, x, y, level });
+        self.spawn_threat_creatures(index);
     }
 
     /// Once each game day: noise and disturbance decay, then the beast roll.
@@ -362,6 +363,9 @@ impl Sim {
             chance_pct,
             arrived,
         });
+        if arrived {
+            self.spawn_beasts();
+        }
     }
 
     // ---- debug hooks (scenario tests) ----

@@ -10,4 +10,8 @@
     (id: "meal_rye", name: "Cook rye meal", workshop: "kitchen", inputs: [("rye", 2)], outputs: [("meal", 1)], work_ticks: 150),
     (id: "meal_sorghum", name: "Cook sorghum meal", workshop: "kitchen", inputs: [("sorghum", 2)], outputs: [("meal", 1)], work_ticks: 150),
     (id: "meal_roots", name: "Cook root meal", workshop: "kitchen", inputs: [("wild_roots", 3)], outputs: [("meal", 1)], work_ticks: 150),
+    // Creatures (Sprint 13). Hunting gives meat and hide.
+    (id: "meal_meat", name: "Cook meat meal", workshop: "kitchen", inputs: [("meat", 2)], outputs: [("meal", 1)], work_ticks: 150),
+    (id: "tan_hide", name: "Tan hide", workshop: "workshop", inputs: [("hide", 2)], outputs: [("leather", 1)], work_ticks: 200),
+    (id: "leather_clothes", name: "Sew leather clothes", workshop: "workshop", inputs: [("leather", 2)], outputs: [("leather_clothes", 1)], work_ticks: 300),
 ]

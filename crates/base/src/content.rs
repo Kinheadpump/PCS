@@ -982,8 +982,6 @@ pub struct RaidRules {
     pub wealth_div: u32,
     /// Notice is divided by this for the hostility.
     pub notice_div: u32,
-    /// Ticks between two thefts.
-    pub loot_interval_ticks: u32,
     /// Most stacks that one raider carries away.
     pub loot_per_raider: u32,
     /// Ticks that the raiders stay in a fight.
@@ -1003,7 +1001,6 @@ pub fn load_raid_rules(file_name: &str, text: &str) -> Result<RaidRules, Content
         (r.decision_ticks, "decision_ticks"),
         (r.wealth_div, "wealth_div"),
         (r.notice_div, "notice_div"),
-        (r.loot_interval_ticks, "loot_interval_ticks"),
         (r.stay_ticks, "stay_ticks"),
     ] {
         if value == 0 {
@@ -1773,7 +1770,7 @@ mod tests {
         assert_eq!(buildings.len(), BuildingKind::ALL.len() + 1);
         let recipes =
             load_recipes("recipes.ron", RECIPES, &materials, &buildings).unwrap_or_default();
-        assert_eq!(recipes.len(), 7);
+        assert_eq!(recipes.len(), 10);
         let rooms = load_room_rules("rooms.ron", ROOMS);
         assert_eq!(rooms.map(|r| r.max_tiles).unwrap_or(0), 400);
     }
