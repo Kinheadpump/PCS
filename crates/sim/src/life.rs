@@ -310,7 +310,7 @@ fn comfort_parts(rules: &SimRules, c: &Colonist) -> Vec<ComfortPart> {
     parts
 }
 
-fn comfort_band(rules: &SimRules, c: &Colonist) -> ComfortBand {
+pub(crate) fn comfort_band(rules: &SimRules, c: &Colonist) -> ComfortBand {
     let parts = comfort_parts(rules, c);
     let low = parts.iter().map(|p| p.tenths).sum();
     ComfortBand {
@@ -956,7 +956,11 @@ impl Sim {
                 && (0..=whole(n.hazard_max)).contains(&c.hypothermia)
                 && (0..=whole(n.hazard_max)).contains(&c.heatstroke)
                 && match c.act {
-                    Some(NeedAct::Eat { stand, .. } | NeedAct::Wear { stand, .. }) => inside(stand),
+                    Some(
+                        NeedAct::Eat { stand, .. }
+                        | NeedAct::Wear { stand, .. }
+                        | NeedAct::Shelter { stand },
+                    ) => inside(stand),
                     Some(NeedAct::Sleep { bed, .. }) => bed.is_none_or(inside),
                     None => true,
                 }

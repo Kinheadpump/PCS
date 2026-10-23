@@ -204,6 +204,10 @@ pub enum UiAction {
     PickCrop(u16),
     /// The player pressed the button to start a new colony after the run ended.
     NewColony,
+    /// The player closed the pause menu.
+    Resume,
+    /// The player chose to quit in the pause menu.
+    Quit,
     /// The player clicked an alert: center the camera on this tile.
     JumpTo(u16, u16),
     /// The player clicked a colonist name in the work panel.

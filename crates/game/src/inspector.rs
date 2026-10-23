@@ -167,6 +167,7 @@ pub fn need_activity(sim: &Sim, c: &sim::Colonist) -> Option<String> {
             || "Getting clothes".to_owned(),
             |i| format!("Getting {}", material_name(sim, i.material).to_lowercase()),
         ),
+        NeedAct::Shelter { .. } => "Going indoors".to_owned(),
         NeedAct::Sleep { asleep: false, .. } => "Walking to bed".to_owned(),
         NeedAct::Sleep { bed: Some(_), .. } => "Sleeping in a bed".to_owned(),
         NeedAct::Sleep { bed: None, .. } => "Sleeping on the ground".to_owned(),

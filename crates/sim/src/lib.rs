@@ -285,7 +285,7 @@ impl Sim {
     }
 
     /// Rebuild the derived caches except the rooms. Call after a load.
-    fn rebuild_caches(&mut self) {
+    pub(crate) fn rebuild_caches(&mut self) {
         let mut blocking = self
             .buildings
             .object_tiles(|def| self.rules.building(def).is_some_and(|d| d.blocks_walking));

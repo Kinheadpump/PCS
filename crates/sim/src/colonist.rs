@@ -56,6 +56,11 @@ pub enum NeedAct {
         /// The tile of the stack.
         stand: (u16, u16),
     },
+    /// Walk to a warm room, because it is too cold or too hot outside.
+    Shelter {
+        /// The room tile to walk to.
+        stand: (u16, u16),
+    },
     /// Walk to a bed, then sleep until rest is full (R-012).
     Sleep {
         /// The reserved bed tile. `None`: the colonist sleeps where it is.
