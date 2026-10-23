@@ -177,6 +177,12 @@ pub enum Fold {
     Health,
     /// The parts of the comfort band of the colonist panel (a why chain).
     Comfort,
+    /// The parts of the food stock and use of the colony panel (a why chain).
+    FoodParts,
+    /// The parts of the fuel stock and use of the colony panel (a why chain).
+    FuelParts,
+    /// The abandon row of the colony panel. Open means that the next click abandons.
+    Abandon,
 }
 
 /// What the interface asks the game to do.
@@ -192,6 +198,12 @@ pub enum UiAction {
     ToggleRooms,
     /// The player pressed the temperature overlay button.
     ToggleTemp,
+    /// The player pressed the colony panel button, or clicked a ledger chip.
+    ToggleColony,
+    /// The player chose a crop in the farm panel (index in `farm.ron`).
+    PickCrop(u16),
+    /// The player pressed the button to start a new colony after the run ended.
+    NewColony,
     /// The player clicked an alert: center the camera on this tile.
     JumpTo(u16, u16),
     /// The player clicked a colonist name in the work panel.
@@ -1091,8 +1103,8 @@ pub struct RecipeRow {
     pub label: (f32, f32),
     /// Top left corner of the line under the name (inputs, outputs, time).
     pub detail: (f32, f32),
-    /// Buttons: add 1, add 5, add 10, clear.
-    pub buttons: [Rect; 4],
+    /// Buttons: add 1, add 5, add 10, clear, next keep target.
+    pub buttons: [Rect; 5],
     /// Y of the line above the recipe.
     pub rule_y: f32,
 }
@@ -1110,8 +1122,8 @@ pub struct WorkshopLayout {
     pub recipes: Vec<RecipeRow>,
 }
 
-/// Labels of the four buttons of a recipe row.
-pub const RECIPE_BUTTONS: [&str; 4] = ["+1", "+5", "+10", "Clear"];
+/// Labels of the five buttons of a recipe row.
+pub const RECIPE_BUTTONS: [&str; 5] = ["+1", "+5", "+10", "Clear", "Keep"];
 
 /// Lay out the workshop panel: a title strip, text lines, and for each recipe a name, a detail
 /// line, and a row of buttons.
@@ -1132,7 +1144,7 @@ pub fn workshop_layout(
         .iter()
         .map(|l| text_px(l) + 2.0 * BUTTON_PAD)
         .collect();
-    let button_row_w = widths.iter().sum::<f32>() + GAP * 3.0;
+    let button_row_w = widths.iter().sum::<f32>() + GAP * 4.0;
     let mut recipes = Vec::new();
     for _ in recipe_labels {
         let rule_y = y + GAP;
@@ -1142,7 +1154,7 @@ pub fn workshop_layout(
         let detail_pos = (x0, y);
         y += ROW_H + GAP;
         let mut bx = x0;
-        let mut rects = [Rect::new(0.0, 0.0, 0.0, 0.0); 4];
+        let mut rects = [Rect::new(0.0, 0.0, 0.0, 0.0); 5];
         for (rect, w) in rects.iter_mut().zip(&widths) {
             *rect = Rect::new(bx, y, *w, BUTTON_H);
             bx += w + GAP;

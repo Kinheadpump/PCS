@@ -9,12 +9,14 @@ mod clock;
 mod font;
 mod hud;
 mod icons;
+mod info_ui;
 mod input;
 mod inspector;
 mod layout;
 mod lifemark;
 mod overlay;
 mod palette;
+mod plants;
 mod render;
 mod site_layer;
 mod sprites;
@@ -259,6 +261,8 @@ impl App {
                 ("comfort", ui::Fold::Comfort),
                 ("skills", ui::Fold::Skills),
                 ("speed", ui::Fold::WorkSpeed),
+                ("food", ui::Fold::FoodParts),
+                ("fuel", ui::Fold::FuelParts),
             ] {
                 if all || word == name {
                     self.ui_state.open.insert(fold);
@@ -266,6 +270,11 @@ impl App {
             }
         }
         self.show_temp = var("PCS_TEMP").is_some_and(|v| v == "1");
+        self.ui_state.colony = var("PCS_COLONY").is_some_and(|v| v == "1");
+        self.ui_state.fertility = var("PCS_FERTILITY").is_some_and(|v| v == "1");
+        if let Some(n) = var("PCS_CROP").and_then(|v| v.parse().ok()) {
+            self.ui_state.crop = n;
+        }
         if let Some(v) = var("PCS_CLIMATE")
             && let [mean, amplitude, moisture] = numbers_signed(&v)[..]
         {
@@ -318,6 +327,16 @@ impl App {
         for order in var("PCS_DESIGNATE").iter().flat_map(|v| v.split(';')) {
             if let Some((tool, area)) = tools::parse_order(order, self.tool) {
                 let sim = &self.sim;
+                if tool == Tool::Farm {
+                    self.pending.push(Command::SetFarmZone {
+                        x0: area.x0,
+                        y0: area.y0,
+                        x1: area.x1,
+                        y1: area.y1,
+                        crop: self.ui_state.crop,
+                    });
+                    continue;
+                }
                 self.pending
                     .extend(tools::commands_for_drag(tool, area, |t, x, y| {
                         tools::applies(sim, t, x, y)
@@ -570,6 +589,8 @@ impl App {
                 Action::ToggleWork => self.show_work = !self.show_work,
                 Action::ToggleRooms => self.show_rooms = !self.show_rooms,
                 Action::ToggleTemp => self.show_temp = !self.show_temp,
+                Action::ToggleColony => self.ui_state.colony = !self.ui_state.colony,
+                Action::ToggleFertility => self.ui_state.fertility = !self.ui_state.fertility,
                 Action::PickBuilding(n) => {
                     self.set_tool(Tool::Build);
                     self.build.pick_building(self.sim.rules(), n);
@@ -593,6 +614,10 @@ impl App {
             return;
         }
         let ticks = self.clock.advance(frame_micros);
+        if self.sim.run_state() != sim::RunState::Running {
+            // The run has ended: the sim stops. The end panel offers a new colony.
+            return;
+        }
         for _ in 0..ticks {
             let commands = std::mem::take(&mut self.pending);
             self.sim.step(&commands);
@@ -716,11 +741,26 @@ impl App {
                         let commands = match self.tool {
                             Tool::Build => self.build_commands(start, end),
                             Tool::Deconstruct => build_ui::remove_commands(sim, area),
+                            Tool::Farm => vec![Command::SetFarmZone {
+                                x0: area.x0,
+                                y0: area.y0,
+                                x1: area.x1,
+                                y1: area.y1,
+                                crop: self.ui_state.crop,
+                            }],
                             _ => tools::commands_for_drag(self.tool, area, |t, tx, ty| {
                                 tools::applies(sim, t, tx, ty)
                             }),
                         };
                         self.pending.extend(commands);
+                        if self.tool == Tool::Cancel {
+                            self.pending.push(Command::ClearFarmZone {
+                                x0: area.x0,
+                                y0: area.y0,
+                                x1: area.x1,
+                                y1: area.y1,
+                            });
+                        }
                     }
                 }
                 Action::RightClick(x, y) if !ui.captures((x, y)) => {
@@ -814,7 +854,12 @@ impl App {
             .and_then(|(x, y)| inspector::zone_at(&self.sim, x, y));
         weather::draw_ice(&frame);
         overlay::draw_zones(&frame, selected_zone);
+        plants::draw_zones(&frame);
+        if self.ui_state.fertility || self.tool == Tool::Farm {
+            plants::draw_fertility(&frame);
+        }
         self.structures.draw_floors(&frame, &self.sprites);
+        plants::draw_plants(&frame, &self.sprites);
         overlay::draw_items(&frame);
         self.structures.draw_objects(&frame, &self.sprites);
         overlay::draw_designations(&frame);
@@ -905,6 +950,9 @@ impl App {
                 UiAction::ToggleWork => self.show_work = !self.show_work,
                 UiAction::ToggleRooms => self.show_rooms = !self.show_rooms,
                 UiAction::ToggleTemp => self.show_temp = !self.show_temp,
+                UiAction::ToggleColony => self.ui_state.colony = !self.ui_state.colony,
+                UiAction::PickCrop(n) => self.ui_state.crop = n,
+                UiAction::NewColony => self.open_world(),
                 UiAction::JumpTo(x, y) => {
                     self.camera.center = (f32::from(x) + 0.5, f32::from(y) + 0.5);
                     self.camera.clamp_center(size);

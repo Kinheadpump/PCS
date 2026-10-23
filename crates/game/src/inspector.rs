@@ -504,6 +504,7 @@ pub fn tile_rows(sim: &Sim, x: u16, y: u16, haulable: &[u16]) -> Vec<Row> {
         }
         None => rows.push(Row::Pair("Stockpile".to_owned(), "-".to_owned())),
     }
+    rows.extend(crate::info_ui::farm_tile_rows(sim, x, y));
     room_rows(sim, x, y, &mut rows);
     rows
 }
@@ -676,6 +677,8 @@ pub struct RecipeInfo {
     pub label: String,
     /// Inputs, outputs, and work time.
     pub detail: String,
+    /// The keep target now (0 for none).
+    pub keep: u32,
 }
 
 /// The building type index of the workshop on a tile, if there is one.
@@ -726,10 +729,18 @@ pub fn workshop_recipes(sim: &Sim, x: u16, y: u16) -> Vec<RecipeInfo> {
                 .iter()
                 .find(|o| o.recipe == recipe)
                 .map_or(0, |o| o.remaining);
-            let label = if ordered > 0 {
-                format!("{} (ordered {ordered})", r.name)
-            } else {
+            let keep = sim.keep_target(x, y, recipe);
+            let mut notes = Vec::new();
+            if ordered > 0 {
+                notes.push(format!("ordered {ordered}"));
+            }
+            if keep > 0 {
+                notes.push(format!("keep {keep}, have {}", sim.keep_stock(recipe)));
+            }
+            let label = if notes.is_empty() {
                 r.name.clone()
+            } else {
+                format!("{} ({})", r.name, notes.join(", "))
             };
             Some(RecipeInfo {
                 recipe,
@@ -740,6 +751,7 @@ pub fn workshop_recipes(sim: &Sim, x: u16, y: u16) -> Vec<RecipeInfo> {
                     units_text(sim, &r.outputs),
                     build_ui::hours_text(r.work_ticks)
                 ),
+                keep,
             })
         })
         .collect()

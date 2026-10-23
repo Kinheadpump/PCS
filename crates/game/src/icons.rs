@@ -25,6 +25,8 @@ pub fn cell_for(tool: Tool) -> usize {
         Tool::Cancel => ic::CANCEL,
         Tool::Build => ic::BUILD,
         Tool::Deconstruct => ic::REMOVE,
+        Tool::Farm => ic::FARM,
+        Tool::Gather => ic::GATHER,
     }
 }
 
@@ -34,6 +36,7 @@ pub fn badge_for(tool: Tool) -> Option<usize> {
         Tool::Cut => Some(ic::BADGE_CUT),
         Tool::Mine => Some(ic::BADGE_MINE),
         Tool::Haul => Some(ic::BADGE_HAUL),
+        Tool::Gather => Some(ic::BADGE_GATHER),
         _ => None,
     }
 }

@@ -42,6 +42,8 @@ pub fn tool_color(tool: Tool) -> Color {
         Tool::Cancel => rgba(240, 90, 90, 255),
         Tool::Build => rgba(120, 190, 255, 255),
         Tool::Deconstruct => rgba(255, 120, 80, 255),
+        Tool::Farm => rgba(190, 220, 90, 255),
+        Tool::Gather => rgba(235, 120, 200, 255),
     }
 }
 
@@ -412,6 +414,7 @@ pub fn draw_designations(f: &Frame) {
             JobKind::Cut => Tool::Cut,
             JobKind::Mine => Tool::Mine,
             JobKind::Haul => Tool::Haul,
+            JobKind::Gather => Tool::Gather,
             // Building orders have no tool in the interface yet (Sprint 4 game side).
             _ => continue,
         };
