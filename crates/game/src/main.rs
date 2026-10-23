@@ -12,28 +12,33 @@ mod icons;
 mod input;
 mod inspector;
 mod layout;
+mod lifemark;
 mod overlay;
 mod palette;
 mod render;
+mod site_layer;
 mod sprites;
 mod structures;
 mod tools;
 mod ui;
 mod weather;
+mod world_map;
+mod world_screen;
 
 use bake::Palette;
 use build_ui::BuildState;
 use camera::{Camera, View};
 use clock::Clock;
-use input::{Action, InputState};
+use input::{Action, InputState, Typed};
 use macroquad::prelude::{Conf, get_frame_time, get_screen_data, mouse_position, next_frame};
 use render::MapView;
-use sim::{ColonistId, Command, Event, JobEvent, JobKind, Sim};
+use sim::{ColonistId, Command, Event, JobEvent, JobKind, LifeEvent, Sim};
 use sprites::Sprites;
 use std::collections::BTreeSet;
 use structures::Structures;
 use tools::{Area, Tool};
 use ui::{Ui, UiAction};
+use world_screen::{WorldAction, WorldScreen};
 use worldgen::{EmbarkSummary, LocalMapData, generate_local};
 
 /// Embark presets on keys F1, F2, F3.
@@ -51,6 +56,19 @@ const PAN_PIXELS_PER_SECOND: f32 = 700.0;
 const ZOOM_STEP: f32 = 1.25;
 /// Zoom at start, in screen pixels per tile.
 const START_ZOOM: f32 = 16.0;
+
+/// The toast text of a life event: who left or died, with the cause.
+fn life_event_text(event: LifeEvent) -> String {
+    match event {
+        LifeEvent::Died { x, y, cause } => {
+            format!(
+                "A colonist died at ({x}, {y}): {}",
+                cause.name().to_lowercase()
+            )
+        }
+        LifeEvent::Left { x, y } => format!("A colonist left the colony at ({x}, {y})"),
+    }
+}
 
 /// The window size. Developer aid: `PCS_WINDOW=<w>x<h>` sets it, for screenshots.
 fn window_size() -> (i32, i32) {
@@ -136,6 +154,14 @@ struct App {
     preview_override: Option<(Tool, Area)>,
     /// True if `PCS_HUD=0` is set: the screenshot shows the map only.
     hide_hud: bool,
+    /// The world map screen. It is made when the player opens it for the first time.
+    world: Option<Box<WorldScreen>>,
+    /// True while the world map screen is on. The sim does not run then.
+    show_world: bool,
+    /// The name of the map for the status line.
+    map_name: String,
+    /// The text keys of this frame.
+    typed: Typed,
 }
 
 impl App {
@@ -181,6 +207,10 @@ impl App {
             dirty: BTreeSet::new(),
             preview_override: None,
             hide_hud: std::env::var("PCS_HUD").is_ok_and(|v| v == "0"),
+            world: None,
+            show_world: false,
+            map_name: PRESETS[0].0.to_owned(),
+            typed: Typed::default(),
             palette,
             sprites,
             grid: false,
@@ -198,7 +228,10 @@ impl App {
     /// `PCS_TEMP=1` (temperature overlay), `PCS_CLIMATE=<mean>,<amplitude>,<moisture>` (tenths of a
     /// degree, moisture 0 to 255), and `PCS_FUEL=<x>,<y>,<hours>` (hearth fuel, several separated
     /// by `;`; these two run before the ticks). `PCS_DAYS=<n>` runs n days of ticks.
-    /// `PCS_FOLDS=1` opens the temperature fold of the tile panel.
+    /// `PCS_FOLDS=<words>` opens folds (1, temp, mood, health, comfort, skills, speed, all),
+    /// `PCS_NEEDS=<slot>,<hunger>,<rest>,<health>;...` sets needs, and
+    /// `PCS_LIFE=<slot>:<wound|kill|memory=<key>|traits=<i>/<j>|clothes=<key|none>>;...`
+    /// changes a colonist (both run before the ticks).
     fn debug_setup(&mut self) {
         let var = |k: &str| std::env::var(k).ok();
         let numbers = |v: &str| -> Vec<u16> {
@@ -216,8 +249,21 @@ impl App {
         }
         self.show_work = var("PCS_WORK").is_some_and(|v| v == "1");
         self.show_rooms = var("PCS_ROOMS").is_some_and(|v| v == "1");
-        if var("PCS_FOLDS").is_some_and(|v| v == "1") {
-            self.ui_state.open.insert(ui::Fold::TempChain);
+        for word in var("PCS_FOLDS").iter().flat_map(|v| v.split(',')) {
+            let all = word == "all";
+            for (name, fold) in [
+                ("1", ui::Fold::TempChain),
+                ("temp", ui::Fold::TempChain),
+                ("mood", ui::Fold::Mood),
+                ("health", ui::Fold::Health),
+                ("comfort", ui::Fold::Comfort),
+                ("skills", ui::Fold::Skills),
+                ("speed", ui::Fold::WorkSpeed),
+            ] {
+                if all || word == name {
+                    self.ui_state.open.insert(fold);
+                }
+            }
         }
         self.show_temp = var("PCS_TEMP").is_some_and(|v| v == "1");
         if let Some(v) = var("PCS_CLIMATE")
@@ -255,6 +301,7 @@ impl App {
                     .debug_spawn_item(material as u16, u32::from(*count), *x, *y);
             }
         }
+        self.debug_life(&var);
         if let Some(v) = var("PCS_PRIORITY") {
             let values: Vec<usize> = v.split(',').filter_map(|p| p.trim().parse().ok()).collect();
             if let [slot, job, priority] = values[..] {
@@ -293,6 +340,66 @@ impl App {
             self.note_events();
         }
         self.note_events();
+    }
+
+    /// Developer aid for the needs: `PCS_NEEDS=<slot>,<hunger>,<rest>,<health>` (whole units; `-`
+    /// keeps a value; several entries separated by `;`) and
+    /// `PCS_LIFE=<slot>:<action>[=<value>]` with the actions `wound`, `kill`, `memory=<key>`,
+    /// `traits=<index>/<index>`, and `clothes=<material key>|none` (several, separated by `;`).
+    fn debug_life(&mut self, var: &dyn Fn(&str) -> Option<String>) {
+        let nth = |sim: &Sim, slot: &str| {
+            let slot = slot.trim().parse::<usize>().ok()?;
+            sim.colonists().iter().nth(slot).map(|(id, _)| id)
+        };
+        for entry in var("PCS_NEEDS").iter().flat_map(|v| v.split(';')) {
+            let parts: Vec<&str> = entry.split(',').map(str::trim).collect();
+            let [slot, hunger, rest, health] = parts[..] else {
+                continue;
+            };
+            let Some(id) = nth(&self.sim, slot) else {
+                continue;
+            };
+            if let Ok(v) = hunger.parse() {
+                self.sim.debug_set_hunger(id, v);
+            }
+            if let Ok(v) = rest.parse() {
+                self.sim.debug_set_rest(id, v);
+            }
+            if let Ok(v) = health.parse() {
+                self.sim.debug_set_health(id, v);
+            }
+        }
+        for entry in var("PCS_LIFE").iter().flat_map(|v| v.split(';')) {
+            let Some((slot, action)) = entry.split_once(':') else {
+                continue;
+            };
+            let Some(id) = nth(&self.sim, slot) else {
+                continue;
+            };
+            let (name, value) = action.split_once('=').unwrap_or((action, ""));
+            match name {
+                "wound" => self.sim.debug_wound(id),
+                "kill" => self.sim.debug_kill(id),
+                "memory" => {
+                    self.sim.debug_add_memory(id, value);
+                }
+                "traits" => {
+                    let list: Vec<u8> = value.split('/').filter_map(|t| t.parse().ok()).collect();
+                    self.sim.debug_set_traits(id, &list);
+                }
+                "clothes" => {
+                    let material = self
+                        .sim
+                        .rules()
+                        .materials
+                        .iter()
+                        .position(|m| m.key == value)
+                        .map(|m| m as u16);
+                    self.sim.debug_set_clothes(id, material);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Developer aid for the build tool. `PCS_BUILD=<building>,<material>,<x0>,<y0>,<x1>,<y1>;...`
@@ -334,6 +441,96 @@ impl App {
         }
     }
 
+    /// Open the world map screen. The world of the first seed is made on the first call.
+    fn open_world(&mut self) {
+        if self.world.is_none() {
+            match WorldScreen::new(world_seed()) {
+                Ok(screen) => self.world = Some(Box::new(screen)),
+                Err(message) => {
+                    self.last_event = format!("World error: {message}");
+                    return;
+                }
+            }
+        }
+        self.show_world = true;
+    }
+
+    /// Start a colony in a world cell: the local map with its stamped sites, a new sim, and a new
+    /// camera. Does nothing if the player cannot embark on the cell.
+    fn embark(&mut self, x: i32, y: i32) {
+        let Some(embarked) = self.world.as_ref().and_then(|w| w.embark(x, y)) else {
+            return;
+        };
+        let view = MapView::new(&embarked.map, &self.palette, &self.sprites);
+        self.loaded = Loaded {
+            map: embarked.map,
+            view,
+        };
+        let mut sim = Sim::new(&self.loaded.map, embarked.summary.seed, self.content_hash);
+        sim.set_climate(
+            embarked.summary.mean_temperature,
+            embarked.amplitude,
+            embarked.moisture,
+        );
+        self.sim = sim;
+        self.map_name = embarked.name;
+        self.reset_colony_state();
+        self.camera = Camera::new(self.map_size(), START_ZOOM);
+        self.show_world = false;
+    }
+
+    /// Developer aid: `PCS_WORLD=1` opens the world map. `PCS_LAYER=<name>` chooses the layer,
+    /// `PCS_WORLD_CELL=<x>,<y>` selects a cell, and `PCS_EMBARK=<x>,<y>` starts a colony there.
+    /// `PCS_WORLD_SEED=<n>` is the seed of the world.
+    fn debug_world(&mut self) {
+        let var = |k: &str| std::env::var(k).ok();
+        let cell = |k: &str| -> Option<(i32, i32)> {
+            let v = var(k)?;
+            let (x, y) = v.split_once(',')?;
+            Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+        };
+        if var("PCS_WORLD").is_none_or(|v| v != "1") && cell("PCS_EMBARK").is_none() {
+            return;
+        }
+        self.open_world();
+        if let Some(world) = self.world.as_mut() {
+            if let Some(layer) = var("PCS_LAYER").and_then(|v| world_map::Layer::from_word(&v)) {
+                world.set_layer(layer);
+            }
+            if let Some(c) = cell("PCS_WORLD_CELL") {
+                world.select(Some(c));
+            }
+        }
+        if let Some((x, y)) = cell("PCS_EMBARK") {
+            self.embark(x, y);
+        }
+    }
+
+    /// Clear the selection, the orders, and the build choice after a new map.
+    fn reset_colony_state(&mut self) {
+        self.selected = None;
+        self.selected_tile = None;
+        self.drag_start = None;
+        self.build = BuildState::new(self.sim.rules());
+        self.dirty.clear();
+        self.pending.clear();
+        self.last_event.clear();
+    }
+
+    /// Apply the actions of one frame on the world map screen.
+    fn apply_world(&mut self, actions: &[Action]) -> bool {
+        for action in actions {
+            match action {
+                Action::ToggleWorld => self.show_world = false,
+                Action::Close if self.world.as_mut().is_none_or(|w| w.on_close()) => {
+                    self.show_world = false;
+                }
+                _ => {}
+            }
+        }
+        true
+    }
+
     fn map_size(&self) -> (u32, u32) {
         (
             self.loaded.map.ground.width(),
@@ -343,6 +540,9 @@ impl App {
 
     /// Apply the actions of one frame. Returns `false` when the game must close.
     fn apply(&mut self, actions: &[Action], view: View, dt: f32) -> bool {
+        if self.show_world {
+            return self.apply_world(actions);
+        }
         let size = self.map_size();
         let center = (view.0 / 2.0, view.1 / 2.0);
         let step = PAN_PIXELS_PER_SECOND * dt / self.camera.zoom;
@@ -363,13 +563,8 @@ impl App {
                     self.preset = n;
                     self.loaded = Self::load_preset(&self.palette, &self.sprites, n);
                     self.sim = Self::start_sim(&self.loaded.map, n, self.content_hash);
-                    self.selected = None;
-                    self.selected_tile = None;
-                    self.drag_start = None;
-                    self.build = BuildState::new(self.sim.rules());
-                    self.dirty.clear();
-                    self.pending.clear();
-                    self.last_event.clear();
+                    self.map_name = PRESETS[n].0.to_owned();
+                    self.reset_colony_state();
                 }
                 Action::SelectTool(tool) => self.set_tool(tool),
                 Action::ToggleWork => self.show_work = !self.show_work,
@@ -384,6 +579,7 @@ impl App {
                 Action::LeftClick(..) | Action::LeftRelease(..) | Action::RightClick(..) => {}
                 Action::ToggleGrid => self.grid = !self.grid,
                 Action::ToggleDebug => self.ui_state.debug = !self.ui_state.debug,
+                Action::ToggleWorld => self.open_world(),
                 Action::Preset(_) => {}
                 Action::Close => return false,
             }
@@ -393,6 +589,9 @@ impl App {
 
     /// Run the ticks of one frame. Pending commands go into the first tick.
     fn update(&mut self, frame_micros: u64) {
+        if self.show_world {
+            return;
+        }
         let ticks = self.clock.advance(frame_micros);
         for _ in 0..ticks {
             let commands = std::mem::take(&mut self.pending);
@@ -422,6 +621,15 @@ impl App {
                 }
                 Event::Crafted { x, y, .. } => format!("Crafted at ({x}, {y})"),
             };
+        }
+        for event in self.sim.drain_life_events() {
+            self.last_event = life_event_text(event);
+        }
+        if self
+            .selected
+            .is_some_and(|id| self.sim.colonist(id).is_none())
+        {
+            self.selected = None;
         }
         for event in self.sim.drain_job_events() {
             if let JobEvent::Completed {
@@ -584,9 +792,14 @@ impl App {
 
     /// Draw one frame, then apply the UI actions and the clicks.
     fn draw(&mut self, actions: &[Action], view: View) {
+        if self.show_world {
+            self.draw_world(actions, view);
+            return;
+        }
         render::clear();
         let size = self.map_size();
         self.loaded.view.draw(&self.camera, size);
+        site_layer::draw(&self.loaded.map, &self.camera, view);
         if self.grid {
             MapView::draw_grid(&self.camera, size);
         }
@@ -605,6 +818,7 @@ impl App {
         overlay::draw_items(&frame);
         self.structures.draw_objects(&frame, &self.sprites);
         overlay::draw_designations(&frame);
+        lifemark::draw_graves(&frame);
         actors::draw(&self.sim, &self.camera, view, self.selected);
         let sprite_size = self.camera.zoom.max(12.0);
         for (id, c) in self.sim.colonists().iter() {
@@ -613,6 +827,7 @@ impl App {
                 overlay::draw_carried(&frame, p, sprite_size, id);
             }
         }
+        lifemark::draw_marks(&self.sim, &self.camera, view);
         self.structures.draw_roofs(&frame, &self.sprites);
         self.structures.draw_blueprints(&frame, &self.sprites);
         if self.show_rooms {
@@ -674,7 +889,7 @@ impl App {
             speed: self.clock.speed(),
             fps: render::fps(),
             zoom: self.camera.zoom,
-            map_name: PRESETS[self.preset].0,
+            map_name: &self.map_name,
             last_event: &self.last_event,
         };
         // Developer aid: PCS_HUD=0 hides the panels, for clean screenshots of the map.
@@ -709,6 +924,34 @@ impl App {
         self.handle_clicks(actions, &ui, view);
         self.panels = ui.panels().to_vec();
     }
+}
+
+impl App {
+    /// Draw the world map screen and act on what the player chose.
+    fn draw_world(&mut self, actions: &[Action], view: View) {
+        let click = actions.iter().find_map(|a| match a {
+            Action::LeftClick(x, y) => Some((*x, *y)),
+            _ => None,
+        });
+        let typed = std::mem::take(&mut self.typed);
+        let Some(world) = self.world.as_mut() else {
+            self.show_world = false;
+            return;
+        };
+        match world.draw(view, click, &typed) {
+            Some(WorldAction::Back) => self.show_world = false,
+            Some(WorldAction::Embark(x, y)) => self.embark(x, y),
+            None => {}
+        }
+    }
+}
+
+/// The seed of the first world: `PCS_WORLD_SEED`, or 1.
+fn world_seed() -> u64 {
+    std::env::var("PCS_WORLD_SEED")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
 }
 
 /// Draw an error message instead of the map.
@@ -751,14 +994,17 @@ async fn main() {
         {
             app.camera.zoom = camera::clamp_zoom(z);
         }
+        app.debug_world();
         app.debug_setup();
     }
     let mut frames = 0;
     let mut input = InputState::default();
     loop {
         let actions = input.poll();
+        let typed = input::typed();
         match &mut state {
             Ok(app) => {
+                app.typed = typed;
                 if !app.apply(&actions, render::view_size(), get_frame_time()) {
                     break;
                 }
@@ -778,5 +1024,28 @@ async fn main() {
             break;
         }
         next_frame().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sim::scenario::sim_from_ascii;
+
+    #[test]
+    fn r016_a_death_toast_names_the_place_and_the_cause() {
+        let mut sim = sim_from_ascii("c..", 1).unwrap();
+        let id = sim.colonists().iter().next().map(|(id, _)| id).unwrap();
+        sim.debug_kill(id);
+        sim.step(&[]);
+        let events = sim.drain_life_events();
+        assert_eq!(events.len(), 1);
+        let text = life_event_text(events[0]);
+        assert!(text.starts_with("A colonist died at ("), "{text}");
+        assert!(text.contains("): "), "{text}");
+        assert_eq!(
+            life_event_text(LifeEvent::Left { x: 3, y: 4 }),
+            "A colonist left the colony at (3, 4)"
+        );
     }
 }

@@ -163,6 +163,20 @@ pub mod icons {
     pub const FLAME: usize = 23;
     /// A snowflake: cold period.
     pub const SNOWFLAKE: usize = 24;
+    /// A heart: health.
+    pub const HEART: usize = 25;
+    /// A face: mood.
+    pub const MOOD: usize = 26;
+    /// An apple: hunger.
+    pub const FOOD: usize = 27;
+    /// A crescent moon: rest.
+    pub const MOON: usize = 28;
+    /// A skull: death.
+    pub const SKULL: usize = 29;
+    /// A sun: heatstroke.
+    pub const SUN: usize = 30;
+    /// A triangle with a bar: a warning.
+    pub const WARN: usize = 31;
     /// Rows of the sheet.
     pub const ROWS: usize = 2;
 }

@@ -6,7 +6,7 @@ use base::Grid;
 use base::rng::mix;
 
 /// Mean sea-level temperature in degrees Celsius from the equator (first) to the pole (last).
-const TEMP_BY_LATITUDE: [i32; 17] = [
+pub(crate) const TEMP_BY_LATITUDE: [i32; 17] = [
     30, 30, 29, 28, 27, 25, 23, 20, 17, 13, 9, 5, 0, -6, -12, -19, -26,
 ];
 
@@ -15,7 +15,7 @@ const AMP_BY_LATITUDE: [i32; 9] = [3, 4, 6, 8, 10, 12, 14, 15, 16];
 
 /// Base moisture (0 to 255) from the equator to the pole: wet tropics, dry subtropics,
 /// wet mid latitudes, dry poles.
-const MOISTURE_BY_LATITUDE: [i32; 17] = [
+pub(crate) const MOISTURE_BY_LATITUDE: [i32; 17] = [
     80, 80, 70, 55, 35, 25, 25, 35, 55, 80, 90, 90, 80, 60, 40, 25, 15,
 ];
 

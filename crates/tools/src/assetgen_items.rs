@@ -681,6 +681,146 @@ const FLAME: [&str; 16] = [
     "................",
 ];
 
+const HEART: [&str; 16] = [
+    "................",
+    "................",
+    "...ooo....ooo...",
+    "..owwwo..owwwo..",
+    ".owwwwwooowwwmo.",
+    ".owwwwwwwwwwmmo.",
+    ".owwwwwwwwwmmdo.",
+    ".owwwwwwwwmmddo.",
+    "..owwwwwwmmmdo..",
+    "...owwwwmmmdo...",
+    "....owwmmmdo....",
+    ".....owmmdo.....",
+    "......omdo......",
+    ".......oo.......",
+    "................",
+    "................",
+];
+
+const MOOD: [&str; 16] = [
+    "................",
+    ".....oooooo.....",
+    "...oowwwwwwoo...",
+    "..owwwwwwwwwmo..",
+    "..owwooowwooomo.",
+    ".owwwooowwooowmo",
+    ".owwwwwwwwwwwmdo",
+    ".owwwwwwwwwwmmdo",
+    ".owowwwwwwwowmdo",
+    ".owwoowwwwoowmdo",
+    "..owwooooooomdo.",
+    "..oommwwwwmmdo..",
+    "...oodddddddo...",
+    ".....oooooo.....",
+    "................",
+    "................",
+];
+
+const FOOD: [&str; 16] = [
+    "................",
+    "........oo......",
+    ".......owo......",
+    "....oooowooo....",
+    "...owwwwoowwo...",
+    "..owwwwwwwwwmo..",
+    "..owwwwwwwwmmo..",
+    "..owwwwwwwmmmdo.",
+    "..owwwwwwmmmmdo.",
+    "..owwwwwmmmmddo.",
+    "...owwwmmmmddo..",
+    "...owmmmmmddo...",
+    "....oomddddoo...",
+    "......oooo......",
+    "................",
+    "................",
+];
+
+const SKULL: [&str; 16] = [
+    "................",
+    "................",
+    "....oooooooo....",
+    "...owwwwwwwwo...",
+    "..owwwwwwwwwwo..",
+    "..owwwwwwwwwwo..",
+    "..owooowwooowo..",
+    "..owooowwooomo..",
+    "..owooowwooomo..",
+    "..owwwwoowwwmo..",
+    "...owwwwwwwmo...",
+    "....owowowomo...",
+    "....owowowmdo...",
+    ".....oooooooo...",
+    "................",
+    "................",
+];
+
+const WARN: [&str; 16] = [
+    "................",
+    ".......oo.......",
+    "......owwo......",
+    "......owwo......",
+    ".....owwwwo.....",
+    ".....owoowo.....",
+    "....owwoowwo....",
+    "....owwoowmo....",
+    "...owwwoowwmo...",
+    "...owwwwwwwmo...",
+    "..owwwwoowwwmo..",
+    "..owwwwoowwmdo..",
+    ".owwwwwwwwwmddo.",
+    ".oooooooooooooo.",
+    "................",
+    "................",
+];
+
+/// A crescent moon: a disc without a second disc that is shifted to the north east.
+fn moon_icon(img: &mut Image) {
+    for y in 0..16i32 {
+        for x in 0..16i32 {
+            let d = |cx: f32, cy: f32| ((x as f32 - cx).powi(2) + (y as f32 - cy).powi(2)).sqrt();
+            if d(7.0, 8.5) <= 5.6 && d(10.2, 6.2) > 4.6 {
+                let level = if d(7.0, 8.5) > 4.4 { 176 } else { SPARK };
+                g(img, ic::MOON, x, y, level);
+            }
+        }
+    }
+    outline(img, ic::MOON, OUT, true);
+}
+
+/// A sun: a disc and eight short rays.
+fn sun_icon(img: &mut Image) {
+    for y in 0..16i32 {
+        for x in 0..16i32 {
+            let (dx, dy) = (x as f32 - 7.5, y as f32 - 7.5);
+            if (dx * dx + dy * dy).sqrt() <= 3.6 {
+                let level = if dx + dy > 2.0 { 176 } else { SPARK };
+                g(img, ic::SUN, x, y, level);
+            }
+        }
+    }
+    let mut rays = Vec::new();
+    for i in [1, 2, 13, 14] {
+        rays.extend([(i, 7), (i, 8), (7, i), (8, i)]);
+    }
+    for (a, b) in [
+        (3, 3),
+        (4, 4),
+        (12, 3),
+        (11, 4),
+        (3, 12),
+        (4, 11),
+        (12, 12),
+        (11, 11),
+    ] {
+        rays.push((a, b));
+    }
+    plot(img, ic::SUN, &rays, SPARK);
+    outline(img, ic::SUN, OUT, true);
+}
+
 const BUILD: [&str; 16] = [
     "................",
     "......oooooo....",
@@ -740,6 +880,13 @@ pub fn make_icons() -> Image {
     rows(&mut img, ic::RAIN, &RAIN);
     rows(&mut img, ic::FLAME, &FLAME);
     snowflake_icon(&mut img);
+    rows(&mut img, ic::HEART, &HEART);
+    rows(&mut img, ic::MOOD, &MOOD);
+    rows(&mut img, ic::FOOD, &FOOD);
+    rows(&mut img, ic::SKULL, &SKULL);
+    rows(&mut img, ic::WARN, &WARN);
+    moon_icon(&mut img);
+    sun_icon(&mut img);
     badges(&mut img);
     brackets(&mut img);
     img

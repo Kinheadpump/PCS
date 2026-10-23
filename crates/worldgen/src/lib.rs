@@ -1,6 +1,7 @@
 //! World map, history, and local map generation (integer math only).
 
 pub mod biome;
+pub mod chunk;
 pub mod climate;
 pub mod deposit;
 pub mod embark;
