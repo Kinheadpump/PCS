@@ -859,6 +859,100 @@ const REMOVE: [&str; 16] = [
     "................",
 ];
 
+const FARM: [&str; 15] = [
+    "................",
+    "................",
+    "...oo......oo...",
+    "..owwo....owwo..",
+    "..owwwo..owwwo..",
+    "...oowwoowwoo...",
+    ".....owwwwo.....",
+    "......owwo......",
+    "......owo.......",
+    "......owo.......",
+    "......ooo.......",
+    "................",
+    "..wwwwwwwwwwww..",
+    "................",
+    "..wwwwwwwwwwww..",
+];
+
+const GATHER: [&str; 13] = [
+    "................",
+    "................",
+    ".....oooooo.....",
+    "....ow....wo....",
+    "....ow....wo....",
+    "..oooooooooooo..",
+    "..owwwwwwwwwwo..",
+    "..owmwmwmwmwwo..",
+    "..owwmwmwmwmwo..",
+    "...owmwmwmwwo...",
+    "...owwmwmwmwo...",
+    "....owwwwwwo....",
+    "....oooooooo....",
+];
+
+const CHRONICLE: [&str; 14] = [
+    "................",
+    "..ooooooooooo...",
+    "..odwwwwwwwwwo..",
+    "..odwwwwwwwwwo..",
+    "..odwoooooowwo..",
+    "..odwowwwwowwo..",
+    "..odwoooooowwo..",
+    "..odwwwwwwwwwo..",
+    "..odwwwwwwwwwo..",
+    "..odwwwwwwwwwo..",
+    "..odwwwwwwwwwo..",
+    "..oooooooowwwoo.",
+    ".........owwwo..",
+    ".........owowo..",
+];
+
+const FERTILITY: [&str; 14] = [
+    "................",
+    "................",
+    "..........oooo..",
+    "......ooowwwwwo.",
+    "....oowwwwwwwwo.",
+    "...owwwwwwwdwwo.",
+    "..owwwwwwdwwwwo.",
+    "..owwwwwdwwwwo..",
+    "..owwwwdwwwwo...",
+    "..owwwdwwwoo....",
+    "..owwdwwoo......",
+    "...oodooo.......",
+    "..od.oo.........",
+    ".od.............",
+];
+
+const LEDGER: [&str; 14] = [
+    "................",
+    ".....ow..wo.....",
+    "......owwo......",
+    ".....oddddo.....",
+    "....owwwwwwo....",
+    "...owwwwwwwwo...",
+    "..owwwwwwwwwwo..",
+    "..owwwmmwwwwwo..",
+    "..owwmmmwwwwwo..",
+    "..owwwwwwwwwwo..",
+    "..owwwwwwwwdwo..",
+    "..owwwwwwwddwo..",
+    "...oowwwwwwoo...",
+    ".....oooooo.....",
+];
+
+fn gather_badge(img: &mut Image) {
+    let mut glyph = vec![(3, 1), (4, 1), (5, 1), (2, 2), (6, 2)];
+    glyph.extend((1..=7).map(|x| (x, 3)));
+    glyph.extend((2..=6).map(|x| (x, 4)));
+    glyph.extend([(2, 5), (3, 5), (5, 5), (6, 5)]);
+    glyph.extend((3..=5).map(|x| (x, 6)));
+    badge(img, ic::BADGE_GATHER, &glyph);
+}
+
 /// Make `icons.png`.
 pub fn make_icons() -> Image {
     let mut img = Image::cell_sheet(ic::ROWS);
@@ -889,5 +983,68 @@ pub fn make_icons() -> Image {
     sun_icon(&mut img);
     badges(&mut img);
     brackets(&mut img);
+    rows(&mut img, ic::FARM, &FARM);
+    rows(&mut img, ic::GATHER, &GATHER);
+    rows(&mut img, ic::CHRONICLE, &CHRONICLE);
+    gather_badge(&mut img);
+    rows(&mut img, ic::FERTILITY, &FERTILITY);
+    rows(&mut img, ic::LEDGER, &LEDGER);
     img
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn solid(img: &Image, cell: usize) -> usize {
+        (0..16)
+            .flat_map(|y| (0..16).map(move |x| (x, y)))
+            .filter(|&(x, y)| img.get_cell(cell, x, y)[3] != 0)
+            .count()
+    }
+
+    #[test]
+    fn sprint_7_icon_grids_have_16_columns() {
+        let grids: [&[&str]; 5] = [&FARM, &GATHER, &CHRONICLE, &FERTILITY, &LEDGER];
+        for grid in grids {
+            for row in grid {
+                assert_eq!(row.chars().count(), 16, "{row}");
+            }
+        }
+    }
+
+    #[test]
+    fn sprint_7_icons_are_not_empty_and_differ() {
+        let img = make_icons();
+        let cells = [
+            ic::FARM,
+            ic::GATHER,
+            ic::CHRONICLE,
+            ic::BADGE_GATHER,
+            ic::FERTILITY,
+            ic::LEDGER,
+        ];
+        for (i, &a) in cells.iter().enumerate() {
+            assert!(solid(&img, a) >= 30, "icon cell {a} is nearly empty");
+            for &b in &cells[i + 1..] {
+                let same = (0..16)
+                    .all(|y| (0..16).all(|x| img.get_cell(a, x, y) == img.get_cell(b, x, y)));
+                assert!(!same, "icon cells {a} and {b} are equal");
+            }
+        }
+    }
+
+    #[test]
+    fn gather_badge_is_a_9_by_9_plate_at_the_top_right() {
+        let img = make_icons();
+        for y in 0..16 {
+            for x in 0..16 {
+                let inside = (7..16).contains(&x) && y < 9;
+                if !inside {
+                    assert_eq!(img.get_cell(ic::BADGE_GATHER, x, y)[3], 0, "({x},{y})");
+                }
+            }
+        }
+        assert_ne!(img.get_cell(ic::BADGE_GATHER, 11, 4)[3], 0);
+    }
 }

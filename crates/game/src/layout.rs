@@ -28,7 +28,7 @@ pub const TEMP_W: f32 = 168.0;
 /// Size of the scale of the temperature overlay.
 pub const SCALE_SIZE: (f32, f32) = (176.0, 28.0);
 /// Size of the alerts strip.
-pub const ALERTS_SIZE: (f32, f32) = (540.0, 36.0);
+pub const ALERTS_SIZE: (f32, f32) = (720.0, 36.0);
 /// Space left of the clock in the top bar.
 const TOP_EDGE: f32 = 16.0;
 /// Space between the groups of the top bar.
@@ -65,6 +65,8 @@ pub struct Sizes {
     pub work: Option<Size>,
     /// The build panel, if the build tool is active.
     pub build: Option<Size>,
+    /// The colony panel (ledger and chronicle), if open.
+    pub info: Option<Size>,
     /// The colonist panel, if a colonist is selected.
     pub colonist: Option<Size>,
     /// The tile panel, if a tile is selected.
@@ -100,6 +102,8 @@ pub struct Placed {
     pub work: Option<Rect>,
     /// The build panel.
     pub build: Option<Rect>,
+    /// The colony panel.
+    pub info: Option<Rect>,
     /// The colonist panel.
     pub colonist: Option<Rect>,
     /// The tile panel.
@@ -117,6 +121,7 @@ impl Placed {
             ("toast", self.toast),
             ("work", self.work),
             ("build", self.build),
+            ("info", self.info),
             ("colonist", self.colonist),
             ("tile", self.tile),
             ("side", self.side),
@@ -238,6 +243,13 @@ pub fn place(view: (f32, f32), s: &Sizes) -> Placed {
         try_place(&mut taken, &[r])
     });
 
+    // The colony panel sits at the top left, right of the work panel if that is open.
+    let info = s.info.and_then(|i| {
+        let first = avoid(rect(m, top_y, i));
+        let beside = work.map_or(first, |w| avoid(rect(w.right() + m, top_y, i)));
+        try_place(&mut taken, &[first, beside])
+    });
+
     // The right column. The colonist panel sits at the right edge.
     let colonist = s.colonist.and_then(|c| {
         let r = avoid(rect(view.0 - m - c.w, top_y, c));
@@ -274,6 +286,7 @@ pub fn place(view: (f32, f32), s: &Sizes) -> Placed {
         toast,
         work,
         build,
+        info,
         colonist,
         tile,
         side,
@@ -303,7 +316,7 @@ mod tests {
         Sizes {
             clock_w: 100.0,
             count_w: 70.0,
-            toolbar_buttons: (10, 8),
+            toolbar_buttons: (14, 10),
             ..Sizes::default()
         }
     }
@@ -332,14 +345,14 @@ mod tests {
         assert_eq!(p.toolbar.bottom(), 720.0 - MARGIN);
         let mid = p.toolbar.x + p.toolbar.w / 2.0;
         assert!((mid - 640.0).abs() <= 1.0);
-        assert_eq!(p.toolbar_buttons.len(), 10);
+        assert_eq!(p.toolbar_buttons.len(), 14);
         for b in &p.toolbar_buttons {
             assert!(b.x >= p.toolbar.x && b.right() <= p.toolbar.right());
             assert!(b.y >= p.toolbar.y && b.bottom() <= p.toolbar.bottom());
         }
         // The panel buttons are a little apart from the tools.
         let gap = |i: usize| p.toolbar_buttons[i + 1].x - p.toolbar_buttons[i].right();
-        assert!(gap(7) > gap(6));
+        assert!(gap(9) > gap(8));
     }
 
     #[test]
@@ -398,7 +411,7 @@ mod tests {
 
     #[test]
     fn panel_height_leaves_room_for_the_bars() {
-        let h = panel_height((1280.0, 720.0), 10);
+        let h = panel_height((1280.0, 720.0), 14);
         let p = place((1280.0, 720.0), &sizes());
         assert!(TOP_H + MARGIN + h <= p.toolbar.y - MARGIN + 0.5);
     }

@@ -865,9 +865,11 @@ impl Sim {
             return;
         };
         let (x, y) = c.tile();
+        let age = c.age;
         self.release_colonist(id);
         self.colonists.remove(id);
         self.life_events.push(LifeEvent::Left { x, y });
+        self.chronicle_gone(crate::ChronicleKind::Left, age);
     }
 
     /// A colonist dies (R-016). The others get the memory "colonist_died".
@@ -896,6 +898,7 @@ impl Sim {
             y: grave.y,
             cause,
         });
+        self.chronicle_gone(crate::ChronicleKind::of_death(cause), grave.age);
         if let Some(index) = self.rules.needs.memory_index("colonist_died") {
             let others: Vec<ColonistId> = self.colonists.iter().map(|(i, _)| i).collect();
             for other in others {
@@ -984,17 +987,6 @@ impl Sim {
                     c.traits = vec![u8::try_from(picked).unwrap_or(0)];
                 }
             }
-        }
-    }
-
-    /// Put the start food of a new colony on the tile of the first colonist.
-    pub(crate) fn place_start_food(&mut self) {
-        let Some((x, y)) = self.colonists.iter().next().map(|(_, c)| c.tile()) else {
-            return;
-        };
-        let food = self.rules.needs.start_food.clone();
-        for (material, count) in food {
-            self.spawn_item(material, count, x, y, true);
         }
     }
 }

@@ -5,8 +5,13 @@
 //! dense indices (`u16`) of `materials.ron`. Buildings and recipes are the dense indices
 //! of `buildings.ron` and `recipes.ron`.
 
+use crate::chronicle::{ChronicleRules, load_chronicle_rules};
 use crate::climate::{ClimateRules, FuelDef, load_climate_rules};
+use crate::farm::{FarmRules, load_farm_rules};
+use crate::ledger::{LedgerRules, load_ledger_rules};
 use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
+use crate::spoilage::{SpoilRules, load_spoil_rules};
+use crate::start::{StartRules, load_start_rules};
 use base::content::{
     BuildingDef, BuildingKind, ContentError, ContentIssue, DroughtRules, JobRules, MaterialDef,
     NoticeRules, RecipeDef, RoomRules, load_buildings, load_drought_rules, load_job_rules,
@@ -23,6 +28,12 @@ const ROOMS_TEXT: &str = include_str!("../../../assets/content/rooms.ron");
 const CLIMATE_TEXT: &str = include_str!("../../../assets/content/climate.ron");
 const NEEDS_TEXT: &str = include_str!("../../../assets/content/needs.ron");
 const TRAITS_TEXT: &str = include_str!("../../../assets/content/traits.ron");
+const SPOILAGE_TEXT: &str = include_str!("../../../assets/content/spoilage.ron");
+const CROPS_TEXT: &str = include_str!("../../../assets/content/crops.ron");
+const WILD_TEXT: &str = include_str!("../../../assets/content/wild_plants.ron");
+const START_TEXT: &str = include_str!("../../../assets/content/start.ron");
+const LEDGER_TEXT: &str = include_str!("../../../assets/content/ledger.ron");
+const CHRONICLE_TEXT: &str = include_str!("../../../assets/content/chronicle_templates.ron");
 const NOTICE_TEXT: &str = include_str!("../../../assets/content/notice.ron");
 const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
 
@@ -49,6 +60,18 @@ pub struct ContentTexts {
     pub needs: &'static str,
     /// `traits.ron`.
     pub traits: &'static str,
+    /// `spoilage.ron`.
+    pub spoilage: &'static str,
+    /// `crops.ron`.
+    pub crops: &'static str,
+    /// `wild_plants.ron`.
+    pub wild_plants: &'static str,
+    /// `start.ron`.
+    pub start: &'static str,
+    /// `ledger.ron`.
+    pub ledger: &'static str,
+    /// `chronicle_templates.ron`.
+    pub chronicle: &'static str,
 }
 
 /// The content texts of the repository.
@@ -61,6 +84,12 @@ pub const BUILTIN_TEXTS: ContentTexts = ContentTexts {
     climate: CLIMATE_TEXT,
     needs: NEEDS_TEXT,
     traits: TRAITS_TEXT,
+    spoilage: SPOILAGE_TEXT,
+    crops: CROPS_TEXT,
+    wild_plants: WILD_TEXT,
+    start: START_TEXT,
+    ledger: LEDGER_TEXT,
+    chronicle: CHRONICLE_TEXT,
 };
 
 /// Linked content for the sim systems.
@@ -88,6 +117,16 @@ pub struct SimRules {
     pub drought: DroughtRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
+    /// Food spoilage numbers (R-005).
+    pub spoil: SpoilRules,
+    /// Crops, wild plants, and fertility numbers (R-006, R-007).
+    pub farm: FarmRules,
+    /// Start conditions.
+    pub start: StartRules,
+    /// Ledger numbers.
+    pub ledger: LedgerRules,
+    /// Chronicle numbers and templates.
+    pub chronicle: ChronicleRules,
     /// Material of a log.
     pub log: u16,
     /// Material of a wall tile without a building (`rooms.ron`).
@@ -118,6 +157,11 @@ impl Default for SimRules {
             notice: NoticeRules::default(),
             drought: DroughtRules::default(),
             fuel: Vec::new(),
+            spoil: SpoilRules::empty(),
+            farm: FarmRules::empty(),
+            start: StartRules::empty(),
+            ledger: LedgerRules::empty(),
+            chronicle: ChronicleRules::empty(),
             log: NO_MATERIAL,
             bare_wall: NO_MATERIAL,
             rock_item: [NO_MATERIAL; 4],
@@ -181,6 +225,20 @@ impl SimRules {
             texts.needs,
             texts.traits,
         )
+        .and_then(|mut rules| {
+            rules.load_sprint7(texts)?;
+            Ok(rules)
+        })
+    }
+
+    /// Load the files of Sprint 7: spoilage, crops, wild plants, start, ledger, chronicle.
+    fn load_sprint7(&mut self, texts: &ContentTexts) -> Result<(), ContentError> {
+        self.spoil = load_spoil_rules("spoilage.ron", texts.spoilage)?;
+        self.farm = load_farm_rules(texts.crops, texts.wild_plants, &self.materials)?;
+        self.start = load_start_rules("start.ron", texts.start, &self.materials)?;
+        self.ledger = load_ledger_rules("ledger.ron", texts.ledger)?;
+        self.chronicle = load_chronicle_rules("chronicle_templates.ron", texts.chronicle)?;
+        Ok(())
     }
 
     /// Link the rules from the text of the five content files. The climate file comes from
@@ -286,7 +344,7 @@ impl SimRules {
         }
         let buildings = load_buildings("buildings.ron", buildings_text)?;
         let recipes = load_recipes("recipes.ron", recipes_text, &materials, &buildings)?;
-        Ok(Self {
+        let mut rules = Self {
             jobs,
             materials,
             buildings,
@@ -298,11 +356,18 @@ impl SimRules {
             notice,
             drought,
             fuel,
+            spoil: SpoilRules::empty(),
+            farm: FarmRules::empty(),
+            start: StartRules::empty(),
+            ledger: LedgerRules::empty(),
+            chronicle: ChronicleRules::empty(),
             log,
             bare_wall,
             rock_item,
             ore_item,
-        })
+        };
+        rules.load_sprint7(&BUILTIN_TEXTS)?;
+        Ok(rules)
     }
 
     /// The rules from the content files of the repository.
@@ -423,8 +488,8 @@ mod tests {
         assert_ne!(rules.log, NO_MATERIAL);
         assert_eq!(rules.materials[usize::from(rules.log)].key, "log");
         assert_eq!(SimRules::builtin().jobs, rules.jobs);
-        assert_eq!(rules.buildings.len(), 7);
-        assert_eq!(rules.recipes.len(), 2);
+        assert_eq!(rules.buildings.len(), 8);
+        assert_eq!(rules.recipes.len(), 7);
         assert_eq!(rules.rooms.max_tiles, 400);
         let wall = rules.building_index("wall").unwrap();
         let granite = rules.material_index("granite").unwrap();

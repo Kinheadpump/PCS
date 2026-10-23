@@ -58,6 +58,10 @@ pub enum Action {
     ToggleRooms,
     /// Show or hide the temperature overlay.
     ToggleTemp,
+    /// Show or hide the colony panel (ledger and chronicle).
+    ToggleColony,
+    /// Show or hide the fertility overlay.
+    ToggleFertility,
     /// Choose the building of the build tool by its number (0-based, `buildings.ron` order).
     PickBuilding(usize),
     /// Open or close the world map.
@@ -121,8 +125,15 @@ pub const KEY_BINDINGS: &[(Trigger, Action)] = &[
         Trigger::Pressed(KeyCode::X),
         Action::SelectTool(Tool::Deconstruct),
     ),
+    (Trigger::Pressed(KeyCode::F), Action::SelectTool(Tool::Farm)),
+    (
+        Trigger::Pressed(KeyCode::N),
+        Action::SelectTool(Tool::Gather),
+    ),
     (Trigger::Pressed(KeyCode::O), Action::ToggleRooms),
     (Trigger::Pressed(KeyCode::Y), Action::ToggleTemp),
+    (Trigger::Pressed(KeyCode::L), Action::ToggleColony),
+    (Trigger::Pressed(KeyCode::U), Action::ToggleFertility),
     (Trigger::Pressed(KeyCode::Key1), Action::PickBuilding(0)),
     (Trigger::Pressed(KeyCode::Key2), Action::PickBuilding(1)),
     (Trigger::Pressed(KeyCode::Key3), Action::PickBuilding(2)),
@@ -253,6 +264,8 @@ mod tests {
             Action::SelectTool(Tool::Cancel),
             Action::SelectTool(Tool::Build),
             Action::SelectTool(Tool::Deconstruct),
+            Action::SelectTool(Tool::Farm),
+            Action::SelectTool(Tool::Gather),
             Action::ToggleRooms,
             Action::ToggleWorld,
             Action::PickBuilding(0),
@@ -298,6 +311,8 @@ mod tests {
             KeyCode::C => Some('C'),
             KeyCode::B => Some('B'),
             KeyCode::X => Some('X'),
+            KeyCode::F => Some('F'),
+            KeyCode::N => Some('N'),
             _ => None,
         }
     }

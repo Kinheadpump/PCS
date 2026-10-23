@@ -1,0 +1,27 @@
+// Chronicle text templates (Sprint 7). The code never builds free text.
+// Placeholders: {0} {1} {2} are the numbers of the entry. {day} is the day of the season,
+// {season} the season name, {year} the year number.
+// The "kind" selects the event. The sim needs one template for each kind.
+// max_entries: the chronicle keeps at most this many entries (oldest first are dropped).
+// seasons: the names of spring, summer, autumn, and winter, for {season} and the grouping.
+// food_rotted_min: a day with this many rotten food units or more gets an entry.
+(
+    max_entries: 500,
+    seasons: ["spring", "summer", "autumn", "winter"],
+    food_rotted_min: 20,
+    templates: [
+        (kind: "death_starvation", text: "A colonist aged {0} starved to death."),
+        (kind: "death_hypothermia", text: "A colonist aged {0} froze to death."),
+        (kind: "death_heatstroke", text: "A colonist aged {0} died of heat."),
+        (kind: "death_wounds", text: "A colonist aged {0} died of wounds."),
+        (kind: "death_unknown", text: "A colonist aged {0} died."),
+        (kind: "left", text: "A colonist aged {0} left the colony after a long breakdown."),
+        (kind: "winter_begins", text: "The first winter begins. The colony has {0} colonists and food for {1} days."),
+        (kind: "winter_survived", text: "The first winter ends. {0} colonists are alive. {1} died in the winter."),
+        (kind: "colony_lost", text: "The last colonist is gone. The colony fell on day {day} of {season}, year {year}."),
+        (kind: "colony_abandoned", text: "The player abandoned the colony with {0} colonists."),
+        (kind: "crops_killed", text: "Frost killed {0} crop plants."),
+        (kind: "first_harvest", text: "The first harvest: {0} units."),
+        (kind: "food_rotted", text: "{0} units of food rotted."),
+    ],
+)

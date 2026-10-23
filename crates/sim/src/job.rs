@@ -33,11 +33,17 @@ pub enum JobKind {
     Deconstruct,
     /// Make one run of a workshop recipe.
     Craft,
+    /// Sow a seed on a farm zone tile (R-006).
+    Sow,
+    /// Harvest a ripe crop plant (R-006).
+    Harvest,
+    /// Gather a ripe wild plant (R-007).
+    Gather,
 }
 
 impl JobKind {
     /// Number of job types.
-    pub const COUNT: usize = 6;
+    pub const COUNT: usize = 9;
     /// All job types, in index order.
     pub const ALL: [JobKind; Self::COUNT] = [
         JobKind::Cut,
@@ -46,6 +52,9 @@ impl JobKind {
         JobKind::Construct,
         JobKind::Deconstruct,
         JobKind::Craft,
+        JobKind::Sow,
+        JobKind::Harvest,
+        JobKind::Gather,
     ];
 
     /// Index in the priority array of a colonist.
@@ -62,6 +71,9 @@ impl JobKind {
             JobKind::Construct => "Construct",
             JobKind::Deconstruct => "Deconstruct",
             JobKind::Craft => "Craft",
+            JobKind::Sow => "Sow",
+            JobKind::Harvest => "Harvest",
+            JobKind::Gather => "Gather",
         }
     }
 
@@ -73,6 +85,7 @@ impl JobKind {
             JobKind::Haul => None,
             JobKind::Construct | JobKind::Deconstruct => Some(Skill::Construction),
             JobKind::Craft => Some(Skill::Crafting),
+            JobKind::Sow | JobKind::Harvest | JobKind::Gather => Some(Skill::Farming),
         }
     }
 }
@@ -272,6 +285,12 @@ pub enum Reject {
     BadCount,
     /// The tile has no workshop that can make the recipe.
     NoWorkshop,
+    /// A farm zone needs soil, clay, or sand without a tree, a rock wall, or a building.
+    NotFarmable,
+    /// A gather designation needs a ripe wild plant.
+    NoPlant,
+    /// The crop does not exist.
+    UnknownCrop,
 }
 
 /// Why a job stopped before it was done.
@@ -389,6 +408,11 @@ impl Sim {
             | Command::CancelDeconstruct { .. }
             | Command::OrderCraft { .. }
             | Command::CancelCraft { .. } => self.apply_build_command(command),
+            Command::SetFarmZone { .. } | Command::ClearFarmZone { .. } => {
+                self.apply_farm_command(command);
+            }
+            Command::SetKeep { .. } => self.apply_keep_command(command),
+            Command::Abandon => self.abandon(),
         }
     }
 
@@ -466,7 +490,20 @@ impl Sim {
                     self.queue_haul(id);
                 }
             }
-            JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
+            JobKind::Gather => {
+                if !self.wild_ripe(x, y) {
+                    self.reject(Reject::NoPlant);
+                    return;
+                }
+                if self.designations.insert((x, y), kind).is_none() {
+                    self.add_job(kind, x, y, None);
+                }
+            }
+            JobKind::Construct
+            | JobKind::Deconstruct
+            | JobKind::Craft
+            | JobKind::Sow
+            | JobKind::Harvest => {
                 self.reject(Reject::BadDesignation);
             }
         }
@@ -711,6 +748,7 @@ impl Sim {
             JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
                 self.eval_build(region, from, job)
             }
+            JobKind::Sow | JobKind::Harvest | JobKind::Gather => self.eval_farm(region, from, job),
         }
     }
 
@@ -835,6 +873,7 @@ impl Sim {
                     JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
                         self.build_job_stale(j)
                     }
+                    JobKind::Sow | JobKind::Harvest | JobKind::Gather => self.farm_job_stale(j),
                 }
             })
             .map(|(id, _)| id)
@@ -843,9 +882,10 @@ impl Sim {
             let Some(job) = self.jobs.remove(id) else {
                 continue;
             };
-            if job.is_dig() {
+            if job.is_dig() || job.kind == JobKind::Gather {
                 self.designations.remove(&(job.x, job.y));
-            } else if job.kind == JobKind::Haul
+            }
+            if job.kind == JobKind::Haul
                 && let Some(item) = job.item
                 && self.is_stockpiled(item)
             {
@@ -971,6 +1011,7 @@ impl Sim {
             JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
                 self.build_work_ticks(job)
             }
+            JobKind::Sow | JobKind::Harvest | JobKind::Gather => self.farm_work_ticks(job),
         }
     }
 
@@ -990,6 +1031,7 @@ impl Sim {
             JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {
                 self.build_target_ok(&job)
             }
+            JobKind::Sow | JobKind::Harvest | JobKind::Gather => self.farm_target_ok(&job),
         };
         if !target_ok {
             self.abort_job(id, AbortReason::JobGone, false);
@@ -1025,6 +1067,10 @@ impl Sim {
             self.finish_job(id, active, job.x, job.y);
             return;
         }
+        if matches!(job.kind, JobKind::Sow | JobKind::Harvest | JobKind::Gather) {
+            self.complete_farm_work(id, active, &job);
+            return;
+        }
         let rules = self.rules.clone();
         // Hook for R-008 (tools): a later sprint checks the tool here and lowers its
         // durability. Sprint 3 colonists work bare-handed.
@@ -1055,7 +1101,13 @@ impl Sim {
                     self.rooms_dirty = true;
                 }
             }
-            JobKind::Haul | JobKind::Construct | JobKind::Deconstruct | JobKind::Craft => {}
+            JobKind::Haul
+            | JobKind::Construct
+            | JobKind::Deconstruct
+            | JobKind::Craft
+            | JobKind::Sow
+            | JobKind::Harvest
+            | JobKind::Gather => {}
         }
         self.designations.remove(&(job.x, job.y));
         self.finish_job(id, active, job.x, job.y);

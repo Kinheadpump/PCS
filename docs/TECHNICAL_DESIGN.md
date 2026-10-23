@@ -62,7 +62,7 @@ Sprint 4 added the `sim` modules `build` and `room` and the content files `build
 Sprint 5 added the `sim` modules `climate`, `hearth`, and `alert`, and the content file `climate.ron`. The save format version is 4.
 Sprint 6 added the `sim` modules `needs`, `life`, and `needact`, and the content files `needs.ron` and `traits.ron`. The save format version is 5.
 Sprint 14 added the `sim` module `notice` and the content file `notice.ron`, and the `worldgen` module `legend`. The save format version is 6. `Sim::notice()` returns the Notice parts, `Sim::threats()` the dormant threats, and `Sim::drain_notice_events()` the daily beast rolls and the threat wake events.
-Sprint 16 added the `sim` modules `drought` and `fire` and the content file `drought.ron`. The save format version is 7. `Command::DigDitch` makes a Mine job with `arg` 1. `Sim::growth_pct()` returns the growth parts, and `Sim::drain_drought_events()` returns the drought and fire events.
+Sprint 16 added the `sim` modules `drought` and `fire` and the content file `drought.ron`. The save format version is 8. `Command::DigDitch` makes a Mine job with `arg` 1. `Sim::growth_pct()` returns the growth parts, and `Sim::drain_drought_events()` returns the drought and fire events.
 
 ### 3.2 Data ownership
 

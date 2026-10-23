@@ -327,3 +327,41 @@ fn builtin_drought_content_is_valid_and_rejects_bad_numbers() {
         assert!(base::content::load_drought_rules("drought.ron", &bad).is_err());
     }
 }
+
+fn crop_hours(sim: &mut Sim, tile: u16, crop: u16) -> u32 {
+    run_to(sim, SUMMER);
+    assert!(sim.debug_plant(tile, 0, crop, false), "tile is farmable");
+    run(sim, 5 * TICKS_PER_DAY);
+    sim.plant_at(tile, 0).map_or(0, |p| p.hours)
+}
+
+#[test]
+fn r025_a_drought_halves_the_growth_hours_of_a_crop_but_not_of_a_dry_soil_crop() {
+    let text = "............~";
+    let mut wet = quiet(text, 0);
+    with_rules(&mut wet, |r| r.drought.drought_days = 1000);
+    let mut dry = quiet(text, 0);
+    let mut dry_soil = quiet(text, 0);
+    let mut wet_soil = quiet(text, 0);
+    with_rules(&mut wet_soil, |r| r.drought.drought_days = 1000);
+    let normal = crop_hours(&mut wet, 0, 0);
+    let slow = crop_hours(&mut dry, 0, 0);
+    assert!(normal > 20, "the crop grows in summer ({normal} hours)");
+    assert!(slow.abs_diff(normal / 2) <= 1, "{slow} is half of {normal}");
+    let sorghum = |sim: &mut Sim| crop_hours(sim, 0, 3);
+    assert_eq!(sorghum(&mut dry_soil), sorghum(&mut wet_soil));
+    let mut near = quiet("..~", 0);
+    assert_eq!(
+        crop_hours(&mut near, 0, 0),
+        normal,
+        "an irrigated tile grows at normal speed"
+    );
+}
+
+#[test]
+fn r025_a_drought_stops_the_regrowth_of_gathered_wild_plants() {
+    // The drought counter blocks the daily countdown in `farm_daily`.
+    let mut sim = quiet("............~", 0);
+    run_to(&mut sim, SUMMER);
+    assert!(!sim.wild_plants_regrow(), "a long dry spell is a drought");
+}

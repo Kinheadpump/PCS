@@ -392,7 +392,7 @@ impl Sim {
         }
     }
 
-    fn order_craft(&mut self, x: u16, y: u16, recipe: u16, count: u32) {
+    pub(crate) fn order_craft(&mut self, x: u16, y: u16, recipe: u16, count: u32) {
         let Some(def) = self.rules.recipe(recipe) else {
             self.reject(Reject::UnknownRecipe);
             return;

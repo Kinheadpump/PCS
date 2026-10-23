@@ -13,4 +13,5 @@
     (id: "bed", name: "Bed", kind: Bed, categories: [Wood], cost: 3, work_ticks: 300, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: false, beauty: 2),
     (id: "hearth", name: "Hearth", kind: Hearth, categories: [Stone], cost: 5, work_ticks: 400, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true, beauty: 1),
     (id: "workshop", name: "Workshop", kind: Workshop, categories: [Wood, Stone], cost: 6, work_ticks: 500, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true, beauty: 0),
+    (id: "kitchen", name: "Kitchen", kind: Workshop, categories: [Wood, Stone], cost: 6, work_ticks: 500, work_ticks_per_10_hardness: 40, deconstruct_pct: 50, return_pct: 50, blocks_walking: true, beauty: 0),
 ]

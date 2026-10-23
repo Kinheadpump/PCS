@@ -56,7 +56,6 @@ struct RawNeeds {
     wounded_health_loss: u32,
     wounded_bed_hours: u32,
     foods: Vec<(String, u32, String)>,
-    start_food: Vec<(String, u32)>,
     mood_base: i16,
     mood_min: i16,
     mood_max: i16,
@@ -172,8 +171,6 @@ pub struct NeedRules {
     pub wounded_bed_hours: u32,
     /// All foods, best first.
     pub foods: Vec<FoodDef>,
-    /// Food of a new colony: (material, units).
-    pub start_food: Vec<(u16, u32)>,
     /// Mood without modifiers (R-014).
     pub mood_base: i16,
     /// Smallest mood.
@@ -266,7 +263,6 @@ impl NeedRules {
             wounded_health_loss: 0,
             wounded_bed_hours: 8,
             foods: Vec::new(),
-            start_food: Vec::new(),
             mood_base: 50,
             mood_min: 0,
             mood_max: 100,
@@ -388,17 +384,6 @@ pub fn load_need_rules(
             memory: mem,
         });
     }
-    let start_food: Vec<(u16, u32)> = raw
-        .start_food
-        .iter()
-        .map(|(key, n)| (link("start_food", key, &mut bad), *n))
-        .collect();
-    if start_food
-        .iter()
-        .any(|(m, n)| *n > 10_000 || !foods.iter().any(|f| f.material == *m))
-    {
-        bad("start_food", "must be foods with at most 10000 units");
-    }
     if raw.memories.len() > 200 {
         bad("memories", "at most 200 memories");
     }
@@ -513,7 +498,6 @@ pub fn load_need_rules(
         wounded_health_loss: raw.wounded_health_loss,
         wounded_bed_hours: raw.wounded_bed_hours,
         foods,
-        start_food,
         mood_base: raw.mood_base,
         mood_min: raw.mood_min,
         mood_max: raw.mood_max,
