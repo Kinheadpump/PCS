@@ -17,6 +17,7 @@ mod overlay;
 mod palette;
 mod render;
 mod site_layer;
+mod sound;
 mod sprites;
 mod structures;
 mod tools;
@@ -162,6 +163,10 @@ struct App {
     map_name: String,
     /// The text keys of this frame.
     typed: Typed,
+    /// The sound engine. It is made after the window opens. `None` means no sound.
+    sound: Option<sound::Engine>,
+    /// The alerts of the last tick, to find the new ones for the alert sounds.
+    alert_keys: Vec<sound::AlertKey>,
 }
 
 impl App {
@@ -211,6 +216,8 @@ impl App {
             show_world: false,
             map_name: PRESETS[0].0.to_owned(),
             typed: Typed::default(),
+            sound: None,
+            alert_keys: Vec::new(),
             palette,
             sprites,
             grid: false,
@@ -598,6 +605,7 @@ impl App {
             self.sim.step(&commands);
             self.note_events();
         }
+        self.sound_frame();
         self.rebake();
     }
 
@@ -610,8 +618,34 @@ impl App {
         }
     }
 
+    /// Play a sound. Nothing happens if the sound engine is not on.
+    fn play(&mut self, id: sound::SoundId) {
+        if let Some(engine) = &mut self.sound {
+            engine.play(id);
+        }
+    }
+
+    /// Once for each frame: the sound cool-downs, and the sound of the most urgent new alert.
+    fn sound_frame(&mut self) {
+        let Some(engine) = &mut self.sound else {
+            return;
+        };
+        engine.next_frame();
+        let alerts = self.sim.alerts();
+        let new = sound::new_alert_sound(&self.alert_keys, &alerts);
+        self.alert_keys = sound::alert_keys(&alerts);
+        if let Some(id) = new {
+            engine.play(id);
+        }
+    }
+
     fn note_events(&mut self) {
         for event in self.sim.drain_events() {
+            match event {
+                Event::ColonistArrived { .. } => self.play(sound::SoundId::Footstep),
+                Event::Crafted { .. } => self.play(sound::SoundId::CraftDone),
+                Event::PathFailed { .. } => {}
+            }
             self.last_event = match event {
                 Event::PathFailed { colonist, x, y } => {
                     format!("Colonist {}: no path to ({x}, {y})", colonist.index())
@@ -633,12 +667,17 @@ impl App {
         }
         for event in self.sim.drain_job_events() {
             if let JobEvent::Completed {
-                kind: JobKind::Cut | JobKind::Mine,
+                kind: kind @ (JobKind::Cut | JobKind::Mine),
                 x,
                 y,
                 ..
             } = event
             {
+                self.play(if kind == JobKind::Cut {
+                    sound::SoundId::ToolChop
+                } else {
+                    sound::SoundId::ToolMine
+                });
                 self.sync_tile(x, y);
             }
             if let Some(text) = inspector::job_event_text(&event) {
@@ -898,6 +937,9 @@ impl App {
         } else {
             hud::draw(&mut ui, &input)
         };
+        if !ui_actions.is_empty() {
+            self.play(sound::SoundId::UiClick);
+        }
         for action in ui_actions {
             match action {
                 UiAction::SetSpeed(speed) => self.clock.set_speed(speed),
@@ -996,6 +1038,9 @@ async fn main() {
         }
         app.debug_world();
         app.debug_setup();
+    }
+    if let Ok(app) = &mut state {
+        app.sound = Some(sound::Engine::load().await);
     }
     let mut frames = 0;
     let mut input = InputState::default();
