@@ -12,6 +12,7 @@ use crate::build_ui::{self, BuildState};
 use crate::camera::View;
 use crate::cells;
 use crate::icons;
+use crate::info_ui;
 use crate::inspector::{self, RecipeInfo};
 use crate::layout::{self, Placed, Size, Sizes};
 use crate::palette::ui as pal;
@@ -52,6 +53,12 @@ pub struct UiState {
     pub open: BTreeSet<Fold>,
     /// True if the debug lines show (tick, hash, FPS, map).
     pub debug: bool,
+    /// True if the colony panel (ledger and chronicle) shows.
+    pub colony: bool,
+    /// True if the fertility overlay is on.
+    pub fertility: bool,
+    /// The crop of the farm tool (index in `farm.ron`).
+    pub crop: u16,
 }
 
 impl UiState {
@@ -119,8 +126,10 @@ pub const WORK_LABEL: &str = "Work (P)";
 pub const ROOMS_LABEL: &str = "Rooms (O)";
 /// Tooltip of the temperature overlay button.
 pub const TEMP_LABEL: &str = "Temperature (Y)";
-/// The number of toolbar buttons after the tools: work, rooms, temperature.
-pub const PANEL_BUTTONS: usize = 3;
+/// Tooltip of the colony panel button.
+pub const COLONY_LABEL: &str = "Colony (L)";
+/// The number of toolbar buttons after the tools: work, rooms, temperature, colony.
+pub const PANEL_BUTTONS: usize = 4;
 /// Color of the rain icon.
 const RAIN_COLOR: [u8; 3] = [124, 184, 255];
 
@@ -142,8 +151,8 @@ pub fn filter_after_click(filter: &ItemFilter, materials: &[u16], button: usize)
 }
 
 /// The command for a click on a button of a recipe row: `button` 0 to 2 order 1, 5, or 10
-/// more runs, 3 clears the order.
-pub fn recipe_command(x: u16, y: u16, recipe: u16, button: usize) -> Command {
+/// more runs, 3 clears the order, 4 sets the next keep target.
+pub fn recipe_command(x: u16, y: u16, recipe: u16, button: usize, keep: u32) -> Command {
     let order = |count| Command::OrderCraft {
         x,
         y,
@@ -154,7 +163,23 @@ pub fn recipe_command(x: u16, y: u16, recipe: u16, button: usize) -> Command {
         0 => order(1),
         1 => order(5),
         2 => order(10),
-        _ => Command::CancelCraft { x, y, recipe },
+        3 => Command::CancelCraft { x, y, recipe },
+        _ => Command::SetKeep {
+            x,
+            y,
+            recipe,
+            target: next_keep(keep),
+        },
+    }
+}
+
+/// The keep target after a click on the keep button: none, 10, 30, 60, then none again.
+pub fn next_keep(keep: u32) -> u32 {
+    match keep {
+        0 => 10,
+        1..=29 => 30,
+        30..=59 => 60,
+        _ => 0,
     }
 }
 
@@ -369,6 +394,29 @@ impl BuildPanel {
     }
 }
 
+/// Text of the farm panel: the crops of the farm tool.
+struct FarmPanel {
+    chips: Vec<info_ui::CropChip>,
+    labels: Vec<String>,
+    active: usize,
+}
+
+impl FarmPanel {
+    fn new(h: &HudInput) -> Self {
+        let chips = info_ui::crop_chips(h.sim);
+        let labels = chips.iter().map(|c| c.name.clone()).collect();
+        Self {
+            chips,
+            labels,
+            active: usize::from(h.state.crop),
+        }
+    }
+
+    fn layout(&self, origin: (f32, f32)) -> ui::GridLayout {
+        ui::grid_layout(origin, "Farm", &self.labels, FILTER_WIDTH)
+    }
+}
+
 /// Text of the workshop panel.
 struct WorkshopPanel {
     tile: (u16, u16),
@@ -453,6 +501,11 @@ struct Content {
     count_tip: String,
     work_names: Vec<String>,
     build: Option<BuildPanel>,
+    farm: Option<FarmPanel>,
+    info: Vec<Row>,
+    info_folds: Vec<Fold>,
+    /// The rows of the end-of-run panel, if the run has ended.
+    end: Option<Vec<Row>>,
     colonist: Vec<Row>,
     colonist_folds: Vec<Fold>,
     tile: Option<Vec<Row>>,
@@ -472,6 +525,12 @@ impl Content {
                 (fit_rows(rows, max_h), folds)
             }
             None => (Vec::new(), Vec::new()),
+        };
+        let (info, info_folds) = if h.state.colony {
+            let (rows, folds) = info_ui::colony_rows(h.sim, |f| h.state.open.contains(&f));
+            (fit_rows(rows, max_h), folds)
+        } else {
+            (Vec::new(), Vec::new())
         };
         let materials = tools::haulable_materials(h.sim.rules());
         let (tile, tile_folds) = match h.selected_tile {
@@ -514,6 +573,10 @@ impl Content {
                 .map(|r| r.name.clone())
                 .collect(),
             build: (h.tool == Tool::Build).then(|| BuildPanel::new(h)),
+            farm: (h.tool == Tool::Farm).then(|| FarmPanel::new(h)),
+            info,
+            info_folds,
+            end: info_ui::end_rows(h.sim),
             colonist,
             colonist_folds,
             tile,
@@ -537,7 +600,13 @@ impl Content {
             work: h
                 .show_work
                 .then(|| size(ui::work_layout(origin, &self.work_names).panel)),
-            build: self.build.as_ref().map(|b| size(b.layout(origin).panel)),
+            build: self
+                .build
+                .as_ref()
+                .map(|b| size(b.layout(origin).panel))
+                .or_else(|| self.farm.as_ref().map(|f| size(f.layout(origin).panel))),
+            info: (!self.info.is_empty())
+                .then(|| size(ui::rows_layout(origin, &self.info, true).panel)),
             colonist: (!self.colonist.is_empty())
                 .then(|| size(ui::rows_layout(origin, &self.colonist, true).panel)),
             tile: self
@@ -672,7 +741,10 @@ fn draw_scale(ui: &Ui, r: ui::Rect, outdoor: i32) {
 
 /// The alert strip under the top bar: one chip for each alert. A click jumps to the hearth.
 fn draw_alerts(ui: &mut Ui, placed: &Placed, h: &HudInput) -> Vec<UiAction> {
-    let chips = weather::alert_chips(h.sim);
+    let ledger = info_ui::ledger_chips(h.sim);
+    let ledger_count = ledger.len();
+    let mut chips = ledger;
+    chips.extend(weather::alert_chips(h.sim));
     let gap = ui::GAP * 2.0;
     let widths: Vec<f32> = chips
         .iter()
@@ -682,13 +754,15 @@ fn draw_alerts(ui: &mut Ui, placed: &Placed, h: &HudInput) -> Vec<UiAction> {
     let slot = placed.alerts_slot;
     let mut x = (slot.x + (slot.w - total) / 2.0).round();
     let mut actions = Vec::new();
-    for (chip, w) in chips.iter().zip(widths) {
+    for (i, (chip, w)) in chips.iter().zip(widths).enumerate() {
         let r = ui::Rect::new(x, slot.y, w, slot.h);
         let tint = rgb_color(chip.tint, 255);
-        if ui.alert_chip(r, chip.icon, tint, &chip.text)
-            && let Some((tx, ty)) = chip.target
-        {
-            actions.push(UiAction::JumpTo(tx, ty));
+        if ui.alert_chip(r, chip.icon, tint, &chip.text) {
+            if i < ledger_count {
+                actions.push(UiAction::ToggleColony);
+            } else if let Some((tx, ty)) = chip.target {
+                actions.push(UiAction::JumpTo(tx, ty));
+            }
         }
         x += w + gap;
     }
@@ -720,9 +794,14 @@ fn draw_toolbar(ui: &mut Ui, placed: &Placed, h: &HudInput) -> Vec<UiAction> {
                     actions.push(UiAction::ToggleRooms);
                 }
             }
-            None => {
+            None if i == Tool::ALL.len() + 2 => {
                 if ui.icon_button(*rect, cells::icons::THERMOMETER, h.show_temp, TEMP_LABEL) {
                     actions.push(UiAction::ToggleTemp);
+                }
+            }
+            None => {
+                if ui.icon_button(*rect, cells::icons::LEDGER, h.state.colony, COLONY_LABEL) {
+                    actions.push(UiAction::ToggleColony);
                 }
             }
         }
@@ -872,9 +951,67 @@ fn draw_workshop(ui: &mut Ui, origin: (f32, f32), panel: &WorkshopPanel) -> Vec<
                     panel.tile.1,
                     recipe.recipe,
                     i,
+                    recipe.keep,
                 )));
             }
         }
+    }
+    actions
+}
+
+fn draw_farm(ui: &mut Ui, origin: (f32, f32), panel: &FarmPanel) -> Vec<UiAction> {
+    let layout = panel.layout(origin);
+    let mut actions = Vec::new();
+    if ui.titled_panel(layout.panel, "Farm", Some(layout.close)) {
+        actions.push(UiAction::SetTool(Tool::Select));
+    }
+    for (i, ((rect, label), chip)) in layout
+        .buttons
+        .iter()
+        .zip(&panel.labels)
+        .zip(&panel.chips)
+        .enumerate()
+    {
+        let swatch = Some(rgb_color(chip.color, 255));
+        if ui.chip(*rect, label, swatch, i == panel.active) {
+            actions.push(UiAction::PickCrop(u16::try_from(i).unwrap_or(0)));
+        }
+        ui.tip(*rect, &chip.tip);
+    }
+    actions
+}
+
+/// The colony panel. The abandon row asks twice: the first click opens it, the second abandons.
+fn draw_colony(ui: &mut Ui, origin: (f32, f32), content: &Content, h: &HudInput) -> Vec<UiAction> {
+    let (_, hit) = ui::rows_panel(ui, origin, &content.info, true);
+    let mut actions = Vec::new();
+    if let Some(fold) = hit.fold.and_then(|i| content.info_folds.get(i)) {
+        if *fold == Fold::Abandon && h.state.open.contains(&Fold::Abandon) {
+            actions.push(UiAction::Command(Command::Abandon));
+        }
+        actions.push(UiAction::ToggleFold(*fold));
+    }
+    if hit.closed {
+        actions.push(UiAction::ToggleColony);
+    }
+    actions
+}
+
+/// The panel at the end of the run, with the button for a new colony.
+fn draw_end(ui: &mut Ui, rows: &[Row], view: (f32, f32)) -> Vec<UiAction> {
+    let size = ui::rows_layout((0.0, 0.0), rows, false).panel;
+    let gap = layout::MARGIN;
+    let total_h = size.h + gap + ui::BUTTON_H;
+    let origin = (
+        ((view.0 - size.w) / 2.0).round(),
+        ((view.1 - total_h) / 2.0).round(),
+    );
+    let (panel, _) = ui::rows_panel(ui, origin, rows, false);
+    let button = ui::Rect::new(panel.x, panel.bottom() + gap, panel.w, ui::BUTTON_H);
+    ui.panel(button);
+    let mut actions = Vec::new();
+    if ui.button(button, "New colony", true) {
+        actions.push(UiAction::NewColony);
     }
     actions
 }
@@ -951,8 +1088,14 @@ pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
     if let (Some(r), Some(panel)) = (placed.build, &content.build) {
         actions.extend(draw_build(ui, (r.x, r.y), panel));
     }
+    if let (Some(r), Some(panel)) = (placed.build, &content.farm) {
+        actions.extend(draw_farm(ui, (r.x, r.y), panel));
+    }
     if let Some(r) = placed.work {
         actions.extend(draw_work(ui, (r.x, r.y), &content, h));
+    }
+    if let Some(r) = placed.info {
+        actions.extend(draw_colony(ui, (r.x, r.y), &content, h));
     }
     if let Some(r) = placed.colonist {
         actions.extend(draw_inspector(
@@ -979,6 +1122,9 @@ pub fn draw(ui: &mut Ui, h: &HudInput) -> Vec<UiAction> {
             }
             Side::Workshop(w) => actions.extend(draw_workshop(ui, (r.x, r.y), w)),
         }
+    }
+    if let Some(rows) = &content.end {
+        actions.extend(draw_end(ui, rows, h.view));
     }
     ui.finish(h.view);
     actions
@@ -1051,16 +1197,28 @@ mod tests {
             recipe: 1,
             count,
         };
-        assert_eq!(recipe_command(3, 4, 1, 0), order(1));
-        assert_eq!(recipe_command(3, 4, 1, 1), order(5));
-        assert_eq!(recipe_command(3, 4, 1, 2), order(10));
+        assert_eq!(recipe_command(3, 4, 1, 0, 0), order(1));
+        assert_eq!(recipe_command(3, 4, 1, 1, 0), order(5));
+        assert_eq!(recipe_command(3, 4, 1, 2, 0), order(10));
         assert_eq!(
-            recipe_command(3, 4, 1, 3),
+            recipe_command(3, 4, 1, 3, 0),
             Command::CancelCraft {
                 x: 3,
                 y: 4,
                 recipe: 1
             }
+        );
+    }
+
+    #[test]
+    fn the_keep_button_steps_through_10_30_60_and_off() {
+        let target = |keep| match recipe_command(3, 4, 1, 4, keep) {
+            Command::SetKeep { target, .. } => target,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            [target(0), target(10), target(30), target(60)],
+            [10, 30, 60, 0]
         );
     }
 
@@ -1077,7 +1235,7 @@ mod tests {
     fn work_text_lists_the_priorities_in_job_order() {
         let sim = sim_from_ascii("c", 1).unwrap();
         let rows = inspector::work_rows(&sim);
-        assert_eq!(work_text(&rows[0]), "Colonist 0 3 3 3 3 3 3");
+        assert_eq!(work_text(&rows[0]), "Colonist 0 3 3 3 3 3 3 3 3 3");
     }
 
     #[test]
@@ -1165,7 +1323,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
-            debug: false,
+            ..UiState::default()
         }
     }
 
@@ -1332,7 +1490,7 @@ mod tests {
         assert!(lines(&UiState::default()).is_empty());
         let open = UiState {
             open: [Fold::Mood].into_iter().collect(),
-            debug: false,
+            ..UiState::default()
         };
         let shown = lines(&open);
         for part in &mood.parts {

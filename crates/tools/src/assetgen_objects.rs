@@ -238,6 +238,280 @@ fn tuft(img: &mut Image, cell: usize, kind: usize) {
     }
 }
 
+// ------------------------------------------------------------------------------------ plants
+
+/// Color of a plant grid character. `.` is transparent. The greens are the foliage ramp.
+fn plant_color(c: char) -> Option<Rgb> {
+    let f = &pal::FOLIAGE;
+    Some(match c {
+        'o' => f[0],
+        '1' => f[1],
+        '2' => f[2],
+        '3' => f[3],
+        '4' => f[4],
+        // Soil: dark, mid, light.
+        's' => [58, 40, 38],
+        'S' => pal::BARK[1],
+        'h' => pal::BARK[2],
+        // Grain: light, mid, dark.
+        'z' => [240, 208, 110],
+        'y' => [212, 166, 60],
+        'Y' => [160, 116, 44],
+        // Turnip bulb: pale, purple, dark purple.
+        'p' => [232, 220, 236],
+        'P' => [174, 140, 190],
+        'q' => [112, 84, 134],
+        // Rye: ear tan, stalk blue-green, dark stalk.
+        'a' => [196, 180, 126],
+        'b' => [100, 142, 116],
+        'e' => [64, 98, 88],
+        // Sorghum: seed head red-brown light and dark, stalk.
+        'r' => [168, 70, 50],
+        'R' => [104, 40, 38],
+        'k' => [104, 136, 74],
+        // Dead: light, mid, dark.
+        'c' => [166, 152, 126],
+        'x' => [122, 106, 88],
+        'X' => [76, 66, 60],
+        // Berry, dark berry; pale root top, its shade; flax flower, its shade.
+        'B' => [218, 54, 66],
+        'D' => [132, 28, 48],
+        'u' => [238, 226, 198],
+        'U' => [184, 160, 126],
+        'f' => [110, 156, 244],
+        'F' => [58, 88, 190],
+        _ => return None,
+    })
+}
+
+/// Draw a plant from 16 text rows. The characters in `hide` are not drawn as they are: a not
+/// ripe plant has no berries, root top, or flowers.
+fn plant(img: &mut Image, cell: usize, rows: &[&str], hide: &str) {
+    for (y, row) in rows.iter().enumerate() {
+        for (x, c) in row.chars().enumerate() {
+            let c = if hide.contains(c) {
+                match c {
+                    'B' | 'D' => '2',
+                    'u' | 'U' => 'S',
+                    _ => '.',
+                }
+            } else {
+                c
+            };
+            if let Some(color) = plant_color(c) {
+                img.set_cell(cell, x as i32, y as i32, px(color));
+            }
+        }
+    }
+}
+
+const SPROUT: [&str; 16] = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "....oo....oo....",
+    "...o34oo.o43o...",
+    "....o3o2o3o.....",
+    ".....oo2oo......",
+    "....osSSSSso....",
+    "...osSShhSSso...",
+    "..osSSSSSSSSso..",
+    "................",
+];
+
+const GROWING: [&str; 16] = [
+    "................",
+    "................",
+    "................",
+    "......oo........",
+    ".....o34o..oo...",
+    "..oo.o33o.o34o..",
+    ".o34oo3ooo.33o..",
+    ".o333o23o.o3o...",
+    "..o33o2o3oo3o...",
+    "...o3o2o33o.....",
+    "....o32o3o......",
+    ".....o2o2o......",
+    "....osSSSSso....",
+    "...osSShhSSso...",
+    "..osSSSSSSSSso..",
+    "................",
+];
+
+const BARLEY: [&str; 16] = [
+    "................",
+    "...zy.....zy....",
+    "..zyYy...zyYy...",
+    "..yYyY..zyyYy...",
+    "...yYy...yYy.zy.",
+    "....k.....k.yYyY",
+    "....k..zy.k..Yy.",
+    "...ok.zyYyk.....",
+    "...ok..yYk.k....",
+    "....kk..k.k.....",
+    "....2k.2k2k.....",
+    ".....2k2k2......",
+    "....osSSSSso....",
+    "...osSShhSSso...",
+    "..osSSSSSSSSso..",
+    "................",
+];
+
+const TURNIP: [&str; 16] = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "....o3o..o3o....",
+    "...o344o3o44o...",
+    "..o33o3443o33o..",
+    "..o3o.o23o.o3o..",
+    "......o22o......",
+    "......o2o.......",
+    "....osppppso....",
+    "...opppppPPso...",
+    "..osPpppPPqqso..",
+    "..osSqPPqqSSso..",
+    "................",
+];
+
+const RYE: [&str; 16] = [
+    "...a.....a......",
+    "..aaa...aaa..a..",
+    "..aaa..aaaa.aaa.",
+    "..aaa...bab.aaa.",
+    "...b....bab..b..",
+    "...b..a.b...b...",
+    "...b.aaab...b.a.",
+    "..eb..aab..eb.aa",
+    "..eb...b...eb..a",
+    "..b.e..b..eb..b.",
+    "..b.eb.b.eb..b..",
+    "...beb.bbe..b...",
+    "...osSbSSbsSo...",
+    "..osSShhSSSSso..",
+    "..osSSSSSSSSso..",
+    "................",
+];
+
+const SORGHUM: [&str; 16] = [
+    "................",
+    ".......rr.......",
+    "......rrRr......",
+    "......rrRR......",
+    "......rRrR......",
+    ".......RR.......",
+    ".......kk.......",
+    "..oo...k2..oo...",
+    ".o3kk..k2.k33o..",
+    "..o33k.k2k3o....",
+    "....o3kk2k3.....",
+    ".....o3k2o......",
+    "....osSk2sso....",
+    "...osSShhSSso...",
+    "..osSSSSSSSSso..",
+    "................",
+];
+
+const DEAD: [&str; 16] = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "......c.........",
+    ".....cx...c.....",
+    "....cx.....xc...",
+    "....x...x...x...",
+    "....x...x..cx...",
+    "...cx..cx..x....",
+    "...X...x...X....",
+    "...X..xX..X.....",
+    "....osXSXsso....",
+    "...osSShhSSso...",
+    "..osSSSSSSSSso..",
+    "................",
+];
+
+const BERRY_BUSH: [&str; 16] = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "....oooooo......",
+    "..oo334433oo....",
+    ".o3344B4343Boo..",
+    ".o334433D4334o..",
+    "o334B4433443B1o.",
+    "o33443D4334433o.",
+    "o2334433B433321o",
+    ".o23343344B32o1.",
+    ".oo2233222221oo.",
+    "..osoo11111ooso.",
+    "...ssssssssss...",
+    "................",
+];
+
+const WILD_ROOT: [&str; 16] = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "....o3o.........",
+    "...o34o...o3o...",
+    "..o33o33o.o43o..",
+    "..o3o.o34o.o3o..",
+    "...o3o.o3oo3o...",
+    "....o3o23o3o....",
+    ".....o3o2o3o....",
+    "....oo2uuUoo....",
+    "...osSuuUUSso...",
+    "..osSSSUUSSSso..",
+    "................",
+];
+
+const WILD_FLAX: [&str; 16] = [
+    "................",
+    "................",
+    "...fF.....Ff....",
+    "..fFf.fF..fF....",
+    "...k..fFf..k.fF.",
+    "...k...k...k.Ff.",
+    "..ok...k...k.k..",
+    "..k.k..k..k..k..",
+    "..k.k..k..k..ok.",
+    "...k..ok..k.k...",
+    "...k..k.k.k.k...",
+    "...2k.k.2.k2....",
+    "...2o2k2o2k2....",
+    "...osSkSkSsso...",
+    "..osSSSSSSSSso..",
+    "................",
+];
+
+/// Draw all plant cells.
+fn plants(img: &mut Image) {
+    plant(img, o::CROP_SPROUT, &SPROUT, "");
+    plant(img, o::CROP_GROWING, &GROWING, "");
+    let ripe: [&[&str; 16]; 4] = [&BARLEY, &TURNIP, &RYE, &SORGHUM];
+    for (k, rows) in ripe.iter().enumerate() {
+        plant(img, o::CROP_RIPE + k, *rows, "");
+    }
+    plant(img, o::CROP_DEAD, &DEAD, "");
+    let wild: [(&[&str; 16], &str); 3] =
+        [(&BERRY_BUSH, "BD"), (&WILD_ROOT, "uU"), (&WILD_FLAX, "fF")];
+    for (k, (rows, hide)) in wild.iter().enumerate() {
+        plant(img, o::WILD + 2 * k, *rows, "");
+        plant(img, o::WILD + 2 * k + 1, *rows, hide);
+    }
+}
+
 /// Make `objects.png`.
 pub fn make(seed: u64) -> Image {
     let mut img = Image::cell_sheet(o::ROWS);
@@ -258,5 +532,74 @@ pub fn make(seed: u64) -> Image {
     for k in 0..o::TUFT_COUNT {
         tuft(&mut img, o::TUFT + k, k);
     }
+    plants(&mut img);
     img
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cell_pixels(img: &Image, cell: usize) -> Vec<[u8; 4]> {
+        (0..16)
+            .flat_map(|y| (0..16).map(move |x| (x, y)))
+            .map(|(x, y)| img.get_cell(cell, x, y))
+            .collect()
+    }
+
+    #[test]
+    fn plant_grids_have_16_rows_of_16_columns() {
+        let grids: [&[&str; 16]; 10] = [
+            &SPROUT,
+            &GROWING,
+            &BARLEY,
+            &TURNIP,
+            &RYE,
+            &SORGHUM,
+            &DEAD,
+            &BERRY_BUSH,
+            &WILD_ROOT,
+            &WILD_FLAX,
+        ];
+        for (i, grid) in grids.iter().enumerate() {
+            for row in grid.iter() {
+                assert_eq!(row.chars().count(), 16, "grid {i}: {row}");
+            }
+        }
+    }
+
+    #[test]
+    fn plant_cells_are_not_empty_and_differ() {
+        let img = make(1);
+        let first = o::CROP_SPROUT;
+        let last = o::WILD + 2 * o::WILD_COUNT;
+        let mut seen: Vec<Vec<[u8; 4]>> = Vec::new();
+        for cell in first..last {
+            let px = cell_pixels(&img, cell);
+            let solid = px.iter().filter(|p| p[3] == 255).count();
+            assert!(
+                (20..=150).contains(&solid),
+                "cell {cell} has {solid} pixels"
+            );
+            // A 1 pixel margin stays free at the top and left edge.
+            assert_eq!(img.get_cell(cell, 0, 0)[3], 0, "cell {cell}");
+            assert!(!seen.contains(&px), "cell {cell} repeats another cell");
+            seen.push(px);
+        }
+    }
+
+    #[test]
+    fn ripe_wild_plant_differs_from_not_ripe() {
+        let img = make(1);
+        for k in 0..o::WILD_COUNT {
+            let ripe = cell_pixels(&img, o::WILD + 2 * k);
+            let green = cell_pixels(&img, o::WILD + 2 * k + 1);
+            assert_ne!(ripe, green, "wild plant {k}");
+        }
+    }
+
+    #[test]
+    fn plants_are_deterministic() {
+        assert_eq!(make(1).rgba, make(1).rgba);
+    }
 }

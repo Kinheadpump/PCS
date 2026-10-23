@@ -1572,10 +1572,11 @@ mod tests {
     fn real_building_recipe_and_room_files_are_valid() {
         let materials = load_materials("materials.ron", MATERIALS).unwrap_or_default();
         let buildings = load_buildings("buildings.ron", BUILDINGS).unwrap_or_default();
-        assert_eq!(buildings.len(), BuildingKind::ALL.len());
+        // The kitchen is a second building of kind Workshop.
+        assert_eq!(buildings.len(), BuildingKind::ALL.len() + 1);
         let recipes =
             load_recipes("recipes.ron", RECIPES, &materials, &buildings).unwrap_or_default();
-        assert_eq!(recipes.len(), 2);
+        assert_eq!(recipes.len(), 7);
         let rooms = load_room_rules("rooms.ron", ROOMS);
         assert_eq!(rooms.map(|r| r.max_tiles).unwrap_or(0), 400);
     }

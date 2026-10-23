@@ -71,8 +71,23 @@ pub mod objects {
     pub const TUFT: usize = 15;
     /// Number of tall grass variants.
     pub const TUFT_COUNT: usize = 2;
+    /// Crop plant that just came up (all crops).
+    pub const CROP_SPROUT: usize = 32;
+    /// Crop plant that grows (all crops).
+    pub const CROP_GROWING: usize = 33;
+    /// First ripe crop plant: barley, turnip, rye, sorghum (`crops.ron` order).
+    pub const CROP_RIPE: usize = 34;
+    /// Number of ripe crop variants.
+    pub const CROP_RIPE_COUNT: usize = 4;
+    /// A crop plant that the frost killed (all crops).
+    pub const CROP_DEAD: usize = 38;
+    /// First wild plant cell. Each wild plant has two cells: ripe, then not ripe, in
+    /// `wild_plants.ron` order: berry bush, wild root, wild flax.
+    pub const WILD: usize = 39;
+    /// Number of wild plant types.
+    pub const WILD_COUNT: usize = 3;
     /// Rows of the sheet.
-    pub const ROWS: usize = 2;
+    pub const ROWS: usize = 3;
 }
 
 /// `items.png`: gray sprites with alpha. Each shape has 3 sizes of pile.
@@ -177,8 +192,20 @@ pub mod icons {
     pub const SUN: usize = 30;
     /// A triangle with a bar: a warning.
     pub const WARN: usize = 31;
+    /// Farm tool: a sprout over furrows.
+    pub const FARM: usize = 32;
+    /// Gather tool: a basket.
+    pub const GATHER: usize = 33;
+    /// Chronicle panel: a closed book.
+    pub const CHRONICLE: usize = 34;
+    /// Badge of a gather order (like the cut badge, 9 x 9 pixels).
+    pub const BADGE_GATHER: usize = 35;
+    /// Fertility overlay: a leaf.
+    pub const FERTILITY: usize = 36;
+    /// Ledger: a sack.
+    pub const LEDGER: usize = 37;
     /// Rows of the sheet.
-    pub const ROWS: usize = 2;
+    pub const ROWS: usize = 3;
 }
 
 /// `buildings.png`: gray sprites. The alpha value says how the game colors a pixel:

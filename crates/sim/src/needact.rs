@@ -12,6 +12,9 @@ use crate::job::{AbortReason, Leg, octile};
 use crate::life::MILLI;
 use base::content::BuildingKind;
 
+/// Sort key of a food stack: rank, rot bucket, distance, item index.
+type FoodKey = (usize, u32, u32, u32);
+
 /// The best candidate so far: sort key, stack, and tile.
 type Pick<K> = Option<((K, u32, u32), ItemId, (u16, u16))>;
 
@@ -162,7 +165,7 @@ impl Sim {
             i.reserved_by == Some(id)
                 && i.loc == ItemLoc::Tile(stand.0, stand.1)
                 && if food {
-                    n.food(i.material).is_some()
+                    n.food(i.material).is_some() && !self.is_rotten(i)
                 } else {
                     n.clothes_def(i.material).is_some()
                 }
@@ -271,12 +274,13 @@ impl Sim {
     }
 
     /// The best food stack the colonist can reach: the best food first (file order), then the
-    /// nearest stack, then the lowest item index.
+    /// older food (R-005), then the nearest stack, then the lowest item index. Rotten food
+    /// is never chosen.
     fn find_food(&self, id: ColonistId) -> Option<(ItemId, (u16, u16))> {
         let c = self.colonists.get(id)?;
         let from = c.tile();
         let n = &self.rules.needs;
-        let mut best: Pick<usize> = None;
+        let mut best: Option<(FoodKey, ItemId, (u16, u16))> = None;
         for (item_id, item) in self.items.iter() {
             let ItemLoc::Tile(x, y) = item.loc else {
                 continue;
@@ -284,10 +288,15 @@ impl Sim {
             if item.reserved_by.is_some() {
                 continue;
             }
+            if self.is_rotten(item) {
+                continue;
+            }
             let Some(rank) = n.foods.iter().position(|f| f.material == item.material) else {
                 continue;
             };
-            let key = (rank, octile(from, (x, y)), item_id.index());
+            // R-005: eat the older food first (bucket of rot, 10 per cent steps).
+            let bucket = u32::MAX - item.rot / (self.rules.spoil.rotten_at / 10).max(1);
+            let key = (rank, bucket, octile(from, (x, y)), item_id.index());
             if best.as_ref().is_some_and(|b| b.0 <= key) {
                 continue;
             }

@@ -23,11 +23,15 @@ pub enum Tool {
     Build,
     /// Drag a rectangle to take buildings down and to remove blueprints.
     Deconstruct,
+    /// Drag a rectangle to make a farm zone for the chosen crop.
+    Farm,
+    /// Drag a rectangle to order the gathering of ripe wild plants.
+    Gather,
 }
 
 impl Tool {
     /// All tools, in toolbar order.
-    pub const ALL: [Tool; 8] = [
+    pub const ALL: [Tool; 10] = [
         Tool::Select,
         Tool::Cut,
         Tool::Mine,
@@ -36,6 +40,8 @@ impl Tool {
         Tool::Cancel,
         Tool::Build,
         Tool::Deconstruct,
+        Tool::Farm,
+        Tool::Gather,
     ];
 
     /// Name for the toolbar and the status text.
@@ -49,6 +55,8 @@ impl Tool {
             Tool::Cancel => "Cancel",
             Tool::Build => "Build",
             Tool::Deconstruct => "Remove",
+            Tool::Farm => "Farm",
+            Tool::Gather => "Gather",
         }
     }
 
@@ -64,6 +72,8 @@ impl Tool {
             Tool::Cancel => 'C',
             Tool::Build => 'B',
             Tool::Deconstruct => 'X',
+            Tool::Farm => 'F',
+            Tool::Gather => 'N',
         }
     }
 
@@ -73,6 +83,7 @@ impl Tool {
             Tool::Cut => Some(JobKind::Cut),
             Tool::Mine => Some(JobKind::Mine),
             Tool::Haul => Some(JobKind::Haul),
+            Tool::Gather => Some(JobKind::Gather),
             _ => None,
         }
     }
@@ -93,6 +104,8 @@ impl Tool {
             "cancel" => Some(Tool::Cancel),
             "build" => Some(Tool::Build),
             "remove" | "deconstruct" => Some(Tool::Deconstruct),
+            "farm" => Some(Tool::Farm),
+            "gather" => Some(Tool::Gather),
             _ => None,
         }
     }
@@ -170,8 +183,11 @@ pub fn applies(sim: &Sim, tool: Tool, x: u16, y: u16) -> bool {
                 .get(id)
                 .is_some_and(|i| !i.to_haul && matches!(i.loc, ItemLoc::Tile(..)))
         }),
+        Tool::Gather => free && sim.wild_plant_at(x, y).is_some_and(|w| w.ripe),
+        Tool::Farm => sim.farmable(x, y),
         Tool::Cancel => {
             !free
+                || sim.farm_zone(x, y).is_some()
                 || sim.items().at_tile(x, y).iter().any(|&id| {
                     sim.items()
                         .get(id)
@@ -202,7 +218,7 @@ pub fn commands_for_drag(
     accepts: impl Fn(Tool, u16, u16) -> bool,
 ) -> Vec<Command> {
     match tool {
-        Tool::Select | Tool::Build | Tool::Deconstruct => Vec::new(),
+        Tool::Select | Tool::Build | Tool::Deconstruct | Tool::Farm => Vec::new(),
         Tool::Stockpile => vec![Command::CreateStockpile {
             x0: area.x0,
             y0: area.y0,
@@ -215,7 +231,7 @@ pub fn commands_for_drag(
             .filter(|&(x, y)| accepts(tool, x, y))
             .map(|(x, y)| Command::CancelDesignation { x, y })
             .collect(),
-        Tool::Cut | Tool::Mine | Tool::Haul => {
+        Tool::Cut | Tool::Mine | Tool::Haul | Tool::Gather => {
             let Some(kind) = tool.job_kind() else {
                 return Vec::new();
             };

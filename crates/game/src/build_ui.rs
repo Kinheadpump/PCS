@@ -304,6 +304,9 @@ pub fn reject_text(reject: Reject) -> &'static str {
         Reject::UnknownRecipe => "unknown recipe",
         Reject::BadCount => "the count must be 1 or more",
         Reject::NoWorkshop => "no workshop there for this recipe",
+        Reject::NotFarmable => "crops need soil, clay, or sand without trees or buildings",
+        Reject::NoPlant => "no ripe wild plant there",
+        Reject::UnknownCrop => "unknown crop",
     }
 }
 

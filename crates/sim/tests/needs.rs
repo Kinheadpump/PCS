@@ -954,7 +954,7 @@ fn gd72_a_new_colony_has_ages_sexes_race_0_and_one_trait_for_each_colonist() {
         assert_eq!(c.traits.len(), 1);
     }
     let meal = mat(&sim, "meal");
-    assert_eq!(sim.items().total_units(meal), 40, "start food");
+    assert_eq!(sim.items().total_units(meal), 420, "start food");
 }
 
 // ---- alerts ----
@@ -1038,8 +1038,8 @@ fn needs_state_after_a_death_survives_a_save() {
 }
 
 #[test]
-fn the_save_format_version_is_5() {
-    assert_eq!(save::FORMAT_VERSION, 6);
+fn the_save_format_version_is_7() {
+    assert_eq!(save::FORMAT_VERSION, 7);
 }
 
 #[test]
@@ -1055,7 +1055,7 @@ fn a_changed_colonist_state_that_breaks_a_range_is_refused_by_the_loader() {
 fn the_repository_needs_and_traits_files_load_and_link() {
     let rules = SimRules::builtin();
     assert!(rules.needs.enabled);
-    assert_eq!(rules.needs.foods.len(), 2);
+    assert_eq!(rules.needs.foods.len(), 4);
     assert!(
         rules
             .needs

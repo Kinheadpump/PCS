@@ -1,7 +1,7 @@
 //! Review sheets for `assetgen`: the palette, a reference set of all sprites, and a repeat grid.
 //! These files are for people. The game does not read them (guide sections 11 and 12).
 
-use super::cells::{actors as a, items as it, objects as o, terrain as t};
+use super::cells::{actors as a, icons as ic, items as it, objects as o, terrain as t};
 use super::palette::{self as pal, Rgb};
 use super::{Image, actors, items, objects, terrain};
 
@@ -83,7 +83,7 @@ pub fn reference_sheet(seed: u64) -> Image {
     let items_img = items::make_items(seed);
     let icons_img = items::make_icons();
     let actors_img = actors::make_sheet();
-    let (w, h) = (16 * 2 * 16 + 16, 560);
+    let (w, h) = (16 * 2 * 16 + 16, 888);
     let mut img = Image::new(w as usize, h as usize);
     fill(&mut img, 0, 0, w, h, [88, 120, 72]);
     // Ground samples: 32 x 32 pixel patches of each texture.
@@ -114,7 +114,7 @@ pub fn reference_sheet(seed: u64) -> Image {
         );
     }
     // Items at 3x on a floor color.
-    fill(&mut img, 0, 172, w, 108, [150, 138, 120]);
+    fill(&mut img, 0, 224, w, 108, [150, 138, 120]);
     for cell in 0..it::SHAPES * it::TIERS {
         let (cx, cy) = ((cell % 9) as i32, (cell / 9) as i32);
         let tint = match cell / it::TIERS {
@@ -130,7 +130,7 @@ pub fn reference_sheet(seed: u64) -> Image {
             &items_img,
             cell,
             8 + cx * 56,
-            178 + cy * 52,
+            230 + cy * 52,
             3,
             Some(tint),
         );
@@ -154,22 +154,47 @@ pub fn reference_sheet(seed: u64) -> Image {
                 &actors_img,
                 style * a::STYLE_CELLS + off,
                 8 + k as i32 * 52,
-                290 + style as i32 * 52,
+                342 + style as i32 * 52,
                 3,
                 None,
             );
         }
     }
     // Icons at 3x.
-    fill(&mut img, 0, 500, w, 56, [30, 32, 52]);
-    for cell in 0..14 {
+    fill(&mut img, 0, 552, w, 100, [30, 32, 52]);
+    for cell in 0..ic::ROWS * 16 - 10 {
         blit(
             &mut img,
             &icons_img,
             cell,
-            8 + cell as i32 * 36,
-            506,
+            8 + (cell as i32 % 19) * 36,
+            558 + (cell as i32 / 19) * 36,
             2,
+            Some([242, 238, 228]),
+        );
+    }
+    // Plants at 4x: crops and wild plants, 7 for each row.
+    for (k, cell) in (o::CROP_SPROUT..o::WILD + 2 * o::WILD_COUNT).enumerate() {
+        blit(
+            &mut img,
+            &objects_img,
+            cell,
+            8 + (k as i32 % 7) * 68,
+            664 + (k as i32 / 7) * 68,
+            4,
+            None,
+        );
+    }
+    // The icons of sprint 7 at 4x.
+    fill(&mut img, 0, 804, w, 76, [30, 32, 52]);
+    for (k, cell) in (ic::FARM..ic::ROWS * 16 - 10).enumerate() {
+        blit(
+            &mut img,
+            &icons_img,
+            cell,
+            8 + k as i32 * 68,
+            808,
+            4,
             Some([242, 238, 228]),
         );
     }

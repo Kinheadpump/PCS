@@ -1,0 +1,8 @@
+// Ledger numbers (Sprint 7). Integers only (D-014).
+// history_days: the trend uses the stock of this many past days.
+// food_low_days, fuel_low_days: the ledger marks a line "low" below this many days.
+(
+    history_days: 5,
+    food_low_days: 10,
+    fuel_low_days: 3,
+)

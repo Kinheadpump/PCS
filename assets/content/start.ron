@@ -1,0 +1,18 @@
+// Start conditions of a new colony (GAME_DESIGN §5). Integers only (D-014).
+// skills: each colonist has main_skills skills at a level from main_level_min to main_level_max.
+// The other skills have a level from other_level_min to other_level_max.
+// stock: items on the start tile: (material, units).
+// seed_crops: the colony gets seeds for this many crops that grow in the local climate (the
+// first ones in the crops.ron order). seed_units: seed units for each crop.
+// A crop grows in the climate when the season curve gives at least growth_days days with a day
+// mean temperature in the band of the crop.
+(
+    main_skills: 2,
+    main_level_min: 3,
+    main_level_max: 5,
+    other_level_min: 0,
+    other_level_max: 2,
+    stock: [("meal", 420), ("log", 20), ("stone_axe", 3), ("stone_pick", 2)],
+    seed_crops: 2,
+    seed_units: 30,
+)
