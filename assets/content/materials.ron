@@ -41,4 +41,8 @@
     (id: "herbal_medicine", name: "Herbal medicine", category: Plant, hardness: 0, density: 10, value: 6, insulation: 0, flammability: 500, beauty: 0, color: (150, 200, 130)),
     (id: "stone_axe", name: "Stone axe", category: Stone, hardness: 40, density: 100, value: 4, insulation: 0, flammability: 0, beauty: 0, color: (130, 120, 110)),
     (id: "stone_pick", name: "Stone pick", category: Stone, hardness: 40, density: 100, value: 4, insulation: 0, flammability: 0, beauty: 0, color: (120, 120, 130)),
+    (id: "meat", name: "Meat", category: Food, hardness: 0, density: 40, value: 4, insulation: 0, flammability: 100, beauty: 0, rot_rate: 120, color: (178, 70, 66)),
+    (id: "hide", name: "Hide", category: Leather, hardness: 4, density: 50, value: 3, insulation: 400, flammability: 400, beauty: 0, color: (150, 110, 80)),
+    (id: "leather", name: "Leather", category: Leather, hardness: 6, density: 50, value: 6, insulation: 450, flammability: 300, beauty: 1, color: (130, 84, 52)),
+    (id: "leather_clothes", name: "Leather clothes", category: Cloth, hardness: 0, density: 30, value: 14, insulation: 0, flammability: 300, beauty: 2, color: (120, 80, 50)),
 ]

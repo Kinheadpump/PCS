@@ -10,7 +10,9 @@ pub mod build;
 pub mod chronicle;
 pub mod climate;
 pub mod colonist;
+pub mod combat;
 pub mod command;
+pub mod creature;
 pub mod disease;
 pub mod drought;
 pub mod event;
@@ -22,11 +24,13 @@ pub mod job;
 pub mod ledger;
 pub mod life;
 pub mod map;
+pub mod migrant;
 pub mod needact;
 pub mod needs;
 pub mod notice;
 pub mod path;
 pub mod production;
+pub mod raid;
 pub mod region;
 pub mod room;
 pub mod rules;
@@ -43,14 +47,19 @@ mod loader;
 pub use alert::{Alert, AlertKind, AlertLevel};
 pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
 pub use chronicle::{
-    ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, RunInfo, RunState,
+    ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, Legacy, RunInfo,
+    RunState,
 };
 pub use climate::{
     ClimateParams, ClimateRules, DayWeather, FORECAST_DAYS, OutdoorParts, TempCause, TempPart,
     TempPlace, TileTemperature,
 };
 pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex};
+pub use combat::melee_damage;
 pub use command::Command;
+pub use creature::{
+    CombatEvent, CombatReject, Creature, CreatureId, CreatureKind, CreatureRules, Mode, Role,
+};
 pub use disease::{
     DOCTOR_ARG, DiseaseEvent, DiseaseKind, Illness, IllnessCause, IllnessPart, IllnessReport,
 };
@@ -60,6 +69,7 @@ pub use farm::{
     CropDef, FarmRules, FarmState, FertilityCause, FertilityPart, FertilityReport, Plant,
     PlantReport, WildDef, WildStatus,
 };
+pub use fire::EXTINGUISH_ARG;
 pub use hearth::REFUEL_ARG;
 pub use item::{Item, ItemId, ItemLoc, Items};
 pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, JobStep, Reject};
@@ -70,9 +80,14 @@ pub use life::{
     SpeedModCause,
 };
 pub use map::LocalMap;
+pub use migrant::{MigrantBlocker, MigrantEvent, MigrantOffer, MigrantProfile, MigrantRules};
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
 pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;
+pub use raid::{
+    Hostility, HostilityCause, HostilityPart, Raid, RaidEvent, RaidOutcome, RaidPhase, RaidRecord,
+    RaidReject, RaidWarning, RivalColony, TributeGood,
+};
 pub use region::Regions;
 pub use room::{
     BeautyCause, BeautyPart, BorderKind, BorderTile, InsulationPart, Room, RoomBeauty,
@@ -159,6 +174,12 @@ pub struct Sim {
     drought: drought::DroughtState,
     /// Diseases, treatments, and sick rooms (S17).
     disease: disease::DiseaseState,
+    /// Rival colonies and raids (S18).
+    raid: raid::RaidState,
+    /// Migrant offer and counts (S15).
+    migrants: migrant::MigrantState,
+    /// Creatures, lairs, and kill counts (S13).
+    creature: creature::CreatureState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
@@ -174,6 +195,15 @@ pub struct Sim {
     /// Disease events for the caller. Not part of the state.
     #[serde(skip)]
     disease_events: Vec<DiseaseEvent>,
+    /// Raid events for the caller. Not part of the state.
+    #[serde(skip)]
+    raid_events: Vec<RaidEvent>,
+    /// Migrant events for the caller. Not part of the state.
+    #[serde(skip)]
+    migrant_events: Vec<MigrantEvent>,
+    /// Combat and creature events for the caller. Not part of the state.
+    #[serde(skip)]
+    combat_events: Vec<CombatEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -219,9 +249,11 @@ impl Sim {
         let spawns = center_spawns(&map, &regions, START_COLONISTS);
         let mut sim = Self::from_map(map, seed, content_hash, &spawns);
         sim.threats = notice::threats_of(&data.placed, &data.site);
+        sim.raid = raid::RaidState::with_rivals(seed, &data.rivals);
         sim.roll_colonists(seed);
         sim.roll_start_skills(seed);
         sim.place_start_stock();
+        sim.creature_start();
         sim
     }
 
@@ -263,6 +295,12 @@ impl Sim {
             drought: drought::DroughtState::default(),
             disease: disease::DiseaseState::new(seed),
             disease_events: Vec::new(),
+            raid: raid::RaidState::new(seed),
+            raid_events: Vec::new(),
+            migrants: migrant::MigrantState::new(seed),
+            migrant_events: Vec::new(),
+            creature: creature::CreatureState::new(seed),
+            combat_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),
             events: Vec::new(),
@@ -310,7 +348,8 @@ impl Sim {
     }
 
     /// Run one tick. Order: room detection (only after a structural change), commands, jobs,
-    /// path requests, movement, the tick number increases, then the climate (each game hour).
+    /// combat, path requests, creatures, movement, the tick number increases, then the climate
+    /// (each game hour).
     pub fn step(&mut self, commands: &[Command]) {
         self.detect_rooms();
         for command in commands {
@@ -318,7 +357,9 @@ impl Sim {
         }
         self.update_needs();
         self.update_jobs();
+        self.combat_tick();
         self.process_path_queue();
+        self.creature_tick();
         self.move_colonists();
         self.tick += 1;
         self.climate_tick();
@@ -330,6 +371,8 @@ impl Sim {
         self.notice_tick();
         self.drought_tick();
         self.disease_tick();
+        self.raid_tick();
+        self.migrant_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -595,7 +638,13 @@ impl Sim {
         if !colonists_ok || !queue_ok {
             return None;
         }
-        if !sim.buildings_state_ok() || !sim.drought_state_ok() || !sim.disease_state_ok() {
+        if !sim.buildings_state_ok()
+            || !sim.drought_state_ok()
+            || !sim.disease_state_ok()
+            || !sim.raid_state_ok()
+            || !sim.migrant_state_ok()
+            || !sim.creature_state_ok()
+        {
             return None;
         }
         sim.rebuild_caches();

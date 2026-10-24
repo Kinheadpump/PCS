@@ -62,7 +62,11 @@ Sprint 4 added the `sim` modules `build` and `room` and the content files `build
 Sprint 5 added the `sim` modules `climate`, `hearth`, and `alert`, and the content file `climate.ron`. The save format version is 4.
 Sprint 6 added the `sim` modules `needs`, `life`, and `needact`, and the content files `needs.ron` and `traits.ron`. The save format version is 5.
 Sprint 14 added the `sim` module `notice` and the content file `notice.ron`, and the `worldgen` module `legend`. The save format version is 6. `Sim::notice()` returns the Notice parts, `Sim::threats()` the dormant threats, and `Sim::drain_notice_events()` the daily beast rolls and the threat wake events.
-Sprint 16 added the `sim` modules `drought` and `fire` and the content file `drought.ron`. The save format version is 8. `Command::DigDitch` makes a Mine job with `arg` 1. `Sim::growth_pct()` returns the growth parts, and `Sim::drain_drought_events()` returns the drought and fire events. Sprint 17 added the `sim` module `disease` and the content file `disease.ron`. The save format version is 9. `Command::SetSickRoom` marks a room as a sick room. A doctor job is a Mine job with `arg` 2 (`DOCTOR_ARG`). `Sim::illnesses()` returns the illness reports, and `Sim::drain_disease_events()` returns the disease events.
+Sprint 16 added the `sim` modules `drought` and `fire` and the content file `drought.ron`. The save format version is 8. `Command::DigDitch` makes a Mine job with `arg` 1. `Sim::growth_pct()` returns the growth parts, and `Sim::drain_drought_events()` returns the drought and fire events.
+Sprint 18 added the `sim` module `raid`, the content file `raid.ron`, and rival colonies in `worldgen` (`EmbarkRival`, `embark.ron`). The save format version is 9. `Sim::rivals()` and `Sim::rival_hostility()` give the rivals and the hostility parts, `Sim::raid_warning()` and `Sim::raid_choice_pending()` the raid state, `Command::RaidPay` and `Command::RaidFight` the answer, and `Sim::drain_raid_events()` the events.
+Sprint 15 added the `sim` module `migrant`, the content file `migrants.ron`, the fire rules for items and buildings in `fire.rs`, and the extinguish job (`Mine` job with `arg` 2). The save format version is 10. `Command::AcceptMigrants` and `Command::RefuseMigrants` answer a migrant offer, `Sim::drain_migrant_events()` gives the offer events, `Sim::legacy()` the legacy score, and `Sim::ironman_save_due()` the ironman save moment.
+Sprint 13 added the `sim` modules `creature` and `combat` and the content file `creatures.ron`. The save format version is 11. `Sim::creatures()` gives the creatures, `Command::Draft`, `Command::DraftMove`, and `Command::Attack` the orders, `Sim::drain_combat_events()` the hits, deaths, beast arrivals, lair wakes, released threats, and broken walls, and `Sim::lairs()` the lairs. Creatures use the path budget that the colonists leave in each tick (P-04).
+Sprint 17 added the `sim` module `disease` and the content file `disease.ron`. The save format version is 12 after the merge with S13. `Command::SetSickRoom` marks a room as a sick room. A doctor job is a Mine job with `arg` 3 (`DOCTOR_ARG`; 2 is the extinguish job). `Sim::illnesses()` returns the illness reports, and `Sim::drain_disease_events()` returns the disease events.
 
 ### 3.2 Data ownership
 
@@ -276,7 +280,8 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 - Do not use `#[serde(skip)]` for data that affects the simulation. Derived caches are rebuilt on load.
 - The `game` crate writes to a temporary file and then renames it. It keeps one backup.
 - `tools dump-save` writes RON for comparison.
-- Ironman and free-save modes use the same format (Q-003). Ironman writes a save at 00:00 of each game day and at exit.
+- Ironman and free-save modes use the same format (Q-003). Ironman writes a save at 00:00 of each game day, on quit to menu, and at exit.
+- Files (proposal, `ROADMAP.md` §7.5): `worlds/<id>.ron` is a world record. `saves/<id>.sav` is a run, and `saves/<id>.meta` is its list entry. `settings.ron` holds the settings. The base folder is `%APPDATA%/Ruinstead` on Windows, from `std::env`. `PCS_DATA_DIR` overrides it. Only `game` reads and writes these files. A bad file gives an error value, never a panic.
 
 ## 10. Content data (D-014)
 

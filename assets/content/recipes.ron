@@ -12,4 +12,8 @@
     (id: "meal_roots", name: "Cook root meal", workshop: "kitchen", inputs: [("wild_roots", 3)], outputs: [("meal", 1)], work_ticks: 150),
     // Medicine (Sprint 17). A doctor uses one unit for one treatment (R-064).
     (id: "herbal_medicine", name: "Make herbal medicine", workshop: "workshop", inputs: [("herbs", 2)], outputs: [("herbal_medicine", 1)], work_ticks: 200),
+    // Creatures (Sprint 13). Hunting gives meat and hide.
+    (id: "meal_meat", name: "Cook meat meal", workshop: "kitchen", inputs: [("meat", 2)], outputs: [("meal", 1)], work_ticks: 150),
+    (id: "tan_hide", name: "Tan hide", workshop: "workshop", inputs: [("hide", 2)], outputs: [("leather", 1)], work_ticks: 200),
+    (id: "leather_clothes", name: "Sew leather clothes", workshop: "workshop", inputs: [("leather", 2)], outputs: [("leather_clothes", 1)], work_ticks: 300),
 ]

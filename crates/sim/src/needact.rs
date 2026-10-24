@@ -226,7 +226,7 @@ impl Sim {
         let Some(c) = self.colonists.get(id) else {
             return;
         };
-        if c.act.is_some() || c.need_next > self.tick {
+        if c.act.is_some() || c.need_next > self.tick || c.drafted || c.foe.is_some() {
             return;
         }
         let n = &self.rules.needs;

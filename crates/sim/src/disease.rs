@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The `arg` of a mine job that is a doctor job. The target tile is the bed of the patient.
-pub const DOCTOR_ARG: u16 = 2;
+pub const DOCTOR_ARG: u16 = 3;
 
 /// A disease type (R-060).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

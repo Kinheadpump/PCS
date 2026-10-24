@@ -889,6 +889,23 @@ pub struct DroughtRules {
     pub tree_fuel: u32,
     /// Work time to dig one ditch tile, in ticks at 100% work speed.
     pub dig_ticks: u32,
+    /// Chance in percent each game hour that one flammable item or object within 1 tile of a
+    /// burning hearth starts to burn (R-023).
+    pub hearth_fire_pct: u32,
+    /// No hearth fire starts in this many first game days of a run.
+    pub hearth_fire_grace_days: u32,
+    /// Intensity of a fire that a hearth starts (1 to 10).
+    pub hearth_fire_intensity: u32,
+    /// Fire steps that a burning item or building lasts.
+    pub thing_fuel: u32,
+    /// Work time of one extinguish job, in ticks at 100% work speed (one game hour).
+    pub extinguish_ticks: u32,
+    /// Intensity that one extinguish job removes (R-024).
+    pub extinguish_drop: u32,
+    /// Colonists put out a fire only if an item or a building is within this many tiles.
+    pub extinguish_radius: u32,
+    /// Health that a colonist on a burning tile loses each game hour.
+    pub fire_health_loss: u32,
 }
 
 /// Load and validate the drought numbers.
@@ -900,6 +917,9 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
         (r.fire_step_ticks, "fire_step_ticks"),
         (r.tree_fuel, "tree_fuel"),
         (r.dig_ticks, "dig_ticks"),
+        (r.thing_fuel, "thing_fuel"),
+        (r.extinguish_ticks, "extinguish_ticks"),
+        (r.extinguish_drop, "extinguish_drop"),
     ] {
         if value == 0 {
             issues.push(issue(name, "must be 1 or more"));
@@ -909,6 +929,7 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
         (r.dry_growth_pct, "dry_growth_pct"),
         (r.lightning_pct, "lightning_pct"),
         (r.tree_flammability, "tree_flammability"),
+        (r.hearth_fire_pct, "hearth_fire_pct"),
     ] {
         if value > 100 {
             issues.push(issue(name, "must be 100 or less"));
@@ -919,6 +940,12 @@ pub fn load_drought_rules(file_name: &str, text: &str) -> Result<DroughtRules, C
     }
     if !(1..=10).contains(&r.lightning_intensity) {
         issues.push(issue("lightning_intensity", "must be from 1 to 10"));
+    }
+    if !(1..=10).contains(&r.hearth_fire_intensity) {
+        issues.push(issue("hearth_fire_intensity", "must be from 1 to 10"));
+    }
+    if r.extinguish_radius > 32 {
+        issues.push(issue("extinguish_radius", "must be 32 or less"));
     }
     if r.irrigation_radius > 32 {
         issues.push(issue("irrigation_radius", "must be 32 or less"));
@@ -1051,6 +1078,76 @@ pub fn load_disease_rules(file_name: &str, text: &str) -> Result<DiseaseRules, C
         }
         if def.treated >= 0 {
             issues.push(issue(name, "treated must be negative"));
+        }
+    }
+    finish(file_name, r, issues)
+}
+
+/// Numbers for rival colonies and raids (`raid.ron`, R-070 to R-072).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RaidRules {
+    /// A raid can start on a day after this one.
+    pub quiet_days: u32,
+    /// The daily raid chance in percent is hostility divided by this.
+    pub chance_div: u32,
+    /// Largest daily raid chance, in percent.
+    pub max_pct: u32,
+    /// Days that a rival colony waits after a raid.
+    pub cooldown_days: u32,
+    /// Fewest raiders.
+    pub min_fighters: u32,
+    /// Ticks between the scout and the raiders.
+    pub scout_lead_ticks: u32,
+    /// Ticks that the player has to answer when the raiders arrive.
+    pub decision_ticks: u32,
+    /// Value of the tribute for each raider.
+    pub tribute_per_raider: u32,
+    /// Hostility that a tribute removes.
+    pub pay_hostility: u32,
+    /// Hostility that a won fight removes.
+    pub win_hostility: u32,
+    /// Hostility that a raid adds when the raiders carry away items.
+    pub loot_hostility: u32,
+    /// Wealth units for 1 hostility.
+    pub wealth_div: u32,
+    /// Notice is divided by this for the hostility.
+    pub notice_div: u32,
+    /// Most stacks that one raider carries away.
+    pub loot_per_raider: u32,
+    /// Ticks that the raiders stay in a fight.
+    pub stay_ticks: u32,
+    /// Ticks to break a door or a wall, for each unit of hardness.
+    pub break_ticks_per_hardness: u32,
+}
+
+/// Load and validate the raid numbers.
+pub fn load_raid_rules(file_name: &str, text: &str) -> Result<RaidRules, ContentError> {
+    let r: RaidRules = parse_ron(file_name, text)?;
+    let mut issues = Vec::new();
+    for (value, name) in [
+        (r.chance_div, "chance_div"),
+        (r.min_fighters, "min_fighters"),
+        (r.scout_lead_ticks, "scout_lead_ticks"),
+        (r.decision_ticks, "decision_ticks"),
+        (r.wealth_div, "wealth_div"),
+        (r.notice_div, "notice_div"),
+        (r.stay_ticks, "stay_ticks"),
+    ] {
+        if value == 0 {
+            issues.push(issue(name, "must be 1 or more"));
+        }
+    }
+    if r.max_pct > 100 {
+        issues.push(issue("max_pct", "must be 100 or less"));
+    }
+    for (value, name) in [
+        (r.pay_hostility, "pay_hostility"),
+        (r.win_hostility, "win_hostility"),
+        (r.loot_hostility, "loot_hostility"),
+    ] {
+        if value > 100 {
+            issues.push(issue(name, "must be 100 or less"));
         }
     }
     finish(file_name, r, issues)
@@ -1556,6 +1653,20 @@ pub struct EmbarkRules {
     pub legend_rumor_true_pct: u32,
     /// A false rumor points to a tile at least this far from every site, in tiles.
     pub legend_min_gap: u32,
+    /// A rival colony is a living settlement within this many world cells (R-070).
+    pub rival_radius: u32,
+    /// Most rival colonies of one embark.
+    pub max_rivals: u32,
+    /// Fewest fighters of a rival colony.
+    pub rival_strength_min: u32,
+    /// Most fighters of a rival colony.
+    pub rival_strength_max: u32,
+    /// The aggression of the civilization is divided by this for the base hostility.
+    pub rival_aggression_div: u32,
+    /// Base hostility for each battle of the rival civilization in the embark area.
+    pub rival_battle_hostility: u32,
+    /// Base hostility for each settlement razed in the embark area in which the rival civilization took part.
+    pub rival_raze_hostility: u32,
 }
 
 /// Load and validate the embark numbers. `biome_names` holds the world biome names in order.
@@ -1660,6 +1771,28 @@ pub fn load_embark_rules(
         r.legend_min_gap <= 64,
         "legend_min_gap",
         "must be 64 or less",
+    );
+    check(r.rival_radius <= 20, "rival_radius", "must be 20 or less");
+    check(r.max_rivals <= 8, "max_rivals", "must be 8 or less");
+    check(
+        1 <= r.rival_strength_min && r.rival_strength_min <= r.rival_strength_max,
+        "rival_strength_min",
+        "must satisfy 1 <= rival_strength_min <= rival_strength_max",
+    );
+    check(
+        r.rival_strength_max <= 100,
+        "rival_strength_max",
+        "must be 100 or less",
+    );
+    check(
+        r.rival_aggression_div >= 1,
+        "rival_aggression_div",
+        "must be 1 or more",
+    );
+    check(
+        r.rival_battle_hostility <= 100 && r.rival_raze_hostility <= 100,
+        "rival_battle_hostility",
+        "hostility values must be 100 or less",
     );
     finish(file_name, r, issues)
 }
@@ -1768,7 +1901,7 @@ mod tests {
         assert_eq!(buildings.len(), BuildingKind::ALL.len() + 1);
         let recipes =
             load_recipes("recipes.ron", RECIPES, &materials, &buildings).unwrap_or_default();
-        assert_eq!(recipes.len(), 8);
+        assert_eq!(recipes.len(), 11);
         let rooms = load_room_rules("rooms.ron", ROOMS);
         assert_eq!(rooms.map(|r| r.max_tiles).unwrap_or(0), 400);
     }

@@ -1,0 +1,36 @@
+// Rival colony and raid numbers (S18, R-070 to R-072). Integers only (D-014).
+// quiet_days: no raid in the first days of the run. A raid can start on a day after this one.
+// chance_div, max_pct: the daily raid chance of a rival colony is hostility / chance_div percent,
+//   to max_pct percent.
+// cooldown_days: days that a rival colony waits after a raid before it can raid again.
+// min_fighters: fewest raiders. The count is strength * hostility / 100.
+// scout_lead_ticks: time between the scout and the raiders (1 game day).
+// decision_ticks: time that the player has to answer when the raiders arrive. After it the
+//   raid starts as a fight. The interface pauses the game, so this limit only serves headless runs.
+// tribute_per_raider: value of the goods that stops a raid, for each raider (R-072).
+// pay_hostility, win_hostility, loot_hostility: hostility change after a tribute, a won fight,
+//   and a raid that carried away items (R-072).
+// wealth_div, notice_div: hostility from the wealth of the colony and its Notice (R-070).
+// loot_per_raider, stay_ticks: the raiders carry away at most loot_per_raider stacks for each
+//   raider, and they leave the map after stay_ticks of the fight (S13: they are creatures
+//   that walk, fight, and carry the stacks).
+// break_ticks_per_hardness: time for one raider to break a door or a wall, for each unit of the
+//   hardness of its material.
+(
+    quiet_days: 20,
+    chance_div: 20,
+    max_pct: 5,
+    cooldown_days: 5,
+    min_fighters: 2,
+    scout_lead_ticks: 2400,
+    decision_ticks: 1200,
+    tribute_per_raider: 200,
+    pay_hostility: 20,
+    win_hostility: 10,
+    loot_hostility: 10,
+    wealth_div: 1000,
+    notice_div: 2,
+    loot_per_raider: 2,
+    stay_ticks: 4800,
+    break_ticks_per_hardness: 20,
+)

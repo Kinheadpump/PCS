@@ -387,7 +387,7 @@ Item durability and value come from the material and the item template.
 
 ### 8.8 Fire
 
-**R-023 Fire start:** Fire starts only from a burning hearth. Each game hour, each flammable item or structure within 1 tile of a burning hearth has a 1% chance to start burning.
+**R-023 Fire start:** Fire starts only from a burning hearth. Each game hour, each flammable item or object (bed, door, workshop) within 1 tile of a burning hearth has a 1% chance to start burning. Floors and roofs burn only when a fire spreads to them. The first 10 days of a run have no hearth fire.
 
 **R-024 Fire spread:** A burning tile has fire intensity from 1 to 10. Each 10 ticks, it has a chance to spread to each adjacent flammable tile. The chance is `flammability × intensity / 10` percent. A burning tile uses its fuel. When the fuel is 0, the fire stops. Stone and soil do not burn. Rain stops all outdoor fire. A colonist with an extinguish job decreases intensity by 2 each game hour.
 
@@ -478,12 +478,12 @@ Each crisis must have a cause in the simulation, a warning sign that the player 
 **R-031 Notice effects:**
 
 - Each game day, a beast enters the map with a chance of Notice / 4 percent, to a maximum of 50%.
-- Beasts in lairs on the map become active when Notice is 30 or more.
+- Beasts in lairs on the map become active when Notice is 30 or more. No beast arrives and no lair wakes in the first 8 game days of the run.
 - An awake dormant threat gets 1 strength level for each 25 Notice.
 
 ### 10.3 Creatures
 
-- Game animals walk around the map. Colonists with a hunt designation hunt them. They give meat and leather.
+- Game animals walk around the map. The player orders a colonist to hunt one (an attack order). A dead animal leaves meat and hide. A workshop makes leather from hide, and clothes from leather.
 - Beasts attack colonists. They come from the map edge or from lairs.
 - Rival colonies send raids (§10.5).
 - Dormant threats wake up when colonists open a sealed site.
@@ -494,7 +494,7 @@ Each crisis must have a cause in the simulation, a warning sign that the player 
 
 ### 10.5 Rival colonies and raids
 
-**R-070 Rival colonies:** Local generation selects up to 3 living settlements of historical civilizations near the embark cell. Each one has a strength (3 to 12 fighters) and a hostility from 0 to 100. Hostility is the base value from history (wars with the owner of the embark area) + wealth / 1,000 + Notice / 2, to a maximum of 100. The lore panel shows each rival colony with its strength and hostility.
+**R-070 Rival colonies:** Local generation selects up to 3 living settlements of historical civilizations near the embark cell. Each one has a strength (3 to 12 fighters) and a hostility from 0 to 100. Hostility is the base value from history (the aggression of its civilization, and the battles and razed settlements of that civilization in the embark area) + wealth / 1,000 + Notice / 2 + the result of earlier raids, from 0 to 100. The lore panel shows each rival colony with its strength and hostility.
 
 **R-071 Raid:** Each game day after day 20 of the run, each rival colony raids with a chance of hostility / 20 percent, to a maximum of 5%. The raid has `strength × hostility / 100` fighters, to a minimum of 2. A scout comes to the map edge 1 game day before the raid and makes a warning alert. Raiders use melee combat (R-032). They attack colonists, break doors and walls (time from material hardness), and carry away items. They leave when half of the raiders are dead or down.
 

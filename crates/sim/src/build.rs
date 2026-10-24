@@ -509,7 +509,12 @@ impl Sim {
     }
 
     /// Take a finished building away and return it.
-    fn remove_building(&mut self, x: u16, y: u16, layer: BuildLayer) -> Option<Building> {
+    pub(crate) fn remove_building(
+        &mut self,
+        x: u16,
+        y: u16,
+        layer: BuildLayer,
+    ) -> Option<Building> {
         let building = self.buildings.layer_mut(layer).remove(&(x, y))?;
         let blocks = self
             .rules

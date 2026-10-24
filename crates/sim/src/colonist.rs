@@ -129,6 +129,14 @@ pub struct Colonist {
     pub break_until: u64,
     /// Hours in a row with a breakdown mood (R-015).
     pub low_mood_hours: u32,
+    /// Background line index plus 1 (`migrants.ron`). 0: no line (S15).
+    pub background: u8,
+    /// True while the colonist is drafted: no job and no need action (R-032, S13).
+    pub drafted: bool,
+    /// The creature that the colonist attacks under an order (R-032, S13).
+    pub foe: Option<crate::creature::CreatureId>,
+    /// The colonist can strike again from this tick on.
+    pub attack_ready: u64,
 }
 
 impl Colonist {
@@ -162,6 +170,10 @@ impl Colonist {
             memories: Vec::new(),
             break_until: 0,
             low_mood_hours: 0,
+            background: 0,
+            drafted: false,
+            foe: None,
+            attack_ready: 0,
         }
     }
 

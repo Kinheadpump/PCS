@@ -56,6 +56,31 @@ pub enum DroughtEvent {
         /// Tile row.
         y: u16,
     },
+    /// A burning hearth set a tile on fire (R-023). The fire alert starts here.
+    HearthFire {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+    },
+    /// Items or buildings burned down on a tile.
+    ThingsBurned {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+        /// Item stacks that are gone.
+        items: u32,
+        /// Buildings that are gone.
+        buildings: u32,
+    },
+    /// Colonists put out the fire on a tile.
+    FireOut {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+    },
 }
 
 /// What a part of the growth speed of a crop is made of.
@@ -290,6 +315,7 @@ impl Sim {
         if now && !was {
             self.drought_events.push(DroughtEvent::DroughtBegan { day });
         } else if was && !now {
+            self.crisis_survived();
             self.drought_events.push(DroughtEvent::DroughtEnded { day });
         }
         self.lightning();

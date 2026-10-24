@@ -106,7 +106,7 @@ impl EmbarkSummary {
 // ---------------------------------------------------------------------------------------------
 
 use crate::biome::WorldBiome;
-use crate::history::{History, NEVER, SiteKind};
+use crate::history::{EventKind, History, NEVER, SiteKind};
 use crate::world::{WORLD_SIZE, WorldData};
 use base::content::{ContentError, EmbarkRules, load_embark_rules};
 use base::rng::mix;
@@ -158,6 +158,25 @@ pub struct EmbarkSite {
     pub level: u8,
 }
 
+/// A living settlement near the embark cell that can raid the colony (R-070).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EmbarkRival {
+    /// Site ID of the settlement in the history.
+    pub site: u32,
+    /// Owner civilization ID.
+    pub civ: u32,
+    /// Culture of the owner.
+    pub culture: u8,
+    /// Fighters (3 to 12 with the numbers of `embark.ron`).
+    pub strength: u8,
+    /// Hostility from the history alone (0 to 100): war with the owner of the embark cell.
+    pub base_hostility: u8,
+    /// The map edge that the raiders come from: `EXIT_N`, `EXIT_W`, `EXIT_E`, or `EXIT_S`.
+    pub edge: u8,
+    /// Distance from the embark cell in world cells.
+    pub distance: u8,
+}
+
 /// The history of the embark area (the 3 by 3 world cells around the selected cell).
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct EmbarkSites {
@@ -173,6 +192,8 @@ pub struct EmbarkSites {
     pub depletion: u8,
     /// Number of site records in the embark area before the limit.
     pub site_count: u32,
+    /// The rival colonies, nearest first (R-070).
+    pub rivals: Vec<EmbarkRival>,
 }
 
 impl EmbarkSites {
@@ -200,6 +221,75 @@ fn edge_offset(world_seed: u64, a: (i32, i32), b: (i32, i32), margin: u32) -> u1
         ^ u64::from((a.0.max(b.0) + a.1.max(b.1)) as u32);
     let span = LOCAL_SIZE.saturating_sub(2 * margin).max(1);
     (margin + (mix(world_seed ^ TAG_EDGE ^ key) % u64::from(span)) as u32) as u16
+}
+
+/// The rival colonies of an embark cell (R-070): living settlements of living civilizations
+/// within `rival_radius` world cells, nearest first, at most `max_rivals`. Same input gives
+/// the same list.
+fn rivals_of(history: &History, rules: &EmbarkRules, wx: i32, wy: i32) -> Vec<EmbarkRival> {
+    let radius = rules.rival_radius as i32;
+    let mut found: Vec<(i32, u32, EmbarkRival)> = Vec::new();
+    for site in &history.sites {
+        if site.kind != SiteKind::Settlement || site.ended != NEVER {
+            continue;
+        }
+        let (dx, dy) = (i32::from(site.x) - wx, i32::from(site.y) - wy);
+        let distance = dx.abs().max(dy.abs());
+        if distance > radius {
+            continue;
+        }
+        let Some(civ) = history.civ(site.civ).filter(|c| c.collapsed == NEVER) else {
+            continue;
+        };
+        // Wars over the embark area: battles and razed settlements of this civilization in the 3
+        // by 3 cells around the embark cell.
+        let war: u32 = history
+            .events
+            .iter()
+            .filter(|e| e.actors[0] == civ.id || e.actors[1] == civ.id)
+            .filter(|e| {
+                history.site(e.place).is_some_and(|s| {
+                    (i32::from(s.x) - wx).abs() <= 1 && (i32::from(s.y) - wy).abs() <= 1
+                })
+            })
+            .map(|e| match e.kind {
+                EventKind::Battle => rules.rival_battle_hostility,
+                EventKind::Raze => rules.rival_raze_hostility,
+                _ => 0,
+            })
+            .sum();
+        let base = (u32::from(civ.aggression) / rules.rival_aggression_div.max(1) + war).min(100);
+        let span = rules.rival_strength_max - rules.rival_strength_min;
+        let strength = rules.rival_strength_min + span * u32::from(civ.prosperity.min(100)) / 100;
+        let edge = if dx == 0 && dy == 0 {
+            [EXIT_N, EXIT_W, EXIT_E, EXIT_S][(site.id % 4) as usize]
+        } else if dx.abs() >= dy.abs() {
+            if dx > 0 { EXIT_E } else { EXIT_W }
+        } else if dy > 0 {
+            EXIT_S
+        } else {
+            EXIT_N
+        };
+        found.push((
+            distance,
+            site.id,
+            EmbarkRival {
+                site: site.id,
+                civ: civ.id,
+                culture: civ.culture,
+                strength: strength.min(255) as u8,
+                base_hostility: base as u8,
+                edge: edge as u8,
+                distance: distance.min(255) as u8,
+            },
+        ));
+    }
+    found.sort_by_key(|&(distance, id, _)| (distance, id));
+    found
+        .into_iter()
+        .take(rules.max_rivals as usize)
+        .map(|(_, _, r)| r)
+        .collect()
 }
 
 /// Make the embark summary and the site records for a world cell. Returns `None` when the cell
@@ -294,6 +384,7 @@ pub fn embark_from_world(
             },
         ));
     }
+    sites.rivals = rivals_of(history, rules, wx, wy);
     found.sort_by_key(|&(distance, id, _)| (distance, id));
     sites.site_count = found.len() as u32;
     sites.sites = found
