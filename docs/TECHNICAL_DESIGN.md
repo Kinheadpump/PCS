@@ -68,6 +68,8 @@ Sprint 15 added the `sim` module `migrant`, the content file `migrants.ron`, the
 Sprint 13 added the `sim` modules `creature` and `combat` and the content file `creatures.ron`. The save format version is 11. `Sim::creatures()` gives the creatures, `Command::Draft`, `Command::DraftMove`, and `Command::Attack` the orders, `Sim::drain_combat_events()` the hits, deaths, beast arrivals, lair wakes, released threats, and broken walls, and `Sim::lairs()` the lairs. Creatures use the path budget that the colonists leave in each tick (P-04).
 Sprint 17 added the `sim` module `disease` and the content file `disease.ron`. The save format version is 12 after the merge with S13. `Command::SetSickRoom` marks a room as a sick room. A doctor job is a Mine job with `arg` 3 (`DOCTOR_ARG`; 2 is the extinguish job). `Sim::illnesses()` returns the illness reports, and `Sim::drain_disease_events()` returns the disease events.
 
+Sprint 20 added the `sim` module `wants` and the content file `wants.ron`. The save format version is 13. `Sim::wants(id)` returns the social trait and the life goal report of a colonist. The want memories are entries in `needs.ron`.
+
 ### 3.2 Data ownership
 
 - `Sim` owns all colony state. Examples: `map: LocalMap`, `colonists: Arena<Colonist>`, `creatures: Arena<Creature>`, `items: Arena<Item>`, `jobs: JobBoard`, `rng: Rng`, `tick: u64`, `notice`, `chronicle`.
