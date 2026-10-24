@@ -384,7 +384,7 @@ fn r017_the_chance_is_5_percent_plus_1_for_each_1000_wealth_to_20() {
     let part = |c: sim::ChanceCause| chance.parts.iter().find(|p| p.cause == c).unwrap().value;
     assert_eq!(
         part(sim::ChanceCause::Base) + part(sim::ChanceCause::Wealth),
-        5 + wealth
+        5 + i32::try_from(wealth).unwrap()
     );
     let iron = material(&sim, "iron");
     sim.debug_spawn_item(iron, 1_000, 1, 1);
