@@ -119,6 +119,8 @@ pub struct MigrantChance {
 /// One migrant of an offer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MigrantProfile {
+    /// Race index (`races.ron` order).
+    pub race: u8,
     /// Sex.
     pub sex: Sex,
     /// Age in years.
@@ -364,7 +366,11 @@ impl Sim {
         let background = u8::try_from(1 + rng.below(lines)).unwrap_or(1);
         let skill = u8::try_from(rng.below(SKILL_COUNT as u32)).unwrap_or(0);
         let level = r.main_level_min + rng.below(r.main_level_max - r.main_level_min + 1);
+        // The race comes from a copy of the stream, so that the numbers of the stream stay.
+        let race_roll = u64::from(rng.clone().below(1 << 20));
+        let race = self.rules.races.pick(race_roll);
         MigrantProfile {
+            race,
             sex,
             age,
             trait_index,
@@ -387,6 +393,7 @@ impl Sim {
             self.rules.needs.init_colonist(&mut c);
             c.age = p.age;
             c.sex = p.sex;
+            c.race = p.race;
             c.traits = p.trait_index.into_iter().collect();
             c.background = p.background;
             if let Some(xp) = c.skill_xp.get_mut(usize::from(p.skill)) {

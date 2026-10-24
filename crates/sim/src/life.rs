@@ -264,6 +264,11 @@ pub enum ComfortCause {
         /// Trait index.
         index: u8,
     },
+    /// The race of the colonist (R-048).
+    Race {
+        /// Race index.
+        index: u8,
+    },
 }
 
 /// One named contribution to the lower limit of the comfort band.
@@ -292,6 +297,14 @@ fn comfort_parts(rules: &SimRules, c: &Colonist) -> Vec<ComfortPart> {
         cause: ComfortCause::Base,
         tenths: i32::from(n.comfort_low),
     }];
+    if let Some(def) = rules.races.races.get(usize::from(c.race))
+        && def.comfort_low_delta != 0
+    {
+        parts.push(ComfortPart {
+            cause: ComfortCause::Race { index: c.race },
+            tenths: i32::from(def.comfort_low_delta),
+        });
+    }
     if let Some(material) = c.clothes
         && let Some(def) = n.clothes_def(material)
     {

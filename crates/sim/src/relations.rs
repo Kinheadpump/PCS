@@ -70,6 +70,8 @@ pub enum OpinionCause {
     Temperament,
     /// A fixed number of the pair.
     Chemistry,
+    /// The rule for the two races of the pair (R-049).
+    Race,
 }
 
 /// One named part of an opinion.
@@ -319,12 +321,21 @@ impl Sim {
     /// The relation of two colonists with the why chain (R-035). `None` if they have none.
     pub fn relation(&self, a: ColonistId, b: ColonistId) -> Option<RelationReport> {
         let rel = self.relation_state.map.get(&pair(a, b))?;
-        let parts = parts_of(
+        let mut parts = parts_of(
             &self.rules.relations,
             rel,
             self.social_of(a),
             self.social_of(b),
         );
+        if let (Some(ra), Some(rb)) = (self.race_of(a), self.race_of(b)) {
+            let value = self.race_pair(ra, rb).opinion;
+            if value != 0 {
+                parts.push(OpinionPart {
+                    cause: OpinionCause::Race,
+                    value,
+                });
+            }
+        }
         let opinion = parts.iter().map(|p| p.value).sum();
         Some(RelationReport {
             opinion,
@@ -484,6 +495,13 @@ impl Sim {
                 continue;
             };
             if report.standing == Standing::Partner || report.opinion < r.partner_at {
+                continue;
+            }
+            let races_ok = match (self.race_of(key.0), self.race_of(key.1)) {
+                (Some(ra), Some(rb)) => self.race_pair(ra, rb).partner,
+                _ => false,
+            };
+            if !races_ok {
                 continue;
             }
             let adult = |x: ColonistId| {

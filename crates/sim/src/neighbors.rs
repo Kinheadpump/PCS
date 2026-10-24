@@ -53,6 +53,8 @@ pub struct NeighborPerson {
     pub age: u8,
     /// Sex.
     pub sex: Sex,
+    /// Race index (`races.ron` order).
+    pub race: u8,
     /// True when the person wed a colonist and left the rival colony.
     pub wed: bool,
 }
@@ -277,7 +279,16 @@ impl Sim {
             Sex::Male
         };
         let wed = self.neighbors.weds.contains(&(rival as u16, slot));
-        Some(NeighborPerson { age, sex, wed })
+        let race = self
+            .rules
+            .races
+            .pick(self.neighbor_roll(5, rival as u64, u64::from(slot)));
+        Some(NeighborPerson {
+            age,
+            sex,
+            race,
+            wed,
+        })
     }
 
     fn neighbor_chemistry(&self, id: ColonistId, rival: u16, slot: u8) -> i32 {
@@ -344,6 +355,7 @@ impl Sim {
                 .unwrap_or(NeighborPerson {
                     age: 0,
                     sex: Sex::Female,
+                    race: 0,
                     wed: false,
                 }),
             standing: self.tie_standing(opinion),
@@ -502,10 +514,15 @@ impl Sim {
             let calm = self
                 .rival_hostility(usize::from(key.1))
                 .is_some_and(|h| h.total <= n.wed_hostility_max);
-            let single_adult = self
-                .colonists
-                .get(key.0)
-                .is_some_and(|c| c.age >= n.partner_min_age)
+            let races_ok = self
+                .neighbor_person(usize::from(key.1), key.2)
+                .zip(self.colonists.get(key.0))
+                .is_some_and(|(p, c)| self.race_pair(c.race, p.race).partner);
+            let single_adult = races_ok
+                && self
+                    .colonists
+                    .get(key.0)
+                    .is_some_and(|c| c.age >= n.partner_min_age)
                 && self.partner_of(key.0).is_none();
             if report.opinion >= n.partner_at
                 && calm
@@ -532,6 +549,7 @@ impl Sim {
         self.rules.needs.init_colonist(&mut c);
         c.age = person.age;
         c.sex = person.sex;
+        c.race = person.race;
         let trait_count = self.rules.traits.len();
         let roll = self.neighbor_roll(4, u64::from(rival), u64::from(slot));
         if trait_count > 0 {

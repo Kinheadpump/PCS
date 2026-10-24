@@ -331,7 +331,8 @@ impl Sim {
     /// Pick a social trait and a goal for a colonist from a salt. The roll uses its own random
     /// stream, so other systems keep their numbers.
     pub(crate) fn roll_wants(&mut self, id: ColonistId, salt: u64) {
-        let per = u64::from(self.rules.family.days_per_age_year.max(1));
+        let race = self.colonists.get(id).map_or(0, |c| c.race);
+        let per = u64::from(self.race_age_days(race));
         let age_days = mix(salt ^ TAG_WANTS ^ 0xA6E) % per;
         if let Some(c) = self.colonists.get_mut(id) {
             c.age_days = u16::try_from(age_days).unwrap_or(0);

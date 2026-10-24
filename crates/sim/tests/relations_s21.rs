@@ -307,7 +307,7 @@ fn r035_relations_survive_a_save_and_the_format_is_current() {
     let all = ids(&sim);
     run_hours(&mut sim, 30);
     let bytes = save::to_bytes(&sim);
-    assert_eq!(save::FORMAT_VERSION, 16);
+    assert_eq!(save::FORMAT_VERSION, 17);
     let loaded = save::from_bytes(&bytes).unwrap();
     assert_eq!(
         loaded.relation(all[0], all[1]),

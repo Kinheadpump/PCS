@@ -266,6 +266,10 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-047 Grudges and the hostility of rivals:** When a colonist dies of wounds in a raid, the partner, the friends, and the parents and children of the dead hold a grudge against the raiding colony. A grudge lowers the opinion of the people of that colony, gives a mood memory, and fades by 1 point in 4 game days. The hostility of a rival colony has a Ties part: grudges add, friends and weddings take away. (D-087)
 
+**R-048 Races:** There are 4 races: folk, stonekin, reedfolk, and ashborn. A race is a set of content values: the speed of ageing, the age of an elder, the lower limit of the comfort band (a named part of the band), and the weight among migrants and among the people of rival colonies. The start colonists are folk. Races have no spells. (D-088)
+
+**R-049 Race pairs:** Each pair of different races has one rule: the opinion that the pair adds to a relation (a named part), if the two can become partners, if they can have children, and the race of the child (mother, father, either, or a fixed race). Two people of the same race can be partners and have children, and the child has the race of the mother. A person of a rival colony weds a colonist only if the rule of the two races allows partners. (D-088)
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.
