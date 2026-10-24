@@ -244,6 +244,10 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 ### 7.5 Health
 
+**R-033 Personality:** A colonist can have a social trait: introvert or extrovert. A colonist can have 1 life goal. A scenario map colonist has neither. (D-083)
+
+**R-034 Wants:** Each game hour, a want gives a timed mood modifier (R-014) that has a name. An extrovert with company is glad, and an extrovert that is alone for 24 hours in a row is lonely. An introvert that is alone is glad, and an introvert in a crowd for 12 hours in a row is crowded. A met life goal adds a modifier. A life goal that is not met adds a negative modifier after a patience time of 20 days. (D-083)
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.
