@@ -13,6 +13,7 @@ pub mod legend;
 pub mod local;
 pub mod noise;
 pub mod plates;
+pub mod realm;
 pub mod region;
 pub mod stamp;
 pub mod world;
@@ -29,6 +30,10 @@ pub use history::{
 };
 pub use legend::{Legend, LegendKind, Reliability, make_legends};
 pub use local::{Ground, LocalMapData, Ore, RockKind, generate_local, generate_local_with_sites};
+pub use realm::{
+    REALM_SIZE, RealmCache, RealmPos, RealmSummary, WORLD_GEN_VERSION, generate_realm,
+    realm_distance, realm_neighbors, realm_seed, summarize as summarize_realm,
+};
 pub use region::{RegionEdge, RegionInfo, RegionLink, Regions};
 pub use stamp::{PlacedSite, SiteTile};
 pub use world::{
