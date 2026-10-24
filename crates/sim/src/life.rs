@@ -63,6 +63,8 @@ pub enum HealthCause {
     Heatstroke,
     /// A wound.
     Wounded,
+    /// A disease above severity 50 (R-060).
+    Disease,
     /// Healing in a bed, with no condition.
     HealingInBed,
     /// Healing elsewhere, with no condition.
@@ -77,6 +79,7 @@ impl HealthCause {
             HealthCause::Hypothermia => "Hypothermia",
             HealthCause::Heatstroke => "Heatstroke",
             HealthCause::Wounded => "Wound",
+            HealthCause::Disease => "Disease",
             HealthCause::HealingInBed => "Healing in a bed",
             HealthCause::Healing => "Healing",
         }
@@ -182,6 +185,8 @@ pub enum DeathCause {
     Heatstroke,
     /// A wound.
     Wounds,
+    /// A disease (R-060).
+    Disease,
     /// No health part explains it (a debug command).
     Unknown,
 }
@@ -194,6 +199,7 @@ impl DeathCause {
             DeathCause::Hypothermia => "Hypothermia",
             DeathCause::Heatstroke => "Heatstroke",
             DeathCause::Wounds => "Wounds",
+            DeathCause::Disease => "Disease",
             DeathCause::Unknown => "Unknown",
         }
     }
@@ -462,6 +468,11 @@ pub enum SpeedModCause {
     LowMood,
     /// Rest 0 (R-012).
     Exhausted,
+    /// A disease (R-060). The number is the `DiseaseKind` index.
+    Disease {
+        /// `DiseaseKind` index.
+        kind: u8,
+    },
     /// A trait.
     Trait {
         /// Trait index.
@@ -520,7 +531,11 @@ impl Sim {
     pub fn health_report(&self, id: ColonistId) -> Option<HealthReport> {
         let c = self.colonists.get(id)?;
         let rules = &self.rules.needs;
-        let parts = health_parts(rules, c);
+        let mut parts = health_parts(rules, c);
+        if let Some(part) = self.disease_health_part(id) {
+            parts.retain(|p| !matches!(p.cause, HealthCause::Healing | HealthCause::HealingInBed));
+            parts.push(part);
+        }
         let per_hour = parts.iter().map(|p| p.per_hour).sum();
         Some(HealthReport {
             health: c.health,
@@ -555,6 +570,12 @@ impl Sim {
                 mods.push(SpeedMod {
                     cause: SpeedModCause::Exhausted,
                     pct: i32::from(n.exhausted_speed_pct),
+                });
+            }
+            for (kind, pct) in self.disease_speed_mods(id) {
+                mods.push(SpeedMod {
+                    cause: SpeedModCause::Disease { kind },
+                    pct,
                 });
             }
             for &index in &c.traits {
@@ -711,6 +732,7 @@ impl Sim {
                 .iter()
                 .filter_map(|&t| rules.traits.get(usize::from(t)))
                 .fold(100u64, |acc, t| acc * u64::from(t.hunger_rate_pct) / 100);
+            let dpart = self.disease_health_part(id);
             let Some(c) = self.colonists.get_mut(id) else {
                 continue;
             };
@@ -760,7 +782,13 @@ impl Sim {
                 }
             }
             // R-016
-            let parts = health_parts(n, c);
+            let mut parts = health_parts(n, c);
+            if let Some(part) = dpart {
+                parts.retain(|p| {
+                    !matches!(p.cause, HealthCause::Healing | HealthCause::HealingInBed)
+                });
+                parts.push(part);
+            }
             let change: i32 = parts.iter().map(|p| p.per_hour).sum();
             c.health = (c.health + change).clamp(0, whole(n.health_max));
             c.memories.retain(|m| m.until > self.tick);
@@ -958,6 +986,7 @@ fn death_cause(parts: &[HealthPart]) -> DeathCause {
             HealthCause::Hypothermia => DeathCause::Hypothermia,
             HealthCause::Heatstroke => DeathCause::Heatstroke,
             HealthCause::Wounded => DeathCause::Wounds,
+            HealthCause::Disease => DeathCause::Disease,
             HealthCause::HealingInBed | HealthCause::Healing => continue,
         };
         if best.is_none_or(|(b, _)| p.per_hour < b.per_hour) {

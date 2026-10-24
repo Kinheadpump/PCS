@@ -23,6 +23,8 @@ pub enum ChronicleKind {
     DeathHeatstroke,
     /// A colonist died of wounds. Number 0: age.
     DeathWounds,
+    /// A colonist died of a disease. Number 0: age.
+    DeathDisease,
     /// A colonist died of an unknown cause. Number 0: age.
     DeathUnknown,
     /// A colonist left the colony. Number 0: age.
@@ -45,11 +47,12 @@ pub enum ChronicleKind {
 
 impl ChronicleKind {
     /// All kinds, in index order.
-    pub const ALL: [ChronicleKind; 13] = [
+    pub const ALL: [ChronicleKind; 14] = [
         ChronicleKind::DeathStarvation,
         ChronicleKind::DeathHypothermia,
         ChronicleKind::DeathHeatstroke,
         ChronicleKind::DeathWounds,
+        ChronicleKind::DeathDisease,
         ChronicleKind::DeathUnknown,
         ChronicleKind::Left,
         ChronicleKind::WinterBegins,
@@ -68,6 +71,7 @@ impl ChronicleKind {
             ChronicleKind::DeathHypothermia => "death_hypothermia",
             ChronicleKind::DeathHeatstroke => "death_heatstroke",
             ChronicleKind::DeathWounds => "death_wounds",
+            ChronicleKind::DeathDisease => "death_disease",
             ChronicleKind::DeathUnknown => "death_unknown",
             ChronicleKind::Left => "left",
             ChronicleKind::WinterBegins => "winter_begins",
@@ -87,6 +91,7 @@ impl ChronicleKind {
             DeathCause::Hypothermia => ChronicleKind::DeathHypothermia,
             DeathCause::Heatstroke => ChronicleKind::DeathHeatstroke,
             DeathCause::Wounds => ChronicleKind::DeathWounds,
+            DeathCause::Disease => ChronicleKind::DeathDisease,
             DeathCause::Unknown => ChronicleKind::DeathUnknown,
         }
     }

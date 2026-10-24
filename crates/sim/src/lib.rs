@@ -13,6 +13,7 @@ pub mod colonist;
 pub mod combat;
 pub mod command;
 pub mod creature;
+pub mod disease;
 pub mod drought;
 pub mod event;
 pub mod farm;
@@ -58,6 +59,9 @@ pub use combat::melee_damage;
 pub use command::Command;
 pub use creature::{
     CombatEvent, CombatReject, Creature, CreatureId, CreatureKind, CreatureRules, Mode, Role,
+};
+pub use disease::{
+    DOCTOR_ARG, DiseaseEvent, DiseaseKind, Illness, IllnessCause, IllnessPart, IllnessReport,
 };
 pub use drought::{DIG_ARG, DroughtEvent, Fire, Growth, GrowthCause, GrowthPart};
 pub use event::Event;
@@ -168,6 +172,8 @@ pub struct Sim {
     threats: Vec<Threat>,
     /// Dry days, ditches, and fires (S16).
     drought: drought::DroughtState,
+    /// Diseases, treatments, and sick rooms (S17).
+    disease: disease::DiseaseState,
     /// Rival colonies and raids (S18).
     raid: raid::RaidState,
     /// Migrant offer and counts (S15).
@@ -186,6 +192,9 @@ pub struct Sim {
     /// Drought and fire events for the caller. Not part of the state.
     #[serde(skip)]
     drought_events: Vec<DroughtEvent>,
+    /// Disease events for the caller. Not part of the state.
+    #[serde(skip)]
+    disease_events: Vec<DiseaseEvent>,
     /// Raid events for the caller. Not part of the state.
     #[serde(skip)]
     raid_events: Vec<RaidEvent>,
@@ -284,6 +293,8 @@ impl Sim {
             notice: notice::NoticeState::default(),
             threats: Vec::new(),
             drought: drought::DroughtState::default(),
+            disease: disease::DiseaseState::new(seed),
+            disease_events: Vec::new(),
             raid: raid::RaidState::new(seed),
             raid_events: Vec::new(),
             migrants: migrant::MigrantState::new(seed),
@@ -359,6 +370,7 @@ impl Sim {
         self.colony_daily_tick();
         self.notice_tick();
         self.drought_tick();
+        self.disease_tick();
         self.raid_tick();
         self.migrant_tick();
     }
@@ -628,6 +640,7 @@ impl Sim {
         }
         if !sim.buildings_state_ok()
             || !sim.drought_state_ok()
+            || !sim.disease_state_ok()
             || !sim.raid_state_ok()
             || !sim.migrant_state_ok()
             || !sim.creature_state_ok()

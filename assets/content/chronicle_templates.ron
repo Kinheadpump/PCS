@@ -14,6 +14,7 @@
         (kind: "death_hypothermia", text: "A colonist aged {0} froze to death."),
         (kind: "death_heatstroke", text: "A colonist aged {0} died of heat."),
         (kind: "death_wounds", text: "A colonist aged {0} died of wounds."),
+        (kind: "death_disease", text: "A colonist aged {0} died of a disease."),
         (kind: "death_unknown", text: "A colonist aged {0} died."),
         (kind: "left", text: "A colonist aged {0} left the colony after a long breakdown."),
         (kind: "winter_begins", text: "The first winter begins. The colony has {0} colonists and food for {1} days."),

@@ -37,6 +37,8 @@
     (id: "sorghum", name: "Sorghum", category: Food, hardness: 0, density: 20, value: 2, insulation: 0, flammability: 600, beauty: 0, rot_rate: 15, color: (200, 100, 70)),
     (id: "wild_roots", name: "Wild roots", category: Food, hardness: 0, density: 30, value: 1, insulation: 0, flammability: 100, beauty: 0, rot_rate: 40, color: (160, 120, 80)),
     (id: "fiber", name: "Plant fiber", category: Plant, hardness: 0, density: 10, value: 1, insulation: 0, flammability: 800, beauty: 0, color: (170, 180, 110)),
+    (id: "herbs", name: "Herbs", category: Plant, hardness: 0, density: 10, value: 2, insulation: 0, flammability: 700, beauty: 0, color: (110, 170, 90)),
+    (id: "herbal_medicine", name: "Herbal medicine", category: Plant, hardness: 0, density: 10, value: 6, insulation: 0, flammability: 500, beauty: 0, color: (150, 200, 130)),
     (id: "stone_axe", name: "Stone axe", category: Stone, hardness: 40, density: 100, value: 4, insulation: 0, flammability: 0, beauty: 0, color: (130, 120, 110)),
     (id: "stone_pick", name: "Stone pick", category: Stone, hardness: 40, density: 100, value: 4, insulation: 0, flammability: 0, beauty: 0, color: (120, 120, 130)),
     (id: "meat", name: "Meat", category: Food, hardness: 0, density: 40, value: 4, insulation: 0, flammability: 100, beauty: 0, rot_rate: 120, color: (178, 70, 66)),

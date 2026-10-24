@@ -367,6 +367,7 @@ impl Sim {
             Command::Designate { kind, x, y } => self.designate(*kind, *x, *y),
             Command::CancelDesignation { x, y } => self.cancel_designation(*x, *y),
             Command::DigDitch { x, y } => self.dig_ditch(*x, *y),
+            Command::SetSickRoom { x, y, on } => self.set_sick_room(*x, *y, *on),
             Command::CreateStockpile {
                 x0,
                 y0,
@@ -862,6 +863,7 @@ impl Sim {
                 match j.kind {
                     JobKind::Cut => !self.map.tree(x, y),
                     JobKind::Mine if j.is_dig() => self.ditch_allowed(j.x, j.y).is_err(),
+                    JobKind::Mine if j.is_doctor() => !self.doctor_job_wanted(j.x, j.y),
                     JobKind::Mine if j.is_extinguish() => self.fire_at(j.x, j.y).is_none(),
                     JobKind::Mine => self
                         .map
@@ -1009,6 +1011,7 @@ impl Sim {
         match job.kind {
             JobKind::Cut => rules.cut_ticks,
             JobKind::Mine if job.is_dig() => self.rules.drought.dig_ticks,
+            JobKind::Mine if job.is_doctor() => self.rules.disease.treat_ticks,
             JobKind::Mine if job.is_extinguish() => self.rules.drought.extinguish_ticks,
             JobKind::Mine => {
                 let rock = self
@@ -1034,6 +1037,7 @@ impl Sim {
         let target_ok = match job.kind {
             JobKind::Cut => self.map.tree(x, y),
             JobKind::Mine if job.is_dig() => self.ditch_allowed(job.x, job.y).is_ok(),
+            JobKind::Mine if job.is_doctor() => self.doctor_job_wanted(job.x, job.y),
             JobKind::Mine if job.is_extinguish() => self.fire_at(job.x, job.y).is_some(),
             JobKind::Mine => self
                 .map
@@ -1062,6 +1066,10 @@ impl Sim {
             JobKind::Construct | JobKind::Deconstruct | JobKind::Craft
         ) {
             self.complete_build_work(id, active, &job);
+            return;
+        }
+        if job.is_doctor() {
+            self.complete_doctor_work(id, active, &job);
             return;
         }
         if job.is_extinguish() {
@@ -1182,20 +1190,32 @@ impl Sim {
     /// The job is done: free the reservations, remove the job, add experience.
     pub(crate) fn finish_job(&mut self, id: ColonistId, active: ActiveJob, x: u16, y: u16) {
         let quiet = self.jobs.get(active.job).is_some_and(Job::is_extinguish);
+        self.finish_job_skill(id, active, x, y, active.kind.skill());
+        if !quiet {
+            self.notice_job_done(active.kind, x, y);
+        }
+    }
+
+    /// End a job and give experience in one skill. Make no noise.
+    pub(crate) fn finish_job_skill(
+        &mut self,
+        id: ColonistId,
+        active: ActiveJob,
+        x: u16,
+        y: u16,
+        skill: Option<Skill>,
+    ) {
         self.jobs.remove(active.job);
         self.jobs.dest_reservations.retain(|_, who| *who != id);
         let rules = self.rules.jobs;
         if let Some(c) = self.colonists.get_mut(id) {
             c.job = None;
             c.next_search = self.tick;
-            if let Some(skill) = active.kind.skill() {
+            if let Some(skill) = skill {
                 let cap = skill::max_xp(&rules);
                 let xp = &mut c.skill_xp[skill.index()];
                 *xp = xp.saturating_add(rules.xp_per_job).min(cap);
             }
-        }
-        if !quiet {
-            self.notice_job_done(active.kind, x, y);
         }
         self.job_events.push(JobEvent::Completed {
             colonist: id,

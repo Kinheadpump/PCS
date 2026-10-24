@@ -15,10 +15,10 @@ use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
 use base::content::{
-    BuildingDef, BuildingKind, ContentError, ContentIssue, DroughtRules, JobRules, MaterialDef,
-    NoticeRules, RaidRules, RecipeDef, RoomRules, load_buildings, load_drought_rules,
-    load_job_rules, load_materials, load_notice_rules, load_raid_rules, load_recipes,
-    load_room_rules,
+    BuildingDef, BuildingKind, ContentError, ContentIssue, DiseaseRules, DroughtRules, JobRules,
+    MaterialDef, NoticeRules, RaidRules, RecipeDef, RoomRules, load_buildings, load_disease_rules,
+    load_drought_rules, load_job_rules, load_materials, load_notice_rules, load_raid_rules,
+    load_recipes, load_room_rules,
 };
 use std::sync::Arc;
 use worldgen::{Ore, RockKind};
@@ -38,6 +38,7 @@ const START_TEXT: &str = include_str!("../../../assets/content/start.ron");
 const LEDGER_TEXT: &str = include_str!("../../../assets/content/ledger.ron");
 const CHRONICLE_TEXT: &str = include_str!("../../../assets/content/chronicle_templates.ron");
 const NOTICE_TEXT: &str = include_str!("../../../assets/content/notice.ron");
+const DISEASE_TEXT: &str = include_str!("../../../assets/content/disease.ron");
 const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
 const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
@@ -121,6 +122,12 @@ pub struct SimRules {
     pub notice: NoticeRules,
     /// Drought, irrigation, and fire numbers.
     pub drought: DroughtRules,
+    /// Disease and medicine numbers.
+    pub disease: DiseaseRules,
+    /// Material of the medicine (`disease.ron`).
+    pub medicine: u16,
+    /// Materials of raw food (`disease.ron`).
+    pub raw_foods: Vec<u16>,
     /// Rival colony and raid numbers.
     pub raid: RaidRules,
     /// Migrant numbers and background lines.
@@ -168,6 +175,9 @@ impl Default for SimRules {
             traits: Vec::new(),
             notice: NoticeRules::default(),
             drought: DroughtRules::default(),
+            disease: DiseaseRules::default(),
+            medicine: NO_MATERIAL,
+            raw_foods: Vec::new(),
             raid: RaidRules::default(),
             migrant: MigrantRules::default(),
             creature: CreatureRules::default(),
@@ -253,6 +263,36 @@ impl SimRules {
         self.start = load_start_rules("start.ron", texts.start, &self.materials)?;
         self.ledger = load_ledger_rules("ledger.ron", texts.ledger)?;
         self.chronicle = load_chronicle_rules("chronicle_templates.ron", texts.chronicle)?;
+        self.load_disease()
+    }
+
+    /// Load `disease.ron` and link its material keys.
+    fn load_disease(&mut self) -> Result<(), ContentError> {
+        let disease = load_disease_rules("disease.ron", DISEASE_TEXT)?;
+        let mut issues = Vec::new();
+        let mut find = |key: &str| -> u16 {
+            match self.materials.iter().position(|m| m.key == key) {
+                Some(i) => u16::try_from(i).unwrap_or(NO_MATERIAL),
+                None => {
+                    issues.push(ContentIssue {
+                        entry: Some(key.to_string()),
+                        message: "disease.ron needs this material".to_string(),
+                    });
+                    NO_MATERIAL
+                }
+            }
+        };
+        let medicine = find(&disease.medicine);
+        let raw_foods: Vec<u16> = disease.raw_foods.iter().map(|k| find(k)).collect();
+        if !issues.is_empty() {
+            return Err(ContentError {
+                file: "disease.ron".to_string(),
+                issues,
+            });
+        }
+        self.disease = disease;
+        self.medicine = medicine;
+        self.raw_foods = raw_foods;
         Ok(())
     }
 
@@ -373,6 +413,9 @@ impl SimRules {
             traits,
             notice,
             drought,
+            disease: DiseaseRules::default(),
+            medicine: NO_MATERIAL,
+            raw_foods: Vec::new(),
             raid,
             migrant,
             creature,
@@ -510,7 +553,7 @@ mod tests {
         assert_eq!(rules.materials[usize::from(rules.log)].key, "log");
         assert_eq!(SimRules::builtin().jobs, rules.jobs);
         assert_eq!(rules.buildings.len(), 8);
-        assert_eq!(rules.recipes.len(), 10);
+        assert_eq!(rules.recipes.len(), 11);
         assert_eq!(rules.rooms.max_tiles, 400);
         let wall = rules.building_index("wall").unwrap();
         let granite = rules.material_index("granite").unwrap();
