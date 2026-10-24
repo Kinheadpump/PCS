@@ -70,6 +70,13 @@
         (key: "crowded", name: "Crowded", value: -3, hours: 6, danger: false),
         (key: "goal_met", name: "Life goal met", value: 4, hours: 24, danger: false),
         (key: "goal_unmet", name: "Life goal not met", value: -4, hours: 24, danger: false),
+        // Relationships (R-036).
+        (key: "near_friend", name: "Near a friend", value: 2, hours: 12, danger: false),
+        (key: "near_rival", name: "Near a rival", value: -2, hours: 6, danger: false),
+        (key: "near_enemy", name: "Near an enemy", value: -4, hours: 6, danger: false),
+        (key: "friend_died", name: "A friend died", value: -6, hours: 72, danger: false),
+        (key: "partner_died", name: "A partner died", value: -15, hours: 168, danger: false),
+        (key: "new_partner", name: "Found a partner", value: 8, hours: 48, danger: false),
     ],
     // R-015 mood effects.
     mood_high_from: 70,
