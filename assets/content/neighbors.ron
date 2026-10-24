@@ -1,0 +1,42 @@
+// People of other colonies (R-045, R-046, R-047). Integers only (D-014).
+// Each rival colony has `people_per_rival` people. Their age, sex, and chemistry come from the
+// seed. A colonist and a person form a tie. The opinion of a tie is the sum of three named parts:
+//   Contact: 1 point for each `contact_days_per_point` days of contact, to `contact_max`.
+//   Chemistry: a fixed number from minus `chemistry_max` to plus `chemistry_max`.
+//   Grudge: minus the grudge that the colonist holds against the rival colony.
+// The mood values are the memories met_neighbor, grudge_raid, and neighbor_wed in `needs.ron`.
+(
+    people_per_rival: 4,
+    person_age_min: 18,
+    person_age_max: 40,
+    // Contacts. Each day a rival colony with a hostility of `contact_hostility_max` or less
+    // has a contact with a chance of `contact_permille` in 1,000.
+    contact_hostility_max: 50,
+    contact_permille: 300,
+    contact_days_per_point: 1,
+    contact_max: 60,
+    chemistry_max: 10,
+    // Standings by opinion.
+    friend_at: 30,
+    rival_at: -20,
+    enemy_at: -40,
+    // A free adult colonist and a person with this opinion wed, if the hostility of the rival
+    // colony is `wed_hostility_max` or less.
+    partner_at: 60,
+    partner_min_age: 18,
+    wed_hostility_max: 60,
+    // Grudges after a death in a raid. A colonist can hold up to `grudge_max` points.
+    grudge_partner: 40,
+    grudge_friend: 20,
+    grudge_kin: 30,
+    grudge_max: 100,
+    // One point of each grudge fades after this many days.
+    grudge_decay_days: 4,
+    // The Ties part of the hostility: each friend takes `friend_hostility` away, each wedding
+    // takes `wed_hostility` away, and `grudge_hostility_div` points of grudge add 1. The part
+    // stays between minus and plus `ties_max`.
+    friend_hostility: 3,
+    wed_hostility: 10,
+    grudge_hostility_div: 10,
+    ties_max: 30,
+)

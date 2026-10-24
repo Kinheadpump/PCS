@@ -260,6 +260,12 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-040 Colony growth:** The chance of migrants (R-017) is the sum of the base chance, the wealth, the average mood of the colonists, and the number of friend and partner pairs. Each part is named. A colonist whose life goal fails for a long time and whose mood is low leaves the colony. A child never leaves for this reason, and the last colonists stay. (D-086)
 
+**R-045 People of other colonies:** Each rival colony has a few people. A colonist meets a person of a calm rival colony (hostility 50 or less) with a daily chance. Contacts make a tie. The opinion of a tie is the sum of three named parts: contact days, chemistry, and the grudge of the colonist against that colony. The standing of a tie is friend, rival, or enemy by the opinion, as in R-035. (D-087)
+
+**R-046 Marriage across colonies:** A free adult colonist whose opinion of a person is 60 or more weds that person if the hostility of the rival colony is 60 or less. The person joins the colony as a new colonist and the partner of the colonist. A person weds one time. Each wedding takes 10 from the hostility of that colony. (D-087)
+
+**R-047 Grudges and the hostility of rivals:** When a colonist dies of wounds in a raid, the partner, the friends, and the parents and children of the dead hold a grudge against the raiding colony. A grudge lowers the opinion of the people of that colony, gives a mood memory, and fades by 1 point in 4 game days. The hostility of a rival colony has a Ties part: grudges add, friends and weddings take away. (D-087)
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.

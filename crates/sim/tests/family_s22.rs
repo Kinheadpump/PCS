@@ -458,7 +458,7 @@ fn r037_families_and_ages_survive_a_save_and_the_format_is_15() {
     let child = sim.debug_add_child(mother, father);
     sim.debug_make_pregnant(mother, father, 7);
     run_hours(&mut sim, 5);
-    assert_eq!(save::FORMAT_VERSION, 15);
+    assert_eq!(save::FORMAT_VERSION, 16);
     let loaded = save::from_bytes(&save::to_bytes(&sim)).unwrap();
     assert_eq!(loaded.family(child), sim.family(child));
     assert_eq!(loaded.family(mother), sim.family(mother));

@@ -868,6 +868,7 @@ impl Sim {
         self.wants_tick();
         self.relations_tick();
         self.family_day();
+        self.neighbors_day();
         self.assign_homes();
     }
 
@@ -928,6 +929,7 @@ impl Sim {
         self.release_colonist(id);
         self.colonists.remove(id);
         self.relations_forget(id);
+        self.neighbors_forget(id);
         self.life_events.push(LifeEvent::Left { x, y });
         self.chronicle_gone(kind, age);
     }
@@ -961,7 +963,9 @@ impl Sim {
             cause,
         });
         self.chronicle_gone(crate::ChronicleKind::of_death(cause), grave.age);
+        self.neighbors_forget(id);
         self.relations_mourn(&mourners);
+        self.neighbors_grudge(&mourners, &kin, cause);
         self.family_mourn(&kin);
         if let Some(index) = self.rules.needs.memory_index("colonist_died") {
             let others: Vec<ColonistId> = self.colonists.iter().map(|(i, _)| i).collect();

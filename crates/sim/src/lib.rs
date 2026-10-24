@@ -28,6 +28,7 @@ pub mod map;
 pub mod migrant;
 pub mod needact;
 pub mod needs;
+pub mod neighbors;
 pub mod notice;
 pub mod path;
 pub mod production;
@@ -89,6 +90,9 @@ pub use migrant::{
     MigrantProfile, MigrantRules,
 };
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
+pub use neighbors::{
+    NeighborCause, NeighborEvent, NeighborPart, NeighborPerson, NeighborRules, NeighborTie,
+};
 pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;
 pub use raid::{
@@ -193,12 +197,17 @@ pub struct Sim {
     creature: creature::CreatureState,
     /// Relations between colonists (S21).
     relation_state: relations::RelationState,
+    /// Ties with the people of rival colonies (S24).
+    neighbors: neighbors::NeighborState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
     /// Standing changes for the caller. Not part of the state.
     #[serde(skip)]
     relation_events: Vec<RelationEvent>,
+    /// Events of the people of other colonies for the caller. Not part of the state.
+    #[serde(skip)]
+    neighbor_events: Vec<neighbors::NeighborEvent>,
     /// Family events for the caller. Not part of the state.
     #[serde(skip)]
     family_events: Vec<FamilyEvent>,
@@ -322,6 +331,8 @@ impl Sim {
             creature: creature::CreatureState::new(seed),
             relation_state: relations::RelationState::new(seed),
             relation_events: Vec::new(),
+            neighbors: neighbors::NeighborState::default(),
+            neighbor_events: Vec::new(),
             family_events: Vec::new(),
             combat_events: Vec::new(),
             notice_events: Vec::new(),
@@ -665,6 +676,7 @@ impl Sim {
             || !sim.drought_state_ok()
             || !sim.disease_state_ok()
             || !sim.raid_state_ok()
+            || !sim.neighbors_state_ok()
             || !sim.migrant_state_ok()
             || !sim.creature_state_ok()
         {
