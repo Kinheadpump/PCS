@@ -81,6 +81,10 @@
         (key: "child_born", name: "A child was born", value: 8, hours: 72, danger: false),
         (key: "parent_died", name: "A parent died", value: -10, hours: 120, danger: false),
         (key: "child_died", name: "A child died", value: -20, hours: 240, danger: false),
+        // People of other colonies (R-041, R-042, R-043).
+        (key: "met_neighbor", name: "Met a neighbor", value: 2, hours: 24, danger: false),
+        (key: "grudge_raid", name: "Grudge after a raid", value: -5, hours: 240, danger: false),
+        (key: "neighbor_wed", name: "Wed across colonies", value: 8, hours: 72, danger: false),
     ],
     // R-015 mood effects.
     mood_high_from: 70,

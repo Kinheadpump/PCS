@@ -63,6 +63,9 @@ pub enum HostilityCause {
     Notice,
     /// Tributes and fights of earlier raids (R-072).
     Raids,
+    /// Friends, weddings, and grudges between the colonists and the people of the rival colony
+    /// (R-043).
+    Ties,
 }
 
 /// One contribution to the hostility.
@@ -79,7 +82,7 @@ pub struct HostilityPart {
 pub struct Hostility {
     /// The sum, limited to 0 to 100.
     pub total: u32,
-    /// The parts: history, wealth, Notice, then raids.
+    /// The parts: history, wealth, Notice, raids, then ties.
     pub parts: Vec<HostilityPart>,
 }
 
@@ -339,6 +342,10 @@ impl Sim {
             HostilityPart {
                 cause: HostilityCause::Raids,
                 value: rival.adjust,
+            },
+            HostilityPart {
+                cause: HostilityCause::Ties,
+                value: self.neighbor_ties_value(index),
             },
         ];
         let sum = parts

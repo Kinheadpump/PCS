@@ -181,8 +181,8 @@ pub struct FamilyReport {
 
 /// The living kin of a colonist, taken before it is removed.
 pub(crate) struct Kin {
-    parents: Vec<ColonistId>,
-    children: Vec<ColonistId>,
+    pub(crate) parents: Vec<ColonistId>,
+    pub(crate) children: Vec<ColonistId>,
 }
 
 impl Sim {

@@ -27,5 +27,6 @@
         (kind: "first_harvest", text: "The first harvest: {0} units."),
         (kind: "food_rotted", text: "{0} units of food rotted."),
         (kind: "birth", text: "A child was born. The colony has {0} colonists."),
+        (kind: "wedding", text: "A person of a rival colony wed a colonist and joined the colony. The colony has {0} colonists."),
     ],
 )

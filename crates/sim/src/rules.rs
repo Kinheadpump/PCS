@@ -13,6 +13,7 @@ use crate::farm::{FarmRules, load_farm_rules};
 use crate::ledger::{LedgerRules, load_ledger_rules};
 use crate::migrant::{MigrantRules, load_migrant_rules};
 use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
+use crate::neighbors::{NeighborRules, load_neighbor_rules};
 use crate::relations::{RelationRules, load_relation_rules};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
@@ -47,6 +48,7 @@ const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
 const CREATURE_TEXT: &str = include_str!("../../../assets/content/creatures.ron");
 const RELATIONS_TEXT: &str = include_str!("../../../assets/content/relations.ron");
+const NEIGHBORS_TEXT: &str = include_str!("../../../assets/content/neighbors.ron");
 const FAMILY_TEXT: &str = include_str!("../../../assets/content/family.ron");
 const WANTS_TEXT: &str = include_str!("../../../assets/content/wants.ron");
 
@@ -146,6 +148,8 @@ pub struct SimRules {
     pub relations: RelationRules,
     /// Family, age, and home numbers.
     pub family: FamilyRules,
+    /// Numbers for the people of other colonies.
+    pub neighbors: NeighborRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -196,6 +200,7 @@ impl Default for SimRules {
             wants: WantRules::default(),
             relations: RelationRules::default(),
             family: FamilyRules::default(),
+            neighbors: NeighborRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -377,6 +382,7 @@ impl SimRules {
         let wants = load_want_rules("wants.ron", WANTS_TEXT, &needs)?;
         let relations = load_relation_rules("relations.ron", RELATIONS_TEXT, &needs)?;
         let family = load_family_rules("family.ron", FAMILY_TEXT, &needs)?;
+        let neighbors = load_neighbor_rules("neighbors.ron", NEIGHBORS_TEXT, &needs)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -440,6 +446,7 @@ impl SimRules {
             wants,
             relations,
             family,
+            neighbors,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
