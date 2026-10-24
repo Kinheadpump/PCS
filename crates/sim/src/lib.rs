@@ -32,6 +32,7 @@ pub mod path;
 pub mod production;
 pub mod raid;
 pub mod region;
+pub mod relations;
 pub mod room;
 pub mod rules;
 pub mod save;
@@ -90,6 +91,9 @@ pub use raid::{
     RaidReject, RaidWarning, RivalColony, TributeGood,
 };
 pub use region::Regions;
+pub use relations::{
+    OpinionCause, OpinionPart, RelationEvent, RelationReport, RelationRules, Standing,
+};
 pub use room::{
     BeautyCause, BeautyPart, BorderKind, BorderTile, InsulationPart, Room, RoomBeauty,
     RoomInsulation, Rooms,
@@ -182,9 +186,14 @@ pub struct Sim {
     migrants: migrant::MigrantState,
     /// Creatures, lairs, and kill counts (S13).
     creature: creature::CreatureState,
+    /// Relations between colonists (S21).
+    relation_state: relations::RelationState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
+    /// Standing changes for the caller. Not part of the state.
+    #[serde(skip)]
+    relation_events: Vec<RelationEvent>,
     /// Life events for the caller. Not part of the state.
     #[serde(skip)]
     life_events: Vec<LifeEvent>,
@@ -303,6 +312,8 @@ impl Sim {
             migrants: migrant::MigrantState::new(seed),
             migrant_events: Vec::new(),
             creature: creature::CreatureState::new(seed),
+            relation_state: relations::RelationState::new(seed),
+            relation_events: Vec::new(),
             combat_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),

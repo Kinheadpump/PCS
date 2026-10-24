@@ -863,6 +863,7 @@ impl Sim {
             self.kill(id, cause);
         }
         self.wants_tick();
+        self.relations_tick();
     }
 
     /// Give every colonist of a new colony a social trait and a life goal (R-033).
@@ -916,6 +917,7 @@ impl Sim {
         let age = c.age;
         self.release_colonist(id);
         self.colonists.remove(id);
+        self.relations_forget(id);
         self.life_events.push(LifeEvent::Left { x, y });
         self.chronicle_gone(crate::ChronicleKind::Left, age);
     }
@@ -935,6 +937,7 @@ impl Sim {
         };
         self.release_colonist(id);
         self.colonists.remove(id);
+        let mourners = self.relations_forget(id);
         self.graveyard.push(grave);
         let cap = self.rules.needs.graveyard_max as usize;
         if self.graveyard.len() > cap {
@@ -947,6 +950,7 @@ impl Sim {
             cause,
         });
         self.chronicle_gone(crate::ChronicleKind::of_death(cause), grave.age);
+        self.relations_mourn(&mourners);
         if let Some(index) = self.rules.needs.memory_index("colonist_died") {
             let others: Vec<ColonistId> = self.colonists.iter().map(|(i, _)| i).collect();
             for other in others {

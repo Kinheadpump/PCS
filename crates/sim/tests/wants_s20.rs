@@ -269,14 +269,14 @@ fn r034_the_mood_total_is_still_the_sum_of_the_named_parts() {
 }
 
 #[test]
-fn r033_the_personality_survives_a_save_and_the_format_is_13() {
+fn r033_the_personality_survives_a_save_and_the_format_is_current() {
     let mut sim = calm(&open_map(10, 10, &[(1, 1)]));
     let id = ids(&sim)[0];
     sim.debug_set_social(id, Social::Introvert);
     assert!(sim.debug_set_goal(id, Some("own_room")));
     run_hours(&mut sim, 5);
     let bytes = save::to_bytes(&sim);
-    assert_eq!(save::FORMAT_VERSION, 13);
+    assert_eq!(save::FORMAT_VERSION, 14);
     let loaded = save::from_bytes(&bytes).unwrap();
     let w = loaded.wants(ids(&loaded)[0]).unwrap();
     assert_eq!(w.social, Social::Introvert);

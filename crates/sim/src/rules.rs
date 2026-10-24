@@ -12,6 +12,7 @@ use crate::farm::{FarmRules, load_farm_rules};
 use crate::ledger::{LedgerRules, load_ledger_rules};
 use crate::migrant::{MigrantRules, load_migrant_rules};
 use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
+use crate::relations::{RelationRules, load_relation_rules};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
 use crate::wants::{WantRules, load_want_rules};
@@ -44,6 +45,7 @@ const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
 const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
 const CREATURE_TEXT: &str = include_str!("../../../assets/content/creatures.ron");
+const RELATIONS_TEXT: &str = include_str!("../../../assets/content/relations.ron");
 const WANTS_TEXT: &str = include_str!("../../../assets/content/wants.ron");
 
 /// Material index used when a material key is not in the content. It never happens
@@ -138,6 +140,8 @@ pub struct SimRules {
     pub creature: CreatureRules,
     /// Wants and personality numbers.
     pub wants: WantRules,
+    /// Relationship numbers.
+    pub relations: RelationRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -186,6 +190,7 @@ impl Default for SimRules {
             migrant: MigrantRules::default(),
             creature: CreatureRules::default(),
             wants: WantRules::default(),
+            relations: RelationRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -365,6 +370,7 @@ impl SimRules {
         let migrant = load_migrant_rules("migrants.ron", MIGRANT_TEXT)?;
         let creature = load_creature_rules("creatures.ron", CREATURE_TEXT, &materials)?;
         let wants = load_want_rules("wants.ron", WANTS_TEXT, &needs)?;
+        let relations = load_relation_rules("relations.ron", RELATIONS_TEXT, &needs)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -426,6 +432,7 @@ impl SimRules {
             migrant,
             creature,
             wants,
+            relations,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),

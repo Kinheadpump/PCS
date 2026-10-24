@@ -1,0 +1,31 @@
+// Relationships (R-035, R-036). Integers only (D-014).
+// The opinion of two colonists is the sum of five named parts:
+//   Together: 1 point for each `together_hours_per_point` hours that both are awake and near.
+//   SharedSleep: 1 point for each `sleep_hours_per_point` hours that both sleep near each other.
+//   Quarrels: minus 1 point for each `quarrel_hours_per_point` hours that they are near and one
+//     of them has a mood below `quarrel_mood_below`.
+//   Temperament: `same_trait` if both have the same social trait, `opposite_trait` if the traits
+//     are introvert and extrovert.
+//   Chemistry: a fixed number from minus `chemistry_max` to plus `chemistry_max` for each pair.
+// The mood values of the standings are the memories near_friend, near_rival, near_enemy,
+// friend_died, partner_died, and new_partner in `needs.ron`.
+(
+    near_radius: 4,
+    together_hours_per_point: 12,
+    together_max: 40,
+    sleep_hours_per_point: 8,
+    sleep_max: 20,
+    quarrel_mood_below: 35,
+    quarrel_hours_per_point: 6,
+    quarrel_max: 70,
+    same_trait: 5,
+    opposite_trait: -5,
+    chemistry_max: 10,
+    // Standings by opinion.
+    friend_at: 30,
+    rival_at: -30,
+    enemy_at: -60,
+    // Two free adults with this opinion become partners.
+    partner_at: 70,
+    partner_min_age: 18,
+)

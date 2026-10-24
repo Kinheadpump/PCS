@@ -248,6 +248,10 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-034 Wants:** Each game hour, a want gives a timed mood modifier (R-014) that has a name. An extrovert with company is glad, and an extrovert that is alone for 24 hours in a row is lonely. An introvert that is alone is glad, and an introvert in a crowd for 12 hours in a row is crowded. A met life goal adds a modifier. A life goal that is not met adds a negative modifier after a patience time of 20 days. (D-083)
 
+**R-035 Opinion:** Two colonists that are near each other have an opinion of each other. The opinion is the sum of named parts: time together, shared sleep, quarrels, temperament, and chemistry. The opinion gives a standing: acquaintance, friend, rival, or enemy. (D-084)
+
+**R-036 Bonds:** A friend, a rival, or an enemy that is near a colonist adds a named mood modifier. When a friend dies, the friend gets a stronger modifier than other colonists. Two free adults with a high opinion become partners, and the death of a partner gives the strongest modifier. (D-084)
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.
