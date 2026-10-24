@@ -671,6 +671,9 @@ impl Sim {
         let Some(c) = self.colonists.get(id) else {
             return (None, false);
         };
+        if c.age < self.rules.family.adult_age {
+            return (None, false);
+        }
         let from = c.tile();
         let region = self.regions.id_at(i32::from(from.0), i32::from(from.1));
         if region == 0 {

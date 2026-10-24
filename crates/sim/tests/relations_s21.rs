@@ -302,12 +302,12 @@ fn r035_a_scenario_colony_with_one_colonist_has_no_relations() {
 }
 
 #[test]
-fn r035_relations_survive_a_save_and_the_format_is_14() {
+fn r035_relations_survive_a_save_and_the_format_is_current() {
     let mut sim = calm(10, 10, &[(1, 1), (2, 1)]);
     let all = ids(&sim);
     run_hours(&mut sim, 30);
     let bytes = save::to_bytes(&sim);
-    assert_eq!(save::FORMAT_VERSION, 14);
+    assert_eq!(save::FORMAT_VERSION, 15);
     let loaded = save::from_bytes(&bytes).unwrap();
     assert_eq!(
         loaded.relation(all[0], all[1]),

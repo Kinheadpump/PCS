@@ -501,6 +501,12 @@ impl Sim {
             if let Some(rel) = self.relation_state.map.get_mut(&key) {
                 rel.partner = true;
             }
+            // The pair gets new beds in the same room (R-039).
+            for id in [key.0, key.1] {
+                if let Some(c) = self.colonists.get_mut(id) {
+                    c.bed = None;
+                }
+            }
             self.give_memory(key.0, r.memories.new_partner);
             self.give_memory(key.1, r.memories.new_partner);
         }
