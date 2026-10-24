@@ -1,4 +1,4 @@
-//! Sprint 24 tests (sim part): people of other colonies (R-041, R-042, R-043). A colonist meets
+//! Sprint 24 tests (sim part): people of other colonies (R-045, R-046, R-047). A colonist meets
 //! the people of calm rival colonies and forms ties with them. A tie can end in a wedding, and
 //! the new partner joins the colony. A raid death leaves grudges. Ties and grudges change the
 //! hostility of the rival colony.
@@ -84,7 +84,7 @@ fn ties_part(sim: &Sim) -> i32 {
 }
 
 #[test]
-fn r041_the_content_is_ordered_and_has_the_memory_keys() {
+fn r045_the_content_is_ordered_and_has_the_memory_keys() {
     let rules = SimRules::builtin();
     let n = &rules.neighbors;
     assert!(n.people_per_rival > 0 && n.contact_days_per_point > 0);
@@ -98,7 +98,7 @@ fn r041_the_content_is_ordered_and_has_the_memory_keys() {
 }
 
 #[test]
-fn r041_the_people_of_a_rival_colony_are_adults_from_the_seed() {
+fn r045_the_people_of_a_rival_colony_are_adults_from_the_seed() {
     let a = calm(&[(1, 1)], 10);
     let b = calm(&[(1, 1)], 10);
     let n = a.rules().neighbors.clone();
@@ -113,7 +113,7 @@ fn r041_the_people_of_a_rival_colony_are_adults_from_the_seed() {
 }
 
 #[test]
-fn r041_a_contact_with_a_calm_rival_makes_a_tie_and_a_memory() {
+fn r045_a_contact_with_a_calm_rival_makes_a_tie_and_a_memory() {
     let mut sim = calm(&[(1, 1)], 10);
     let id = ids(&sim)[0];
     run_days(&mut sim, 1);
@@ -137,7 +137,7 @@ fn r041_a_contact_with_a_calm_rival_makes_a_tie_and_a_memory() {
 }
 
 #[test]
-fn r041_a_hostile_rival_makes_no_contact() {
+fn r045_a_hostile_rival_makes_no_contact() {
     let mut sim = calm(&[(1, 1)], 100);
     run_days(&mut sim, 3);
     assert_eq!(sim.neighbor_contacts(0), 0);
@@ -145,7 +145,7 @@ fn r041_a_hostile_rival_makes_no_contact() {
 }
 
 #[test]
-fn r041_the_opinion_is_the_sum_of_named_parts() {
+fn r045_the_opinion_is_the_sum_of_named_parts() {
     let mut sim = calm(&[(1, 1)], 10);
     let id = ids(&sim)[0];
     let n = sim.rules().neighbors.clone();
@@ -165,7 +165,7 @@ fn r041_the_opinion_is_the_sum_of_named_parts() {
 }
 
 #[test]
-fn r041_friends_and_grudges_move_the_hostility_of_the_rival() {
+fn r045_friends_and_grudges_move_the_hostility_of_the_rival() {
     let mut sim = calm(&[(1, 1)], 10);
     let id = ids(&sim)[0];
     let n = sim.rules().neighbors.clone();
@@ -184,7 +184,7 @@ fn r041_friends_and_grudges_move_the_hostility_of_the_rival() {
 }
 
 #[test]
-fn r042_a_tie_with_a_high_opinion_ends_in_a_wedding() {
+fn r046_a_tie_with_a_high_opinion_ends_in_a_wedding() {
     let mut sim = calm(&[(1, 1)], 10);
     let id = ids(&sim)[0];
     sim.debug_set_neighbor_tie(id, 0, 1, 500, 10);
@@ -219,7 +219,7 @@ fn r042_a_tie_with_a_high_opinion_ends_in_a_wedding() {
 }
 
 #[test]
-fn r042_a_colonist_with_a_partner_does_not_wed() {
+fn r046_a_colonist_with_a_partner_does_not_wed() {
     let mut sim = calm(&[(1, 1), (2, 1)], 10);
     let all = ids(&sim);
     run_hours(&mut sim, 1);
@@ -234,7 +234,7 @@ fn r042_a_colonist_with_a_partner_does_not_wed() {
 }
 
 #[test]
-fn r042_a_hostile_rival_does_not_wed() {
+fn r046_a_hostile_rival_does_not_wed() {
     let mut sim = calm(&[(1, 1)], 100);
     let id = ids(&sim)[0];
     sim.debug_set_neighbor_tie(id, 0, 1, 500, 10);
@@ -243,7 +243,7 @@ fn r042_a_hostile_rival_does_not_wed() {
 }
 
 #[test]
-fn r043_a_raid_death_leaves_grudges_with_the_partner_and_friends() {
+fn r047_a_raid_death_leaves_grudges_with_the_partner_and_friends() {
     let mut sim = calm(&[(1, 1), (2, 1)], 10);
     let all = ids(&sim);
     run_hours(&mut sim, 1);
@@ -269,7 +269,7 @@ fn r043_a_raid_death_leaves_grudges_with_the_partner_and_friends() {
 }
 
 #[test]
-fn r043_a_death_outside_a_raid_leaves_no_grudge() {
+fn r047_a_death_outside_a_raid_leaves_no_grudge() {
     let mut sim = calm(&[(1, 1), (2, 1)], 10);
     let all = ids(&sim);
     sim.debug_kill_wounded(all[1]);
@@ -277,7 +277,7 @@ fn r043_a_death_outside_a_raid_leaves_no_grudge() {
 }
 
 #[test]
-fn r043_a_grudge_fades_over_the_days() {
+fn r047_a_grudge_fades_over_the_days() {
     let mut sim = calm(&[(1, 1)], 100);
     let id = ids(&sim)[0];
     let decay = u64::from(sim.rules().neighbors.grudge_decay_days);
@@ -289,7 +289,7 @@ fn r043_a_grudge_fades_over_the_days() {
 }
 
 #[test]
-fn r043_a_gone_colonist_leaves_no_ties_or_grudges() {
+fn r047_a_gone_colonist_leaves_no_ties_or_grudges() {
     let mut sim = calm(&[(1, 1), (2, 1)], 10);
     let all = ids(&sim);
     sim.debug_set_neighbor_tie(all[1], 0, 0, 20, 0);
@@ -300,7 +300,7 @@ fn r043_a_gone_colonist_leaves_no_ties_or_grudges() {
 }
 
 #[test]
-fn r041_ties_survive_a_save_and_the_run_is_repeatable() {
+fn r045_ties_survive_a_save_and_the_run_is_repeatable() {
     let make = || {
         let mut sim = calm(&[(1, 1)], 10);
         run_days(&mut sim, 4);

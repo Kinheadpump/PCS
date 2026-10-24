@@ -1,4 +1,4 @@
-//! People of other colonies (S24, R-041, R-042, R-043).
+//! People of other colonies (S24, R-045, R-046, R-047).
 //!
 //! Each rival colony has a few people. Their age, sex, and chemistry come from the seed, so the
 //! state holds only the ties. Each game day a calm rival colony can have a contact: one colonist
@@ -262,7 +262,7 @@ impl Sim {
         mix(self.relation_state.seed ^ TAG_NEIGHBOR ^ mix(a ^ mix(b ^ mix(c))))
     }
 
-    /// A person of a rival colony (R-041). `None` for a wrong rival or person.
+    /// A person of a rival colony (R-045). `None` for a wrong rival or person.
     pub fn neighbor_person(&self, rival: usize, slot: u8) -> Option<NeighborPerson> {
         let n = &self.rules.neighbors;
         if rival >= self.raid.rivals.len() || slot >= n.people_per_rival {
@@ -392,7 +392,7 @@ impl Sim {
         std::mem::take(&mut self.neighbor_events)
     }
 
-    /// The Ties part of the hostility of a rival colony (R-043): grudges add, friends and
+    /// The Ties part of the hostility of a rival colony (R-047): grudges add, friends and
     /// weddings take away.
     pub(crate) fn neighbor_ties_value(&self, index: usize) -> i32 {
         let n = &self.rules.neighbors;
@@ -588,7 +588,7 @@ impl Sim {
     }
 
     /// A colonist died of wounds during a raid: the partner, the friends, and the kin of the dead
-    /// get a grudge against the raiding colony (R-043).
+    /// get a grudge against the raiding colony (R-047).
     pub(crate) fn neighbors_grudge(
         &mut self,
         mourners: &[(ColonistId, Standing)],

@@ -64,7 +64,7 @@ pub enum HostilityCause {
     /// Tributes and fights of earlier raids (R-072).
     Raids,
     /// Friends, weddings, and grudges between the colonists and the people of the rival colony
-    /// (R-043).
+    /// (R-047).
     Ties,
 }
 

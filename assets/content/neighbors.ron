@@ -1,4 +1,4 @@
-// People of other colonies (R-041, R-042, R-043). Integers only (D-014).
+// People of other colonies (R-045, R-046, R-047). Integers only (D-014).
 // Each rival colony has `people_per_rival` people. Their age, sex, and chemistry come from the
 // seed. A colonist and a person form a tie. The opinion of a tie is the sum of three named parts:
 //   Contact: 1 point for each `contact_days_per_point` days of contact, to `contact_max`.
