@@ -85,6 +85,7 @@
         (key: "met_neighbor", name: "Met a neighbor", value: 2, hours: 24, danger: false),
         (key: "grudge_raid", name: "Grudge after a raid", value: -5, hours: 240, danger: false),
         (key: "neighbor_wed", name: "Wed across colonies", value: 8, hours: 72, danger: false),
+        (key: "storm_damage", name: "Storm tore a roof off", value: -4, hours: 48, danger: false),
     ],
     // R-015 mood effects.
     mood_high_from: 70,

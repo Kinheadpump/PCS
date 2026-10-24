@@ -51,11 +51,15 @@ pub enum ChronicleKind {
     Birth,
     /// A person of a rival colony wed a colonist. Number 0: colonists after the wedding.
     Wedding,
+    /// The river flooded the land. Number 0: the river level.
+    Flood,
+    /// A storm hit the colony. Number 0: strength. Number 1: roofs lost.
+    Storm,
 }
 
 impl ChronicleKind {
     /// All kinds, in index order.
-    pub const ALL: [ChronicleKind; 18] = [
+    pub const ALL: [ChronicleKind; 20] = [
         ChronicleKind::DeathStarvation,
         ChronicleKind::DeathHypothermia,
         ChronicleKind::DeathHeatstroke,
@@ -74,6 +78,8 @@ impl ChronicleKind {
         ChronicleKind::FoodRotted,
         ChronicleKind::Birth,
         ChronicleKind::Wedding,
+        ChronicleKind::Flood,
+        ChronicleKind::Storm,
     ];
 
     /// The key in the template file.
@@ -97,6 +103,8 @@ impl ChronicleKind {
             ChronicleKind::FoodRotted => "food_rotted",
             ChronicleKind::Birth => "birth",
             ChronicleKind::Wedding => "wedding",
+            ChronicleKind::Flood => "flood",
+            ChronicleKind::Storm => "storm",
         }
     }
 

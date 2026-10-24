@@ -19,6 +19,7 @@ use crate::relations::{RelationRules, load_relation_rules};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
 use crate::wants::{WantRules, load_want_rules};
+use crate::weather::{WeatherRules, load_weather_rules};
 use base::content::{
     BuildingDef, BuildingKind, ContentError, ContentIssue, DiseaseRules, DroughtRules, JobRules,
     MaterialDef, NoticeRules, RaidRules, RecipeDef, RoomRules, load_buildings, load_disease_rules,
@@ -49,6 +50,7 @@ const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
 const CREATURE_TEXT: &str = include_str!("../../../assets/content/creatures.ron");
 const RELATIONS_TEXT: &str = include_str!("../../../assets/content/relations.ron");
+const WEATHER_TEXT: &str = include_str!("../../../assets/content/weather.ron");
 const NEIGHBORS_TEXT: &str = include_str!("../../../assets/content/neighbors.ron");
 const RACES_TEXT: &str = include_str!("../../../assets/content/races.ron");
 const FAMILY_TEXT: &str = include_str!("../../../assets/content/family.ron");
@@ -152,6 +154,8 @@ pub struct SimRules {
     pub family: FamilyRules,
     /// Numbers for the people of other colonies.
     pub neighbors: NeighborRules,
+    /// Snow, floods, and storms (`weather.ron`).
+    pub weather: WeatherRules,
     /// Races and the rules of race pairs.
     pub races: RaceRules,
     /// Fuel materials of the hearth, in file order.
@@ -205,6 +209,7 @@ impl Default for SimRules {
             relations: RelationRules::default(),
             family: FamilyRules::default(),
             neighbors: NeighborRules::default(),
+            weather: WeatherRules::default(),
             races: RaceRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
@@ -389,6 +394,7 @@ impl SimRules {
         let family = load_family_rules("family.ron", FAMILY_TEXT, &needs)?;
         let races = load_race_rules("races.ron", RACES_TEXT)?;
         let neighbors = load_neighbor_rules("neighbors.ron", NEIGHBORS_TEXT, &needs)?;
+        let weather = load_weather_rules("weather.ron", WEATHER_TEXT, &needs)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -453,6 +459,7 @@ impl SimRules {
             relations,
             family,
             neighbors,
+            weather,
             races,
             fuel,
             spoil: SpoilRules::empty(),
