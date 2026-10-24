@@ -112,6 +112,12 @@ pub struct WantRules {
     pub crowd_after_hours: u32,
     /// Hours that a goal can stay unmet before it costs mood.
     pub goal_patience_hours: u32,
+    /// More hours after the patience until a colonist with a low mood leaves.
+    pub goal_leave_extra_hours: u32,
+    /// A colonist leaves only with a mood below this.
+    pub goal_leave_mood_below: i32,
+    /// A colonist leaves only if the colony has this many colonists or more.
+    pub leave_min_colonists: usize,
     /// Life goals, in file order.
     pub goals: Vec<GoalDef>,
     /// Linked memory indices.
@@ -199,6 +205,8 @@ pub struct GoalReport {
     pub unmet_hours: u32,
     /// Hours of patience before an unmet goal costs mood.
     pub patience_hours: u32,
+    /// Hours of unmet goal after which a colonist with a low mood leaves (R-040).
+    pub leave_after_hours: u32,
 }
 
 /// The wants of a colonist, for the UI.
@@ -295,6 +303,11 @@ impl Sim {
             target,
             unmet_hours: c.goal_unmet_hours,
             patience_hours: self.rules.wants.goal_patience_hours,
+            leave_after_hours: self
+                .rules
+                .wants
+                .goal_patience_hours
+                .saturating_add(self.rules.wants.goal_leave_extra_hours),
         })
     }
 
@@ -355,6 +368,7 @@ impl Sim {
             .any(|(_, c)| c.goal > 0)
             .then(|| self.ledger().food.days_remaining_tenths)
             .flatten();
+        let mut leavers: Vec<ColonistId> = Vec::new();
         for id in ids {
             let Some(c) = self.colonists.get(id) else {
                 continue;
@@ -394,7 +408,11 @@ impl Sim {
                 }
             }
             let mut unmet = c.goal_unmet_hours;
-            if let Some(g) = self.goal_report_of(id, food) {
+            // A child has no goal to fail yet.
+            let child = c.age < rules.family.adult_age;
+            if child {
+                unmet = 0;
+            } else if let Some(g) = self.goal_report_of(id, food) {
                 if g.met {
                     unmet = 0;
                     gives.push(r.memories.goal_met);
@@ -413,6 +431,29 @@ impl Sim {
             for key in gives {
                 self.give_memory(id, key);
             }
+            if !child
+                && unmet
+                    >= r.goal_patience_hours
+                        .saturating_add(r.goal_leave_extra_hours)
+                && self
+                    .mood(id)
+                    .is_some_and(|m| m.total < r.goal_leave_mood_below)
+            {
+                leavers.push(id);
+            }
+        }
+        // The colony fails their goal: they leave (R-040). The last colonists stay.
+        for id in leavers {
+            if self.colonists.len() >= r.leave_min_colonists.max(2) {
+                self.leave_with(id, crate::ChronicleKind::LeftGoals);
+            }
+        }
+    }
+
+    /// Set the hours that the life goal was not met. For scenario tests and debug tools.
+    pub fn debug_set_goal_unmet_hours(&mut self, id: ColonistId, hours: u32) {
+        if let Some(c) = self.colonists.get_mut(id) {
+            c.goal_unmet_hours = hours;
         }
     }
 

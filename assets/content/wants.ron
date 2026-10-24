@@ -15,6 +15,12 @@
     crowd_after_hours: 12,
     // A life goal that is not met costs no mood before this many hours (20 days).
     goal_patience_hours: 480,
+    // A colonist whose goal was not met for patience plus this many hours leaves the colony,
+    // if the mood is below goal_leave_mood_below, the colonist is an adult, and the colony has
+    // leave_min_colonists or more colonists.
+    goal_leave_extra_hours: 480,
+    goal_leave_mood_below: 35,
+    leave_min_colonists: 3,
     // Life goals. Kinds:
     //   PrivateRoom: the colonist slept in a room with exactly one bed.
     //   Skill(name, level): a skill of this level.

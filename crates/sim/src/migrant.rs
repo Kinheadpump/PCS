@@ -39,6 +39,14 @@ pub struct MigrantRules {
     pub max_pct: u32,
     /// Largest group.
     pub group_max: u32,
+    /// Mood that gives no change of the chance.
+    pub mood_ref: i32,
+    /// Points of average mood for 1 percent of chance.
+    pub mood_points_per_pct: i32,
+    /// Largest change of the chance by mood, up or down, in percent.
+    pub mood_pct_max: u32,
+    /// Largest change of the chance by bonds, in percent.
+    pub bond_pct_max: u32,
     /// Ticks that the player has to answer.
     pub decision_ticks: u32,
     /// Lowest level of the main skill.
@@ -59,6 +67,9 @@ pub fn load_migrant_rules(file: &str, text: &str) -> Result<MigrantRules, Conten
     if r.wealth_per_pct == 0 {
         issues.add("wealth_per_pct", "must be 1 or more");
     }
+    if r.mood_points_per_pct <= 0 {
+        issues.add("mood_points_per_pct", "must be 1 or more");
+    }
     if r.decision_ticks == 0 {
         issues.add("decision_ticks", "must be 1 or more");
     }
@@ -72,6 +83,37 @@ pub fn load_migrant_rules(file: &str, text: &str) -> Result<MigrantRules, Conten
         issues.add("backgrounds", "must hold 1 to 200 lines");
     }
     issues.finish(r)
+}
+
+/// Why the migrant chance has a part of its value (D-021).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChanceCause {
+    /// The base chance.
+    Base,
+    /// The wealth of the colony.
+    Wealth,
+    /// The average mood of the colonists.
+    Mood,
+    /// The friend and partner pairs.
+    Bonds,
+}
+
+/// One named part of the migrant chance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChancePart {
+    /// The cause.
+    pub cause: ChanceCause,
+    /// Percent points.
+    pub value: i32,
+}
+
+/// The daily migrant chance with its why chain.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MigrantChance {
+    /// The named parts.
+    pub parts: Vec<ChancePart>,
+    /// The chance in percent: the sum of the parts, limited to 0 and `max_pct`.
+    pub total: u32,
 }
 
 /// One migrant of an offer.
@@ -197,13 +239,66 @@ impl Sim {
         None
     }
 
-    /// The daily chance of migrants in percent: `base_pct` + wealth / `wealth_per_pct`, to
-    /// `max_pct` (R-017).
+    /// The daily chance of migrants in percent (R-017, R-040).
     pub fn migrant_chance_pct(&self) -> u32 {
+        self.migrant_chance().total
+    }
+
+    /// The daily chance of migrants as a sum of named parts (R-017, R-040): `base_pct`, the
+    /// wealth, the average mood, and the friend and partner pairs. The total is limited to
+    /// 0 and `max_pct`.
+    pub fn migrant_chance(&self) -> MigrantChance {
         let r = &self.rules.migrant;
         let wealth = self.wealth_value() / u64::from(r.wealth_per_pct.max(1));
-        let pct = u64::from(r.base_pct).saturating_add(wealth);
-        u32::try_from(pct.min(u64::from(r.max_pct))).unwrap_or(r.max_pct)
+        let count = i64::try_from(self.colonists.len())
+            .unwrap_or(i64::MAX)
+            .max(1);
+        let mood_sum: i64 = self
+            .colonists
+            .iter()
+            .map(|(id, _)| i64::from(self.mood(id).map_or(r.mood_ref, |m| m.total)))
+            .sum();
+        let average = i32::try_from(mood_sum / count).unwrap_or(r.mood_ref);
+        let limit = i32::try_from(r.mood_pct_max).unwrap_or(0);
+        let mood = ((average - r.mood_ref) / r.mood_points_per_pct.max(1)).clamp(-limit, limit);
+        let pairs = self
+            .relation_state
+            .map
+            .keys()
+            .filter(|k| {
+                matches!(
+                    self.relation(k.0, k.1).map(|x| x.standing),
+                    Some(crate::Standing::Friend | crate::Standing::Partner)
+                )
+            })
+            .count();
+        let bonds = i32::try_from(pairs)
+            .unwrap_or(i32::MAX)
+            .min(i32::try_from(r.bond_pct_max).unwrap_or(0));
+        let parts = vec![
+            ChancePart {
+                cause: ChanceCause::Base,
+                value: i32::try_from(r.base_pct).unwrap_or(0),
+            },
+            ChancePart {
+                cause: ChanceCause::Wealth,
+                value: i32::try_from(wealth).unwrap_or(i32::MAX),
+            },
+            ChancePart {
+                cause: ChanceCause::Mood,
+                value: mood,
+            },
+            ChancePart {
+                cause: ChanceCause::Bonds,
+                value: bonds,
+            },
+        ];
+        let sum = parts.iter().fold(0i64, |a, p| a + i64::from(p.value));
+        let total = sum.clamp(0, i64::from(r.max_pct));
+        MigrantChance {
+            parts,
+            total: u32::try_from(total).unwrap_or(0),
+        }
     }
 
     /// Called every tick after the tick number increased.

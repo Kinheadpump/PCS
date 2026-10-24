@@ -379,7 +379,13 @@ fn r017_the_chance_is_5_percent_plus_1_for_each_1000_wealth_to_20() {
         .find(|p| p.cause == sim::NoticeCause::Wealth)
         .unwrap()
         .value;
-    assert_eq!(sim.migrant_chance_pct(), 5 + wealth);
+    // Mood and bonds (S23) add their own parts, so the base and the wealth part are checked.
+    let chance = sim.migrant_chance();
+    let part = |c: sim::ChanceCause| chance.parts.iter().find(|p| p.cause == c).unwrap().value;
+    assert_eq!(
+        part(sim::ChanceCause::Base) + part(sim::ChanceCause::Wealth),
+        5 + i32::try_from(wealth).unwrap()
+    );
     let iron = material(&sim, "iron");
     sim.debug_spawn_item(iron, 1_000, 1, 1);
     assert_eq!(sim.migrant_chance_pct(), 20, "the maximum");

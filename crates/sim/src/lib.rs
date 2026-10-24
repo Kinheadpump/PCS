@@ -84,7 +84,10 @@ pub use life::{
     SpeedModCause,
 };
 pub use map::LocalMap;
-pub use migrant::{MigrantBlocker, MigrantEvent, MigrantOffer, MigrantProfile, MigrantRules};
+pub use migrant::{
+    ChanceCause, ChancePart, MigrantBlocker, MigrantChance, MigrantEvent, MigrantOffer,
+    MigrantProfile, MigrantRules,
+};
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
 pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;

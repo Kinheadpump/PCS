@@ -16,6 +16,14 @@
     wealth_per_pct: 1000,
     max_pct: 20,
     group_max: 2,
+    // Mood and bonds change the chance (R-040). Each part is a named part of the chance.
+    // Mood: (average mood - 50) / mood_points_per_pct percent, from minus mood_pct_max to plus
+    //   mood_pct_max.
+    // Bonds: 1 percent for each friend or partner pair, to bond_pct_max.
+    mood_ref: 50,
+    mood_points_per_pct: 5,
+    mood_pct_max: 5,
+    bond_pct_max: 5,
     decision_ticks: 2400,
     main_level_min: 2,
     main_level_max: 5,

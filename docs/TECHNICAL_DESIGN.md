@@ -74,6 +74,8 @@ Sprint 21 added the `sim` module `relations` and the content file `relations.ron
 
 Sprint 22 added the `sim` module `family` and the content file `family.ron`. The save format version is 15. `Sim::family(id)` returns the age, the stage of life, the pregnancy, the kin, and the home of a colonist, and `Sim::home_of(id)` returns the assigned bed.
 
+Sprint 23 added no module. `Sim::migrant_chance()` returns the migrant chance as named parts. The save format version stays 15.
+
 ### 3.2 Data ownership
 
 - `Sim` owns all colony state. Examples: `map: LocalMap`, `colonists: Arena<Colonist>`, `creatures: Arena<Creature>`, `items: Arena<Item>`, `jobs: JobBoard`, `rng: Rng`, `tick: u64`, `notice`, `chronicle`.

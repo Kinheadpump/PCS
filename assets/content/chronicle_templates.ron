@@ -18,6 +18,7 @@
         (kind: "death_unknown", text: "A colonist aged {0} died."),
         (kind: "death_old_age", text: "A colonist aged {0} died of old age."),
         (kind: "left", text: "A colonist aged {0} left the colony after a long breakdown."),
+        (kind: "left_goals", text: "A colonist aged {0} left the colony. Their life goal had failed for too long."),
         (kind: "winter_begins", text: "The first winter begins. The colony has {0} colonists and food for {1} days."),
         (kind: "winter_survived", text: "The first winter ends. {0} colonists are alive. {1} died in the winter."),
         (kind: "colony_lost", text: "The last colonist is gone. The colony fell on day {day} of {season}, year {year}."),
