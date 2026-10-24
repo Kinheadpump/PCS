@@ -411,7 +411,7 @@ Each step needs a rule ID, a content file, and a test before it goes into a spri
 | Day and night in the picture: daylight tint by hour and season, dark nights, light around hearths | S15 | New. Display only. It does not change the simulation. |
 | Drought and wildfire | S16 (R-025, R-026) | Already planned. |
 | Snow cover that slows movement | S27 | Moved from the backlog. |
-| Floods (snow melt raises the river in spring) and storms | S27 Floods and weather events | New. A river level model, a flood forecast, dikes, and storm damage to roofs. Phase 4, after S11a shows how the world model changes. |
+| Floods (snow melt raises the river in spring) and storms | S27 Floods and weather events | New. A river level model, a flood forecast, dikes, and storm damage to roofs. Phase 4, after S11a shows how the world model changes. Status: the `sim` part is done (D-090). Open: the interface (forecast, flood overlay, storm alert). |
 | Sound engine and first sounds | S6 | New task 9. |
 | Weather ambience | S16 | New. Rain, wind, and fire loops. |
 | Music | S15 | New. One loop for each season, made by `tools assetgen`. |

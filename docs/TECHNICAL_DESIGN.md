@@ -80,7 +80,9 @@ Sprint 24 added `neighbors.rs` with `neighbors.ron`. The people of a rival colon
 
 Sprint 25 added `races.rs` with `races.ron`. `RaceRules` holds the races and one `RacePairRule` for each pair of different races. `Sim::race_pair`, `race_age_days`, and `race_elder_age` give the values. `relation()` adds the `OpinionCause::Race` part, `comfort_parts` adds `ComfortCause::Race`, `pick_partners` and `pregnancies` obey the pair rule, and `births` sets the race of the child. `MigrantProfile` has a race. The save format version is 17.
 
-Sprint 26 added `worldgen/src/realm.rs`. `realm_seed` gives the sub-seed of a realm, and realm (0, 0) has the seed. `RealmCache` holds a few realms and makes one missing realm for each `generate_next` call. `WORLD_GEN_VERSION` is the version of the world generator. `Sim` keeps `realm` and `world_gen_version`, and `save::from_bytes` refuses another generator version with `SaveError::WorldMismatch`. The save format version is 18.
+Sprint 26 added `worldgen/src/realm.rs`. `realm_seed` gives the sub-seed of a realm, and realm (0, 0) has the seed. `RealmCache` holds a few realms and makes one missing realm for each `generate_next` call. `WORLD_GEN_VERSION` is the version of the world generator. `Sim` keeps `realm` and `world_gen_version`, and `save::from_bytes` refuses another generator version with `SaveError::WorldMismatch`. The save format version was 18.
+
+Sprint 27 added `sim/src/weather.rs` and `assets/content/weather.ron`. `WeatherState` keeps the snow depth, the river level, the flood and its tiles, and the counts. `Sim::weather_day` runs once each game day after the drought step. `advance` is a pure function, so `flood_forecast` gives the exact level of the next 3 days. `storm_on_day` is a hash roll from the weather seed, so `storm_forecast` is exact. `walk_speed` returns the walking speed with named parts, and `move_colonists` scales the walk progress with it. The save format version is 19.
 
 ### 3.2 Data ownership
 

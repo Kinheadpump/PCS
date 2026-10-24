@@ -274,6 +274,12 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-052 Realm cache and saves:** The game keeps a few realms in a cache and makes at most one missing realm between two frames. A save keeps the realm of the colony and the version of the world generator. The game refuses a save that has another generator version. (D-089)
 
+**R-053 Snow:** On a game day with rain and a day mean at or below the snow limit, snow falls and adds depth, to a limit. On a day with a mean above 0, a part of the snow melts. The melt grows with the temperature. Snow slows walking on open tiles: a tile with a roof has no snow. The loss is the same for each 10 depth, to a limit. The walking speed is a sum of named parts: base, snow, flood.
+
+**R-054 Floods:** The river level is a number. Each game day it keeps a part of its value, and it grows with the melted snow and with rain above 0 degrees. When the level reaches the flood level, the river floods the land near water tiles, and the flood lasts until the level falls below the end level. The flood reaches farther when the level is higher. A wall line or a solid building stops the water (a dike). Crops on flooded tiles die, and walking on a flooded tile is slow. The forecast shows the river level of the next 3 days. No flood starts in the first days of a run.
+
+**R-055 Storms:** On a game day that is not in winter, a storm can come. The storm has a strength from 1 to 3. The forecast shows the storm of the next 3 days. A storm can tear roofs off, and a stronger storm tears more. A stone roof has a smaller chance than a wood roof. A colonist gets a bad memory only when a roof was lost. No storm comes in the first days of a run.
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.
