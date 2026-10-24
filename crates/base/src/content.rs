@@ -40,6 +40,28 @@ pub enum MaterialCategory {
     Fluid,
 }
 
+/// The kind of work that a tool allows (R-008).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+pub enum ToolKind {
+    /// An axe: needed to cut a tree.
+    Axe,
+    /// A pick: needed to mine a rock.
+    Pick,
+}
+
+impl ToolKind {
+    /// Number of tool kinds.
+    pub const COUNT: usize = 2;
+
+    /// Index of the kind in the tool slots of a colonist.
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Axe => 0,
+            Self::Pick => 1,
+        }
+    }
+}
+
 /// Result of smelting an ore.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SmeltsTo {
@@ -84,6 +106,8 @@ pub struct MaterialDef {
     pub smelts_to: Option<SmeltsTo>,
     /// Rock materials in which this ore can occur.
     pub ore_in_rock: Vec<MaterialId>,
+    /// The tool kind, if the material is a tool. Its durability is its hardness x 10 (R-008).
+    pub tool: Option<ToolKind>,
 }
 
 #[derive(Deserialize)]
@@ -116,6 +140,8 @@ struct RawMaterial {
     smelts_to: Option<RawSmelts>,
     #[serde(default)]
     ore_in_rock: Vec<String>,
+    #[serde(default)]
+    tool: Option<ToolKind>,
 }
 
 /// One problem found in a content file.
@@ -327,6 +353,7 @@ fn link_materials(file_name: &str, raw: &[RawMaterial]) -> Result<Vec<MaterialDe
             melts_into,
             smelts_to,
             ore_in_rock,
+            tool: m.tool,
         });
     }
 
@@ -681,6 +708,8 @@ pub struct RecipeDef {
     pub outputs: Vec<(u16, u32)>,
     /// Work time of one run, in ticks at 100% work speed.
     pub work_ticks: u32,
+    /// The knowledge key that unlocks the recipe (R-042). `None`: known from the start.
+    pub requires: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -692,6 +721,8 @@ struct RawRecipe {
     inputs: Vec<(String, u32)>,
     outputs: Vec<(String, u32)>,
     work_ticks: u32,
+    #[serde(default)]
+    requires: Option<String>,
 }
 
 /// Load and validate a recipes file. The materials and buildings must be loaded first.
@@ -777,6 +808,7 @@ pub fn load_recipes(
             inputs,
             outputs,
             work_ticks: r.work_ticks,
+            requires: r.requires.clone(),
         });
     }
     finish(file_name, out, issues)
@@ -1897,11 +1929,28 @@ mod tests {
     fn real_building_recipe_and_room_files_are_valid() {
         let materials = load_materials("materials.ron", MATERIALS).unwrap_or_default();
         let buildings = load_buildings("buildings.ron", BUILDINGS).unwrap_or_default();
-        // The kitchen is a second building of kind Workshop.
-        assert_eq!(buildings.len(), BuildingKind::ALL.len() + 1);
+        // The kitchen, kiln, smelter, and forge are more buildings of kind Workshop.
+        assert_eq!(buildings.len(), BuildingKind::ALL.len() + 4);
         let recipes =
             load_recipes("recipes.ron", RECIPES, &materials, &buildings).unwrap_or_default();
-        assert_eq!(recipes.len(), 11);
+        assert_eq!(recipes.len(), 27);
+        let locked: Vec<&str> = recipes
+            .iter()
+            .filter_map(|r| r.requires.as_deref())
+            .collect();
+        for key in [
+            "charcoal",
+            "fired_clay",
+            "smoked_food",
+            "smelting",
+            "iron_tools",
+        ] {
+            assert!(locked.contains(&key), "no recipe needs {key}");
+        }
+        let tools = load_materials("materials.ron", MATERIALS).unwrap_or_default();
+        let kind = |k: &str| tools.iter().find(|m| m.key == k).and_then(|m| m.tool);
+        assert_eq!(kind("stone_axe"), Some(ToolKind::Axe));
+        assert_eq!(kind("iron_pick"), Some(ToolKind::Pick));
         let rooms = load_room_rules("rooms.ron", ROOMS);
         assert_eq!(rooms.map(|r| r.max_tiles).unwrap_or(0), 400);
     }

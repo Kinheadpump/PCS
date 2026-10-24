@@ -388,5 +388,5 @@ fn r048_races_survive_a_save_and_the_run_is_repeatable() {
             .count(),
         1
     );
-    assert_eq!(save::FORMAT_VERSION, 19);
+    assert_eq!(save::FORMAT_VERSION, 20);
 }

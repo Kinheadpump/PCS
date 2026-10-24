@@ -960,6 +960,7 @@ impl Sim {
             sex: c.sex,
             cause,
         };
+        self.drop_tools(id);
         let kin = self.family_kin(id);
         self.release_colonist(id);
         self.colonists.remove(id);

@@ -398,6 +398,10 @@ impl Sim {
             return;
         };
         let workshop = def.workshop;
+        if !self.recipe_known(recipe) {
+            self.reject(Reject::RecipeLocked);
+            return;
+        }
         if count == 0 {
             self.reject(Reject::BadCount);
             return;

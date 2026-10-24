@@ -14,6 +14,10 @@ const MAP: &str = "c.......\n........\n........\n........\n........\n........\n.
 fn quiet() -> Sim {
     let mut sim = sim_from_ascii(MAP, 1).unwrap();
     sim.debug_set_needs_enabled(false);
+    let ids: Vec<_> = sim.colonists().iter().map(|(id, _)| id).collect();
+    for id in ids {
+        sim.debug_clear_tools(id);
+    }
     sim
 }
 

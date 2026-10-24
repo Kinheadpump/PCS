@@ -312,6 +312,6 @@ fn r045_ties_survive_a_save_and_the_run_is_repeatable() {
     let loaded = save::from_bytes(&save::to_bytes(&a)).unwrap();
     assert_eq!(loaded.state_hash(), a.state_hash());
     assert_eq!(loaded.neighbor_contacts(0), a.neighbor_contacts(0));
-    assert_eq!(save::FORMAT_VERSION, 19);
+    assert_eq!(save::FORMAT_VERSION, 20);
     let _ = DAY;
 }

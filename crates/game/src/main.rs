@@ -907,7 +907,7 @@ impl App {
             .selected_tile
             .and_then(|(x, y)| inspector::zone_at(&self.sim, x, y));
         weather::draw_ice(&frame);
-        overlay::draw_zones(&frame, selected_zone);
+        overlay::draw_zones(&frame, selected_zone, self.tool == Tool::Stockpile);
         plants::draw_zones(&frame);
         if self.ui_state.fertility || self.tool == Tool::Farm {
             plants::draw_fertility(&frame);
@@ -1009,6 +1009,7 @@ impl App {
                 UiAction::ToggleTemp => self.show_temp = !self.show_temp,
                 UiAction::ToggleColony => self.ui_state.colony = !self.ui_state.colony,
                 UiAction::PickCrop(n) => self.ui_state.crop = n,
+                UiAction::WorkshopPage(n) => self.ui_state.workshop_page = n,
                 UiAction::NewColony => self.open_world(),
                 UiAction::Resume => self.close_menu(),
                 UiAction::Quit => self.ui_state.quit = true,

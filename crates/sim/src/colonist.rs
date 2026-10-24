@@ -4,6 +4,7 @@ use crate::item::ItemId;
 use crate::job::{ActiveJob, JobKind};
 use crate::skill::SKILL_COUNT;
 use base::Id;
+use base::content::ToolKind;
 use serde::{Deserialize, Serialize};
 
 /// Typed ID of a colonist.
@@ -26,6 +27,15 @@ pub enum Sex {
     Female,
     /// Male.
     Male,
+}
+
+/// A tool in the hand of a colonist (R-008).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Tool {
+    /// Material index of the tool.
+    pub material: u16,
+    /// Jobs that the tool can still do. It breaks at 0.
+    pub durability: u16,
 }
 
 /// A mood memory: a timed mood modifier from `needs.ron` that ends at a tick.
@@ -93,6 +103,8 @@ pub struct Colonist {
     pub job: Option<ActiveJob>,
     /// The item stack that the colonist carries.
     pub carrying: Option<ItemId>,
+    /// The tools in hand, in `ToolKind::index` order (R-008).
+    pub tools: [Option<Tool>; ToolKind::COUNT],
     /// The colonist looks for a new job from this tick on.
     pub next_search: u64,
     /// Age in years (GAME_DESIGN 7.2).
@@ -178,6 +190,7 @@ impl Colonist {
             priorities: [0; JobKind::COUNT],
             job: None,
             carrying: None,
+            tools: [None; ToolKind::COUNT],
             next_search: 0,
             age: 30,
             sex: Sex::Female,

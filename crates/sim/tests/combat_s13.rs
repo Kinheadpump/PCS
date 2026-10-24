@@ -557,6 +557,8 @@ fn r071_raiders_attack_colonists() {
 #[test]
 fn r071_raiders_carry_a_stack_away_and_leave_with_it() {
     let mut sim = quiet(60, 20, &[(0, 0)]);
+    let who = sim.colonists().iter().next().unwrap().0;
+    sim.debug_clear_tools(who);
     let gold = sim
         .rules()
         .materials

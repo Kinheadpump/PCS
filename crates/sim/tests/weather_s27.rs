@@ -424,7 +424,7 @@ fn r054_snow_flood_and_storm_state_survives_a_save() {
     assert_eq!(loaded.river_level(), sim.river_level());
     assert_eq!(loaded.flood_tiles(), sim.flood_tiles());
     assert_eq!(loaded.state_hash(), sim.state_hash());
-    assert_eq!(save::FORMAT_VERSION, 19);
+    assert_eq!(save::FORMAT_VERSION, 20);
 }
 
 #[test]

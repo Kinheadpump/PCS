@@ -22,6 +22,7 @@ pub mod fire;
 pub mod hearth;
 pub mod item;
 pub mod job;
+pub mod knowledge;
 pub mod ledger;
 pub mod life;
 pub mod map;
@@ -45,6 +46,7 @@ pub mod spoilage;
 pub mod start;
 pub mod stockpile;
 pub mod time;
+pub mod tools;
 pub mod wants;
 pub mod weather;
 
@@ -61,7 +63,7 @@ pub use climate::{
     ClimateParams, ClimateRules, DayWeather, FORECAST_DAYS, OutdoorParts, TempCause, TempPart,
     TempPlace, TileTemperature,
 };
-pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex};
+pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex, Tool};
 pub use combat::melee_damage;
 pub use command::Command;
 pub use creature::{
@@ -124,7 +126,7 @@ use base::hash::fnv1a;
 use base::{Arena, Pcg32};
 use colonist::{START_COLONISTS, step_progress_needed};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
 use worldgen::LocalMapData;
 
@@ -183,6 +185,8 @@ pub struct Sim {
     farm: FarmState,
     /// "Keep N" orders by workshop tile and recipe.
     keep: BTreeMap<(u16, u16, u16), u32>,
+    /// The knowledge keys that the colony has learned (R-042).
+    knowledge: BTreeSet<String>,
     /// The ledger history.
     ledger: LedgerState,
     /// The chronicle.
@@ -331,6 +335,7 @@ impl Sim {
             graveyard: Vec::new(),
             farm: FarmState::with_seed(base::rng::mix(seed ^ 0x4641_524d_5345_4544)),
             keep: BTreeMap::new(),
+            knowledge: BTreeSet::new(),
             ledger: LedgerState::default(),
             chronicle: ChronicleState::default(),
             run: RunInfo::default(),

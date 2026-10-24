@@ -1039,7 +1039,7 @@ fn needs_state_after_a_death_survives_a_save() {
 
 #[test]
 fn the_save_format_version_is_7() {
-    assert_eq!(save::FORMAT_VERSION, 19);
+    assert_eq!(save::FORMAT_VERSION, 20);
 }
 
 #[test]

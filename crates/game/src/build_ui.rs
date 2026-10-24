@@ -298,6 +298,7 @@ pub fn reject_text(reject: Reject) -> &'static str {
         Reject::TileBlocked => "water, rock, or a tree is in the way",
         Reject::TileOccupied => "something is already built there",
         Reject::NoRoofSupport => "a roof needs a wall within 6 tiles",
+        Reject::RecipeLocked => "the colony does not know this recipe",
         Reject::NoBlueprint => "no blueprint there",
         Reject::NoBuilding => "no building there",
         Reject::AlreadyOrdered => "already ordered",
