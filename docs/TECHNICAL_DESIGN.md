@@ -132,7 +132,7 @@ Each value that the player can inspect (mood, Notice, room temperature, work spe
 - Use a small immediate-mode UI that we write. It draws with the same sprite batch and a bitmap pixel font.
 - Widgets: panel, label, button, toggle, scroll list, table with sortable columns, tooltip, tabs.
 - The UI reads `&Sim` and returns `Vec<Command>`. It never changes `Sim`.
-- Text input in the MVP is only a numeric seed widget. Save names are automatic (D-027).
+- Text input in the MVP is a numeric seed widget and a world name box (D-090). Save names are automatic (D-027).
 - If the UI code becomes larger than approximately 3,000 lines, or free text input becomes necessary, evaluate `egui` for debug panels only. Record the decision in `DECISIONS.md`.
 
 ### 4.4 Input
