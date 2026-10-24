@@ -270,6 +270,10 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-049 Race pairs:** Each pair of different races has one rule: the opinion that the pair adds to a relation (a named part), if the two can become partners, if they can have children, and the race of the child (mother, father, either, or a fixed race). Two people of the same race can be partners and have children, and the child has the race of the mother. A person of a rival colony weds a colonist only if the rule of the two races allows partners. (D-088)
 
+**R-051 Realms:** The world is a plane of realms. A realm is one finite world of 256 by 256 cells with its own sub-seed. The edge of each realm is ocean, so a strait lies between two realms. Realm (0, 0) is the world of the seed itself. A colony is in one realm. The distance between two realms is the number of realm steps, and a step can go diagonal. (D-089)
+
+**R-052 Realm cache and saves:** The game keeps a few realms in a cache and makes at most one missing realm between two frames. A save keeps the realm of the colony and the version of the world generator. The game refuses a save that has another generator version. (D-089)
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.

@@ -151,6 +151,10 @@ pub struct PathStats {
 pub struct Sim {
     /// Hash of the content that the colony uses. The save header holds it.
     content_hash: u64,
+    /// The realm of the plane that the colony is in (S26). (0, 0) is the world of the seed.
+    realm: (i32, i32),
+    /// Version of the world generator that made the world of this colony (S26).
+    world_gen_version: u32,
     tick: u64,
     rng: Pcg32,
     map: LocalMap,
@@ -302,6 +306,8 @@ impl Sim {
         }
         let mut sim = Self {
             content_hash,
+            realm: (0, 0),
+            world_gen_version: worldgen::WORLD_GEN_VERSION,
             tick: 0,
             rng: Pcg32::from_seed(seed),
             map,
@@ -629,6 +635,26 @@ impl Sim {
     /// The connectivity regions.
     pub fn regions(&self) -> &Regions {
         &self.regions
+    }
+
+    /// The realm of the plane that the colony is in (R-051). (0, 0) is the world of the seed.
+    pub fn realm(&self) -> (i32, i32) {
+        self.realm
+    }
+
+    /// Put the colony in a realm. The game calls this once, before the first step.
+    pub fn set_realm(&mut self, rx: i32, ry: i32) {
+        self.realm = (rx, ry);
+    }
+
+    /// Version of the world generator that made the world of this colony (R-052).
+    pub fn world_gen_version(&self) -> u32 {
+        self.world_gen_version
+    }
+
+    /// Set the generator version. For scenario tests and debug tools.
+    pub fn debug_set_world_gen_version(&mut self, version: u32) {
+        self.world_gen_version = version;
     }
 
     /// Hash of the content that this colony was made with.
