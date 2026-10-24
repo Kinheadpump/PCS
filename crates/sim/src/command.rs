@@ -2,6 +2,7 @@
 
 use crate::build::BuildLayer;
 use crate::colonist::ColonistId;
+use crate::creature::CreatureId;
 use crate::item::ItemId;
 use crate::job::JobKind;
 use crate::stockpile::{ItemFilter, StockpileId};
@@ -11,6 +12,32 @@ use serde::{Deserialize, Serialize};
 /// commands at the start of a tick. Replay files hold commands with their tick.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Command {
+    /// Draft a colonist or send it back to work (R-032). A drafted colonist stops its job and its
+    /// need action, takes no new job, and obeys `DraftMove` and `Attack`.
+    Draft {
+        /// The colonist.
+        colonist: ColonistId,
+        /// True to draft, false to release.
+        drafted: bool,
+    },
+    /// Walk a drafted colonist to a tile. The colonist obeys in the same tick (R-032). A
+    /// refused command gives `CombatEvent::Rejected`.
+    DraftMove {
+        /// The colonist.
+        colonist: ColonistId,
+        /// Goal tile column.
+        x: u16,
+        /// Goal tile row.
+        y: u16,
+    },
+    /// Send a colonist to attack a creature (R-032). A colonist that is not drafted hunts the
+    /// creature and goes back to work when it is dead.
+    Attack {
+        /// The colonist.
+        colonist: ColonistId,
+        /// The creature.
+        creature: CreatureId,
+    },
     /// Debug command: walk a colonist to a tile. Only debug builds, scenario tests, and
     /// tools use it. The player has no such command. If the tile is not reachable,
     /// the same tick gives `Event::PathFailed`.
@@ -41,6 +68,17 @@ pub enum Command {
         x: u16,
         /// Tile row.
         y: u16,
+    },
+    /// Mark the room that contains a tile as a sick room, or take the mark away. Sick
+    /// colonists sleep in a sick room if a bed is free there. A tile outside a room gives
+    /// `JobEvent::Rejected`.
+    SetSickRoom {
+        /// Tile column.
+        x: u16,
+        /// Tile row.
+        y: u16,
+        /// True: mark the room. False: unmark it.
+        on: bool,
     },
     /// Remove the cut or mine designation of a tile, and the haul order of its items that
     /// no colonist carries yet.
@@ -191,6 +229,10 @@ pub enum Command {
     },
     /// Fight the raiders while they wait (R-072).
     RaidFight,
+    /// Accept the migrants that wait at the map edge (R-017). They join as colonists.
+    AcceptMigrants,
+    /// Refuse the migrants that wait (R-017). They leave the map.
+    RefuseMigrants,
     /// The player abandons the colony. The run ends (R-050).
     Abandon,
 }

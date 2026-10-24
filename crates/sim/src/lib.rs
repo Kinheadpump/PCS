@@ -10,9 +10,13 @@ pub mod build;
 pub mod chronicle;
 pub mod climate;
 pub mod colonist;
+pub mod combat;
 pub mod command;
+pub mod creature;
+pub mod disease;
 pub mod drought;
 pub mod event;
+pub mod family;
 pub mod farm;
 pub mod fire;
 pub mod hearth;
@@ -22,13 +26,17 @@ pub mod knowledge;
 pub mod ledger;
 pub mod life;
 pub mod map;
+pub mod migrant;
 pub mod needact;
 pub mod needs;
+pub mod neighbors;
 pub mod notice;
 pub mod path;
 pub mod production;
+pub mod races;
 pub mod raid;
 pub mod region;
+pub mod relations;
 pub mod room;
 pub mod rules;
 pub mod save;
@@ -39,26 +47,39 @@ pub mod start;
 pub mod stockpile;
 pub mod time;
 pub mod tools;
+pub mod wants;
+pub mod weather;
 
 mod loader;
 
 pub use alert::{Alert, AlertKind, AlertLevel};
+pub use base::content::MaterialCategory;
 pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
 pub use chronicle::{
-    ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, RunInfo, RunState,
+    ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, Legacy, RunInfo,
+    RunState,
 };
 pub use climate::{
     ClimateParams, ClimateRules, DayWeather, FORECAST_DAYS, OutdoorParts, TempCause, TempPart,
     TempPlace, TileTemperature,
 };
 pub use colonist::{Colonist, ColonistId, Memory, NeedAct, Sex, Tool};
+pub use combat::melee_damage;
 pub use command::Command;
+pub use creature::{
+    CombatEvent, CombatReject, Creature, CreatureId, CreatureKind, CreatureRules, Mode, Role,
+};
+pub use disease::{
+    DOCTOR_ARG, DiseaseEvent, DiseaseKind, Illness, IllnessCause, IllnessPart, IllnessReport,
+};
 pub use drought::{DIG_ARG, DroughtEvent, Fire, Growth, GrowthCause, GrowthPart};
 pub use event::Event;
+pub use family::{FamilyEvent, FamilyReport, FamilyRules, LifeStage};
 pub use farm::{
     CropDef, FarmRules, FarmState, FertilityCause, FertilityPart, FertilityReport, Plant,
     PlantReport, WildDef, WildStatus,
 };
+pub use fire::EXTINGUISH_ARG;
 pub use hearth::REFUEL_ARG;
 pub use item::{Item, ItemId, ItemLoc, Items};
 pub use job::{AbortReason, ActiveJob, Job, JobBoard, JobEvent, JobId, JobKind, JobStep, Reject};
@@ -69,7 +90,14 @@ pub use life::{
     SpeedModCause,
 };
 pub use map::LocalMap;
+pub use migrant::{
+    ChanceCause, ChancePart, MigrantBlocker, MigrantChance, MigrantEvent, MigrantOffer,
+    MigrantProfile, MigrantRules,
+};
 pub use needs::{ClothesDef, FoodDef, MemoryDef, NeedRules, TraitDef};
+pub use neighbors::{
+    NeighborCause, NeighborEvent, NeighborPart, NeighborPerson, NeighborRules, NeighborTie,
+};
 pub use notice::{NoticeCause, NoticeEvent, NoticePart, NoticeReport, NoticeSource, Threat};
 pub use path::PathFinder;
 pub use raid::{
@@ -77,6 +105,9 @@ pub use raid::{
     RaidReject, RaidWarning, RivalColony, TributeGood,
 };
 pub use region::Regions;
+pub use relations::{
+    OpinionCause, OpinionPart, RelationEvent, RelationReport, RelationRules, Standing,
+};
 pub use room::{
     BeautyCause, BeautyPart, BorderKind, BorderTile, InsulationPart, Room, RoomBeauty,
     RoomInsulation, Rooms,
@@ -88,10 +119,12 @@ pub use spoilage::{RotCause, RotPart, RotReport, SpoilRules};
 pub use start::StartRules;
 pub use stockpile::{ItemFilter, Stockpile, StockpileId};
 pub use time::{GameTime, Season, Speed};
+pub use wants::{GoalKind, GoalReport, Social, WantRules, Wants};
+pub use weather::{FloodDay, WalkCause, WalkPart, WalkSpeed, WeatherEvent, WeatherRules};
 
 use base::hash::fnv1a;
 use base::{Arena, Pcg32};
-use colonist::{START_COLONISTS, WALK_PROGRESS_PER_TICK, step_progress_needed};
+use colonist::{START_COLONISTS, step_progress_needed};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
@@ -123,6 +156,10 @@ pub struct PathStats {
 pub struct Sim {
     /// Hash of the content that the colony uses. The save header holds it.
     content_hash: u64,
+    /// The realm of the plane that the colony is in (S26). (0, 0) is the world of the seed.
+    realm: (i32, i32),
+    /// Version of the world generator that made the world of this colony (S26).
+    world_gen_version: u32,
     tick: u64,
     rng: Pcg32,
     map: LocalMap,
@@ -162,11 +199,32 @@ pub struct Sim {
     threats: Vec<Threat>,
     /// Dry days, ditches, and fires (S16).
     drought: drought::DroughtState,
+    /// Snow, river level, and flood (S27).
+    weather: weather::WeatherState,
+    /// Diseases, treatments, and sick rooms (S17).
+    disease: disease::DiseaseState,
     /// Rival colonies and raids (S18).
     raid: raid::RaidState,
+    /// Migrant offer and counts (S15).
+    migrants: migrant::MigrantState,
+    /// Creatures, lairs, and kill counts (S13).
+    creature: creature::CreatureState,
+    /// Relations between colonists (S21).
+    relation_state: relations::RelationState,
+    /// Ties with the people of rival colonies (S24).
+    neighbors: neighbors::NeighborState,
     /// Events for the caller. Not part of the state.
     #[serde(skip)]
     events: Vec<Event>,
+    /// Standing changes for the caller. Not part of the state.
+    #[serde(skip)]
+    relation_events: Vec<RelationEvent>,
+    /// Events of the people of other colonies for the caller. Not part of the state.
+    #[serde(skip)]
+    neighbor_events: Vec<neighbors::NeighborEvent>,
+    /// Family events for the caller. Not part of the state.
+    #[serde(skip)]
+    family_events: Vec<FamilyEvent>,
     /// Life events for the caller. Not part of the state.
     #[serde(skip)]
     life_events: Vec<LifeEvent>,
@@ -176,9 +234,21 @@ pub struct Sim {
     /// Drought and fire events for the caller. Not part of the state.
     #[serde(skip)]
     drought_events: Vec<DroughtEvent>,
+    /// Weather events for the caller. Not part of the state.
+    #[serde(skip)]
+    weather_events: Vec<weather::WeatherEvent>,
+    /// Disease events for the caller. Not part of the state.
+    #[serde(skip)]
+    disease_events: Vec<DiseaseEvent>,
     /// Raid events for the caller. Not part of the state.
     #[serde(skip)]
     raid_events: Vec<RaidEvent>,
+    /// Migrant events for the caller. Not part of the state.
+    #[serde(skip)]
+    migrant_events: Vec<MigrantEvent>,
+    /// Combat and creature events for the caller. Not part of the state.
+    #[serde(skip)]
+    combat_events: Vec<CombatEvent>,
     /// True: the needs system is off. Tests only. Not part of the state.
     #[serde(skip)]
     needs_off: bool,
@@ -227,7 +297,9 @@ impl Sim {
         sim.raid = raid::RaidState::with_rivals(seed, &data.rivals);
         sim.roll_colonists(seed);
         sim.roll_start_skills(seed);
+        sim.roll_all_wants(seed);
         sim.place_start_stock();
+        sim.creature_start();
         sim
     }
 
@@ -246,6 +318,8 @@ impl Sim {
         }
         let mut sim = Self {
             content_hash,
+            realm: (0, 0),
+            world_gen_version: worldgen::WORLD_GEN_VERSION,
             tick: 0,
             rng: Pcg32::from_seed(seed),
             map,
@@ -268,8 +342,21 @@ impl Sim {
             notice: notice::NoticeState::default(),
             threats: Vec::new(),
             drought: drought::DroughtState::default(),
+            weather: weather::WeatherState::default(),
+            weather_events: Vec::new(),
+            disease: disease::DiseaseState::new(seed),
+            disease_events: Vec::new(),
             raid: raid::RaidState::new(seed),
             raid_events: Vec::new(),
+            migrants: migrant::MigrantState::new(seed),
+            migrant_events: Vec::new(),
+            creature: creature::CreatureState::new(seed),
+            relation_state: relations::RelationState::new(seed),
+            relation_events: Vec::new(),
+            neighbors: neighbors::NeighborState::default(),
+            neighbor_events: Vec::new(),
+            family_events: Vec::new(),
+            combat_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),
             events: Vec::new(),
@@ -317,7 +404,8 @@ impl Sim {
     }
 
     /// Run one tick. Order: room detection (only after a structural change), commands, jobs,
-    /// path requests, movement, the tick number increases, then the climate (each game hour).
+    /// combat, path requests, creatures, movement, the tick number increases, then the climate
+    /// (each game hour).
     pub fn step(&mut self, commands: &[Command]) {
         self.detect_rooms();
         for command in commands {
@@ -325,7 +413,9 @@ impl Sim {
         }
         self.update_needs();
         self.update_jobs();
+        self.combat_tick();
         self.process_path_queue();
+        self.creature_tick();
         self.move_colonists();
         self.tick += 1;
         self.climate_tick();
@@ -336,7 +426,12 @@ impl Sim {
         self.colony_daily_tick();
         self.notice_tick();
         self.drought_tick();
+        if self.tick > 0 && self.tick.is_multiple_of(time::TICKS_PER_DAY) {
+            self.weather_day();
+        }
+        self.disease_tick();
         self.raid_tick();
+        self.migrant_tick();
     }
 
     /// Take the job events that the last ticks made.
@@ -464,6 +559,7 @@ impl Sim {
     fn move_colonists(&mut self) {
         let ids: Vec<ColonistId> = self.colonists.iter().map(|(id, _)| id).collect();
         for id in ids {
+            let step = self.walk_progress(id);
             let Some(c) = self.colonists.get_mut(id) else {
                 continue;
             };
@@ -480,7 +576,7 @@ impl Sim {
                 }
                 continue;
             }
-            c.progress = c.progress.saturating_add(WALK_PROGRESS_PER_TICK);
+            c.progress = c.progress.saturating_add(step);
             let need = step_progress_needed(c.tile(), next);
             if c.progress >= need {
                 c.progress -= need;
@@ -560,6 +656,26 @@ impl Sim {
         &self.regions
     }
 
+    /// The realm of the plane that the colony is in (R-051). (0, 0) is the world of the seed.
+    pub fn realm(&self) -> (i32, i32) {
+        self.realm
+    }
+
+    /// Put the colony in a realm. The game calls this once, before the first step.
+    pub fn set_realm(&mut self, rx: i32, ry: i32) {
+        self.realm = (rx, ry);
+    }
+
+    /// Version of the world generator that made the world of this colony (R-052).
+    pub fn world_gen_version(&self) -> u32 {
+        self.world_gen_version
+    }
+
+    /// Set the generator version. For scenario tests and debug tools.
+    pub fn debug_set_world_gen_version(&mut self, version: u32) {
+        self.world_gen_version = version;
+    }
+
     /// Hash of the content that this colony was made with.
     pub fn content_hash(&self) -> u64 {
         self.content_hash
@@ -602,7 +718,15 @@ impl Sim {
         if !colonists_ok || !queue_ok {
             return None;
         }
-        if !sim.buildings_state_ok() || !sim.drought_state_ok() || !sim.raid_state_ok() {
+        if !sim.buildings_state_ok()
+            || !sim.drought_state_ok()
+            || !sim.weather_state_ok()
+            || !sim.disease_state_ok()
+            || !sim.raid_state_ok()
+            || !sim.neighbors_state_ok()
+            || !sim.migrant_state_ok()
+            || !sim.creature_state_ok()
+        {
             return None;
         }
         sim.rebuild_caches();

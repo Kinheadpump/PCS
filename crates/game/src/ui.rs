@@ -202,6 +202,8 @@ pub enum UiAction {
     ToggleColony,
     /// The player chose a crop in the farm panel (index in `farm.ron`).
     PickCrop(u16),
+    /// Show a page of the recipes of the workshop panel.
+    WorkshopPage(usize),
     /// The player pressed the button to start a new colony after the run ended.
     NewColony,
     /// The player closed the pause menu.
@@ -1124,6 +1126,8 @@ pub struct WorkshopLayout {
     pub lines: Vec<(f32, f32)>,
     /// One row for each recipe.
     pub recipes: Vec<RecipeRow>,
+    /// The button that shows the next page of recipes, if there is more than one page.
+    pub pager: Option<Rect>,
 }
 
 /// Labels of the five buttons of a recipe row.
@@ -1136,6 +1140,7 @@ pub fn workshop_layout(
     title: &str,
     lines: &[String],
     recipe_labels: &[(String, String)],
+    pager: bool,
 ) -> WorkshopLayout {
     let x0 = origin.0 + PAD;
     let mut y = origin.1 + TITLE_H + PAD / 2.0;
@@ -1171,6 +1176,10 @@ pub fn workshop_layout(
             rule_y,
         });
     }
+    let pager_y = y + GAP * 2.0;
+    if pager {
+        y = pager_y + BUTTON_H;
+    }
     let text_w = lines
         .iter()
         .chain(recipe_labels.iter().flat_map(|(a, b)| [a, b]))
@@ -1178,11 +1187,13 @@ pub fn workshop_layout(
         .chain([text_px(title) + CLOSE_W + 2.0 * GAP])
         .fold(0.0_f32, f32::max);
     let w = text_w.max(button_row_w) + 2.0 * PAD;
+    let pager = pager.then(|| Rect::new(x0, pager_y, w - 2.0 * PAD, BUTTON_H));
     WorkshopLayout {
         panel: Rect::new(origin.0, origin.1, w, y - origin.1 + PAD),
         close: close_rect(origin, w),
         lines: line_pos,
         recipes,
+        pager,
     }
 }
 
@@ -1396,7 +1407,13 @@ mod tests {
             ("Make planks".to_owned(), "1 Log to 2 Plank".to_owned()),
             ("Make firewood (ordered 3)".to_owned(), "1 Log".to_owned()),
         ];
-        let l = workshop_layout((0.0, 0.0), "Workshop", &["Bin: empty".to_owned()], &recipes);
+        let l = workshop_layout(
+            (0.0, 0.0),
+            "Workshop",
+            &["Bin: empty".to_owned()],
+            &recipes,
+            false,
+        );
         assert_eq!(l.recipes.len(), 2);
         assert!(l.recipes[1].label.1 > l.recipes[0].buttons[0].bottom());
         let row = &l.recipes[0];

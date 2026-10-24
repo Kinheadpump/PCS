@@ -141,6 +141,40 @@ pub struct Colonist {
     pub break_until: u64,
     /// Hours in a row with a breakdown mood (R-015).
     pub low_mood_hours: u32,
+    /// Background line index plus 1 (`migrants.ron`). 0: no line (S15).
+    pub background: u8,
+    /// True while the colonist is drafted: no job and no need action (R-032, S13).
+    pub drafted: bool,
+    /// The creature that the colonist attacks under an order (R-032, S13).
+    pub foe: Option<crate::creature::CreatureId>,
+    /// The colonist can strike again from this tick on.
+    pub attack_ready: u64,
+    /// Social trait code: 0 none, 1 introvert, 2 extrovert (R-033, S20).
+    pub social: u8,
+    /// Life goal index plus 1 (`wants.ron`). 0: no goal.
+    pub goal: u8,
+    /// Awake hours in a row without a colonist near.
+    pub alone_hours: u16,
+    /// Awake hours in a row in a crowd.
+    pub crowd_hours: u16,
+    /// Hours in a row that the life goal was not met.
+    pub goal_unmet_hours: u32,
+    /// Beds in the room where the colonist last slept in a bed. 0: on the ground or no room.
+    pub sleep_room_beds: u8,
+    /// Game days since the last birthday (R-037, S22).
+    pub age_days: u16,
+    /// The pregnancy ends at this tick. 0: not pregnant.
+    pub pregnant_until: u64,
+    /// The father of the child that this colonist carries.
+    pub pregnancy_father: Option<ColonistId>,
+    /// The tick of the last birth. 0: none.
+    pub last_birth: u64,
+    /// The mother, if known.
+    pub mother: Option<ColonistId>,
+    /// The father, if known.
+    pub father: Option<ColonistId>,
+    /// The assigned bed (R-039).
+    pub bed: Option<(u16, u16)>,
 }
 
 impl Colonist {
@@ -175,6 +209,23 @@ impl Colonist {
             memories: Vec::new(),
             break_until: 0,
             low_mood_hours: 0,
+            background: 0,
+            drafted: false,
+            foe: None,
+            attack_ready: 0,
+            social: 0,
+            goal: 0,
+            alone_hours: 0,
+            crowd_hours: 0,
+            goal_unmet_hours: 0,
+            sleep_room_beds: 0,
+            age_days: 0,
+            pregnant_until: 0,
+            pregnancy_father: None,
+            last_birth: 0,
+            mother: None,
+            father: None,
+            bed: None,
         }
     }
 

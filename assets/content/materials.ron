@@ -45,4 +45,10 @@
     (id: "smoked_food", name: "Smoked food", category: Food, hardness: 0, density: 25, value: 6, insulation: 0, flammability: 0, beauty: 0, rot_rate: 5, color: (150, 100, 70)),
     (id: "iron_axe", name: "Iron axe", category: Metal, hardness: 80, density: 400, value: 14, insulation: 0, flammability: 0, beauty: 0, color: (176, 180, 188), tool: Some(Axe)),
     (id: "iron_pick", name: "Iron pick", category: Metal, hardness: 80, density: 400, value: 14, insulation: 0, flammability: 0, beauty: 0, color: (160, 164, 172), tool: Some(Pick)),
+    (id: "herbs", name: "Herbs", category: Plant, hardness: 0, density: 10, value: 2, insulation: 0, flammability: 700, beauty: 0, color: (110, 170, 90)),
+    (id: "herbal_medicine", name: "Herbal medicine", category: Plant, hardness: 0, density: 10, value: 6, insulation: 0, flammability: 500, beauty: 0, color: (150, 200, 130)),
+    (id: "meat", name: "Meat", category: Food, hardness: 0, density: 40, value: 4, insulation: 0, flammability: 100, beauty: 0, rot_rate: 120, color: (178, 70, 66)),
+    (id: "hide", name: "Hide", category: Leather, hardness: 4, density: 50, value: 3, insulation: 400, flammability: 400, beauty: 0, color: (150, 110, 80)),
+    (id: "leather", name: "Leather", category: Leather, hardness: 6, density: 50, value: 6, insulation: 450, flammability: 300, beauty: 1, color: (130, 84, 52)),
+    (id: "leather_clothes", name: "Leather clothes", category: Cloth, hardness: 0, density: 30, value: 14, insulation: 0, flammability: 300, beauty: 2, color: (120, 80, 50)),
 ]

@@ -1009,6 +1009,7 @@ impl App {
                 UiAction::ToggleTemp => self.show_temp = !self.show_temp,
                 UiAction::ToggleColony => self.ui_state.colony = !self.ui_state.colony,
                 UiAction::PickCrop(n) => self.ui_state.crop = n,
+                UiAction::WorkshopPage(n) => self.ui_state.workshop_page = n,
                 UiAction::NewColony => self.open_world(),
                 UiAction::Resume => self.close_menu(),
                 UiAction::Quit => self.ui_state.quit = true,

@@ -7,16 +7,24 @@
 
 use crate::chronicle::{ChronicleRules, load_chronicle_rules};
 use crate::climate::{ClimateRules, FuelDef, load_climate_rules};
+use crate::creature::{CreatureRules, load_creature_rules};
+use crate::family::{FamilyRules, load_family_rules};
 use crate::farm::{FarmRules, load_farm_rules};
 use crate::ledger::{LedgerRules, load_ledger_rules};
+use crate::migrant::{MigrantRules, load_migrant_rules};
 use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
+use crate::neighbors::{NeighborRules, load_neighbor_rules};
+use crate::races::{RaceRules, load_race_rules};
+use crate::relations::{RelationRules, load_relation_rules};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
+use crate::wants::{WantRules, load_want_rules};
+use crate::weather::{WeatherRules, load_weather_rules};
 use base::content::{
-    BuildingDef, BuildingKind, ContentError, ContentIssue, DroughtRules, JobRules, MaterialDef,
-    NoticeRules, RaidRules, RecipeDef, RoomRules, load_buildings, load_drought_rules,
-    load_job_rules, load_materials, load_notice_rules, load_raid_rules, load_recipes,
-    load_room_rules,
+    BuildingDef, BuildingKind, ContentError, ContentIssue, DiseaseRules, DroughtRules, JobRules,
+    MaterialDef, NoticeRules, RaidRules, RecipeDef, RoomRules, load_buildings, load_disease_rules,
+    load_drought_rules, load_job_rules, load_materials, load_notice_rules, load_raid_rules,
+    load_recipes, load_room_rules,
 };
 use std::sync::Arc;
 use worldgen::{Ore, RockKind};
@@ -36,8 +44,17 @@ const START_TEXT: &str = include_str!("../../../assets/content/start.ron");
 const LEDGER_TEXT: &str = include_str!("../../../assets/content/ledger.ron");
 const CHRONICLE_TEXT: &str = include_str!("../../../assets/content/chronicle_templates.ron");
 const NOTICE_TEXT: &str = include_str!("../../../assets/content/notice.ron");
+const DISEASE_TEXT: &str = include_str!("../../../assets/content/disease.ron");
 const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
+const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
+const CREATURE_TEXT: &str = include_str!("../../../assets/content/creatures.ron");
+const RELATIONS_TEXT: &str = include_str!("../../../assets/content/relations.ron");
+const WEATHER_TEXT: &str = include_str!("../../../assets/content/weather.ron");
+const NEIGHBORS_TEXT: &str = include_str!("../../../assets/content/neighbors.ron");
+const RACES_TEXT: &str = include_str!("../../../assets/content/races.ron");
+const FAMILY_TEXT: &str = include_str!("../../../assets/content/family.ron");
+const WANTS_TEXT: &str = include_str!("../../../assets/content/wants.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
@@ -117,8 +134,30 @@ pub struct SimRules {
     pub notice: NoticeRules,
     /// Drought, irrigation, and fire numbers.
     pub drought: DroughtRules,
+    /// Disease and medicine numbers.
+    pub disease: DiseaseRules,
+    /// Material of the medicine (`disease.ron`).
+    pub medicine: u16,
+    /// Materials of raw food (`disease.ron`).
+    pub raw_foods: Vec<u16>,
     /// Rival colony and raid numbers.
     pub raid: RaidRules,
+    /// Migrant numbers and background lines.
+    pub migrant: MigrantRules,
+    /// Creatures and melee numbers.
+    pub creature: CreatureRules,
+    /// Wants and personality numbers.
+    pub wants: WantRules,
+    /// Relationship numbers.
+    pub relations: RelationRules,
+    /// Family, age, and home numbers.
+    pub family: FamilyRules,
+    /// Numbers for the people of other colonies.
+    pub neighbors: NeighborRules,
+    /// Snow, floods, and storms (`weather.ron`).
+    pub weather: WeatherRules,
+    /// Races and the rules of race pairs.
+    pub races: RaceRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -160,7 +199,18 @@ impl Default for SimRules {
             traits: Vec::new(),
             notice: NoticeRules::default(),
             drought: DroughtRules::default(),
+            disease: DiseaseRules::default(),
+            medicine: NO_MATERIAL,
+            raw_foods: Vec::new(),
             raid: RaidRules::default(),
+            migrant: MigrantRules::default(),
+            creature: CreatureRules::default(),
+            wants: WantRules::default(),
+            relations: RelationRules::default(),
+            family: FamilyRules::default(),
+            neighbors: NeighborRules::default(),
+            weather: WeatherRules::default(),
+            races: RaceRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -243,6 +293,36 @@ impl SimRules {
         self.start = load_start_rules("start.ron", texts.start, &self.materials)?;
         self.ledger = load_ledger_rules("ledger.ron", texts.ledger)?;
         self.chronicle = load_chronicle_rules("chronicle_templates.ron", texts.chronicle)?;
+        self.load_disease()
+    }
+
+    /// Load `disease.ron` and link its material keys.
+    fn load_disease(&mut self) -> Result<(), ContentError> {
+        let disease = load_disease_rules("disease.ron", DISEASE_TEXT)?;
+        let mut issues = Vec::new();
+        let mut find = |key: &str| -> u16 {
+            match self.materials.iter().position(|m| m.key == key) {
+                Some(i) => u16::try_from(i).unwrap_or(NO_MATERIAL),
+                None => {
+                    issues.push(ContentIssue {
+                        entry: Some(key.to_string()),
+                        message: "disease.ron needs this material".to_string(),
+                    });
+                    NO_MATERIAL
+                }
+            }
+        };
+        let medicine = find(&disease.medicine);
+        let raw_foods: Vec<u16> = disease.raw_foods.iter().map(|k| find(k)).collect();
+        if !issues.is_empty() {
+            return Err(ContentError {
+                file: "disease.ron".to_string(),
+                issues,
+            });
+        }
+        self.disease = disease;
+        self.medicine = medicine;
+        self.raw_foods = raw_foods;
         Ok(())
     }
 
@@ -307,6 +387,14 @@ impl SimRules {
         let notice = load_notice_rules("notice.ron", NOTICE_TEXT)?;
         let drought = load_drought_rules("drought.ron", DROUGHT_TEXT)?;
         let raid = load_raid_rules("raid.ron", RAID_TEXT)?;
+        let migrant = load_migrant_rules("migrants.ron", MIGRANT_TEXT)?;
+        let creature = load_creature_rules("creatures.ron", CREATURE_TEXT, &materials)?;
+        let wants = load_want_rules("wants.ron", WANTS_TEXT, &needs)?;
+        let relations = load_relation_rules("relations.ron", RELATIONS_TEXT, &needs)?;
+        let family = load_family_rules("family.ron", FAMILY_TEXT, &needs)?;
+        let races = load_race_rules("races.ron", RACES_TEXT)?;
+        let neighbors = load_neighbor_rules("neighbors.ron", NEIGHBORS_TEXT, &needs)?;
+        let weather = load_weather_rules("weather.ron", WEATHER_TEXT, &needs)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -361,7 +449,18 @@ impl SimRules {
             traits,
             notice,
             drought,
+            disease: DiseaseRules::default(),
+            medicine: NO_MATERIAL,
+            raw_foods: Vec::new(),
             raid,
+            migrant,
+            creature,
+            wants,
+            relations,
+            family,
+            neighbors,
+            weather,
+            races,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -503,7 +602,7 @@ mod tests {
         assert_eq!(rules.materials[usize::from(rules.log)].key, "log");
         assert_eq!(SimRules::builtin().jobs, rules.jobs);
         assert_eq!(rules.buildings.len(), 11);
-        assert_eq!(rules.recipes.len(), 23);
+        assert_eq!(rules.recipes.len(), 27);
         assert_eq!(rules.rooms.max_tiles, 400);
         let wall = rules.building_index("wall").unwrap();
         let granite = rules.material_index("granite").unwrap();

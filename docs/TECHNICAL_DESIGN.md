@@ -64,6 +64,25 @@ Sprint 6 added the `sim` modules `needs`, `life`, and `needact`, and the content
 Sprint 14 added the `sim` module `notice` and the content file `notice.ron`, and the `worldgen` module `legend`. The save format version is 6. `Sim::notice()` returns the Notice parts, `Sim::threats()` the dormant threats, and `Sim::drain_notice_events()` the daily beast rolls and the threat wake events.
 Sprint 16 added the `sim` modules `drought` and `fire` and the content file `drought.ron`. The save format version is 8. `Command::DigDitch` makes a Mine job with `arg` 1. `Sim::growth_pct()` returns the growth parts, and `Sim::drain_drought_events()` returns the drought and fire events.
 Sprint 18 added the `sim` module `raid`, the content file `raid.ron`, and rival colonies in `worldgen` (`EmbarkRival`, `embark.ron`). The save format version is 9. `Sim::rivals()` and `Sim::rival_hostility()` give the rivals and the hostility parts, `Sim::raid_warning()` and `Sim::raid_choice_pending()` the raid state, `Command::RaidPay` and `Command::RaidFight` the answer, and `Sim::drain_raid_events()` the events.
+Sprint 15 added the `sim` module `migrant`, the content file `migrants.ron`, the fire rules for items and buildings in `fire.rs`, and the extinguish job (`Mine` job with `arg` 2). The save format version is 10. `Command::AcceptMigrants` and `Command::RefuseMigrants` answer a migrant offer, `Sim::drain_migrant_events()` gives the offer events, `Sim::legacy()` the legacy score, and `Sim::ironman_save_due()` the ironman save moment.
+Sprint 13 added the `sim` modules `creature` and `combat` and the content file `creatures.ron`. The save format version is 11. `Sim::creatures()` gives the creatures, `Command::Draft`, `Command::DraftMove`, and `Command::Attack` the orders, `Sim::drain_combat_events()` the hits, deaths, beast arrivals, lair wakes, released threats, and broken walls, and `Sim::lairs()` the lairs. Creatures use the path budget that the colonists leave in each tick (P-04).
+Sprint 17 added the `sim` module `disease` and the content file `disease.ron`. The save format version is 12 after the merge with S13. `Command::SetSickRoom` marks a room as a sick room. A doctor job is a Mine job with `arg` 3 (`DOCTOR_ARG`; 2 is the extinguish job). `Sim::illnesses()` returns the illness reports, and `Sim::drain_disease_events()` returns the disease events.
+
+Sprint 20 added the `sim` module `wants` and the content file `wants.ron`. The save format version is 13. `Sim::wants(id)` returns the social trait and the life goal report of a colonist. The want memories are entries in `needs.ron`.
+
+Sprint 21 added the `sim` module `relations` and the content file `relations.ron`. The save format version is 14. `Sim::relation(a, b)` returns the opinion with its named parts, and `Sim::relations_of(id)` lists the relations of a colonist.
+
+Sprint 22 added the `sim` module `family` and the content file `family.ron`. The save format version is 15. `Sim::family(id)` returns the age, the stage of life, the pregnancy, the kin, and the home of a colonist, and `Sim::home_of(id)` returns the assigned bed.
+
+Sprint 23 added no module. `Sim::migrant_chance()` returns the migrant chance as named parts. The save format version stays 15.
+
+Sprint 24 added `neighbors.rs` with `neighbors.ron`. The people of a rival colony come from the seed. `NeighborState` holds the ties by colonist, rival, and person, the grudges, the contact counts, and the people that wed. `neighbors_day()` runs at the end of the hourly hook chain and acts on the day boundary. `rival_hostility` has a fifth part, `HostilityCause::Ties`. `kill` and `leave_with` call `neighbors_forget`, and `kill` calls `neighbors_grudge`. The save format version is 16.
+
+Sprint 25 added `races.rs` with `races.ron`. `RaceRules` holds the races and one `RacePairRule` for each pair of different races. `Sim::race_pair`, `race_age_days`, and `race_elder_age` give the values. `relation()` adds the `OpinionCause::Race` part, `comfort_parts` adds `ComfortCause::Race`, `pick_partners` and `pregnancies` obey the pair rule, and `births` sets the race of the child. `MigrantProfile` has a race. The save format version is 17.
+
+Sprint 26 added `worldgen/src/realm.rs`. `realm_seed` gives the sub-seed of a realm, and realm (0, 0) has the seed. `RealmCache` holds a few realms and makes one missing realm for each `generate_next` call. `WORLD_GEN_VERSION` is the version of the world generator. `Sim` keeps `realm` and `world_gen_version`, and `save::from_bytes` refuses another generator version with `SaveError::WorldMismatch`. The save format version was 18.
+
+Sprint 27 added `sim/src/weather.rs` and `assets/content/weather.ron`. `WeatherState` keeps the snow depth, the river level, the flood and its tiles, and the counts. `Sim::weather_day` runs once each game day after the drought step. `advance` is a pure function, so `flood_forecast` gives the exact level of the next 3 days. `storm_on_day` is a hash roll from the weather seed, so `storm_forecast` is exact. `walk_speed` returns the walking speed with named parts, and `move_colonists` scales the walk progress with it. The save format version is 19.
 
 ### 3.2 Data ownership
 
@@ -113,7 +132,7 @@ Each value that the player can inspect (mood, Notice, room temperature, work spe
 - Use a small immediate-mode UI that we write. It draws with the same sprite batch and a bitmap pixel font.
 - Widgets: panel, label, button, toggle, scroll list, table with sortable columns, tooltip, tabs.
 - The UI reads `&Sim` and returns `Vec<Command>`. It never changes `Sim`.
-- Text input in the MVP is only a numeric seed widget. Save names are automatic (D-027).
+- Text input in the MVP is a numeric seed widget and a world name box (D-091). Save names are automatic (D-027).
 - If the UI code becomes larger than approximately 3,000 lines, or free text input becomes necessary, evaluate `egui` for debug panels only. Record the decision in `DECISIONS.md`.
 
 ### 4.4 Input
@@ -277,7 +296,8 @@ All steps are single-threaded and use integer math. Each step has a stage hash t
 - Do not use `#[serde(skip)]` for data that affects the simulation. Derived caches are rebuilt on load.
 - The `game` crate writes to a temporary file and then renames it. It keeps one backup.
 - `tools dump-save` writes RON for comparison.
-- Ironman and free-save modes use the same format (Q-003). Ironman writes a save at 00:00 of each game day and at exit.
+- Ironman and free-save modes use the same format (Q-003). Ironman writes a save at 00:00 of each game day, on quit to menu, and at exit.
+- Files (proposal, `ROADMAP.md` §7.5): `worlds/<id>.ron` is a world record. `saves/<id>.sav` is a run, and `saves/<id>.meta` is its list entry. `settings.ron` holds the settings. The base folder is `%APPDATA%/Ruinstead` on Windows, from `std::env`. `PCS_DATA_DIR` overrides it. Only `game` reads and writes these files. A bad file gives an error value, never a panic.
 
 ## 10. Content data (D-014)
 

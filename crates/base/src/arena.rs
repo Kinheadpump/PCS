@@ -152,6 +152,23 @@ impl<T> Arena<T> {
         self.get(id).is_some()
     }
 
+    /// Iterate over `(id, &mut value)` in slot order.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Id<T>, &mut T)> {
+        self.slots.iter_mut().enumerate().filter_map(|(i, s)| {
+            let generation = s.generation;
+            s.value.as_mut().map(|v| {
+                (
+                    Id {
+                        index: i as u32,
+                        generation,
+                        marker: PhantomData,
+                    },
+                    v,
+                )
+            })
+        })
+    }
+
     /// Iterate over `(id, &value)` in slot order.
     pub fn iter(&self) -> impl Iterator<Item = (Id<T>, &T)> {
         self.slots.iter().enumerate().filter_map(|(i, s)| {

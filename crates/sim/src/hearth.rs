@@ -71,6 +71,7 @@ impl Sim {
     /// Each game hour: every hearth with fuel burns 1 hour of it. Then hearths with little
     /// fuel get a refuel job.
     pub(crate) fn burn_hearths(&mut self) {
+        self.fire_hour();
         let hearths = self.hearth_tiles();
         for &(x, y) in &hearths {
             let fuel = self.hearth_fuel(x, y);

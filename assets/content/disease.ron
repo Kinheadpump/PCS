@@ -1,0 +1,36 @@
+// Disease and medicine numbers (R-060 to R-064). Integers only (D-014).
+// grace_days: game days at the start of a colony with no new disease.
+// health_loss_above, health_loss_per_hour: a disease above this severity costs this health each hour.
+// raw_foods: material ids of raw food. medicine: material id of the medicine.
+// food_*: chances of food poisoning in percent (food_cook_skill_permille: permille per cook level).
+// wound_pct_*: daily chance of wound infection in percent. cold_catch_permille: chance each hour.
+// infect_*: nightly chance of infection in the same room, in percent.
+// treat_*: doctor job work time in ticks, treatment length in days, success chance in percent.
+// Each disease: start severity, daily severity change (untreated, in a bed, treated), work speed
+// change in percent points, and contagion.
+(
+    grace_days: 10,
+    health_loss_above: 50,
+    health_loss_per_hour: 2,
+    raw_foods: ["berries", "turnips", "wild_roots"],
+    medicine: "herbal_medicine",
+    food_raw_pct: 20,
+    food_cooked_pct: 5,
+    food_cook_skill_permille: 5,
+    food_rot_value: 50,
+    food_rot_pct: 30,
+    wound_pct_no_bed: 15,
+    wound_pct_bed: 5,
+    wound_pct_treated: 1,
+    cold_catch_permille: 1,
+    infect_pct: 20,
+    infect_comfort_pct: 10,
+    immune_days: 20,
+    treat_ticks: 100,
+    treat_days: 1,
+    treat_base_pct: 60,
+    treat_per_level_pct: 4,
+    food_poisoning: (start: 40, untreated: -20, bed: -20, treated: -20, speed_pct: -50, contagious: false),
+    wound_infection: (start: 20, untreated: 15, bed: 15, treated: -20, speed_pct: -20, contagious: false),
+    winter_fever: (start: 20, untreated: 10, bed: -15, treated: -30, speed_pct: -30, contagious: true),
+)

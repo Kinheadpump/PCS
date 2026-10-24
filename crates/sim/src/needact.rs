@@ -193,6 +193,9 @@ impl Sim {
         };
         let max = i32::try_from(n.hunger_max).unwrap_or(i32::MAX) * MILLI;
         let gain = i32::try_from(food.nutrition).unwrap_or(i32::MAX) * MILLI;
+        if let Some((material, rot)) = self.items.get(item).map(|i| (i.material, i.rot)) {
+            self.eat_disease_roll(id, material, rot);
+        }
         self.items.take_one(item);
         if let Some(c) = self.colonists.get_mut(id) {
             c.hunger = c.hunger.saturating_add(gain).min(max);
@@ -223,7 +226,7 @@ impl Sim {
         let Some(c) = self.colonists.get(id) else {
             return;
         };
-        if c.act.is_some() || c.need_next > self.tick {
+        if c.act.is_some() || c.need_next > self.tick || c.drafted || c.foe.is_some() {
             return;
         }
         let n = &self.rules.needs;
@@ -442,14 +445,23 @@ impl Sim {
                 .building(def)
                 .is_some_and(|d| d.kind == BuildingKind::Bed)
         });
-        beds.into_iter()
-            .filter(|t| !taken.contains(t))
+        let free: Vec<(u16, u16)> = beds.into_iter().filter(|t| !taken.contains(t)).collect();
+        let reachable: Vec<(u16, u16)> = self
+            .sick_room_filter(id, free)
+            .into_iter()
             .filter(|t| {
                 self.regions.connected(
                     (i32::from(from.0), i32::from(from.1)),
                     (i32::from(t.0), i32::from(t.1)),
                 )
             })
+            .collect();
+        // The assigned bed first (R-039).
+        if let Some(home) = c.bed.filter(|b| reachable.contains(b)) {
+            return Some(home);
+        }
+        reachable
+            .into_iter()
             .min_by_key(|&t| (octile(from, t), t.1, t.0))
     }
 }

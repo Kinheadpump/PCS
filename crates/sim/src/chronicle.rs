@@ -23,10 +23,16 @@ pub enum ChronicleKind {
     DeathHeatstroke,
     /// A colonist died of wounds. Number 0: age.
     DeathWounds,
+    /// A colonist died of a disease. Number 0: age.
+    DeathDisease,
     /// A colonist died of an unknown cause. Number 0: age.
     DeathUnknown,
+    /// A colonist died of old age. Number 0: age.
+    DeathOldAge,
     /// A colonist left the colony. Number 0: age.
     Left,
+    /// A colonist left because the colony failed their life goal. Number 0: age.
+    LeftGoals,
     /// The first winter begins. Number 0: colonists. Number 1: days of food.
     WinterBegins,
     /// The first winter ends. Number 0: colonists alive. Number 1: deaths in the winter.
@@ -41,17 +47,28 @@ pub enum ChronicleKind {
     FirstHarvest,
     /// Food rotted. Number 0: units.
     FoodRotted,
+    /// A child was born. Number 0: colonists after the birth.
+    Birth,
+    /// A person of a rival colony wed a colonist. Number 0: colonists after the wedding.
+    Wedding,
+    /// The river flooded the land. Number 0: the river level.
+    Flood,
+    /// A storm hit the colony. Number 0: strength. Number 1: roofs lost.
+    Storm,
 }
 
 impl ChronicleKind {
     /// All kinds, in index order.
-    pub const ALL: [ChronicleKind; 13] = [
+    pub const ALL: [ChronicleKind; 20] = [
         ChronicleKind::DeathStarvation,
         ChronicleKind::DeathHypothermia,
         ChronicleKind::DeathHeatstroke,
         ChronicleKind::DeathWounds,
+        ChronicleKind::DeathDisease,
         ChronicleKind::DeathUnknown,
+        ChronicleKind::DeathOldAge,
         ChronicleKind::Left,
+        ChronicleKind::LeftGoals,
         ChronicleKind::WinterBegins,
         ChronicleKind::WinterSurvived,
         ChronicleKind::ColonyLost,
@@ -59,6 +76,10 @@ impl ChronicleKind {
         ChronicleKind::CropsKilled,
         ChronicleKind::FirstHarvest,
         ChronicleKind::FoodRotted,
+        ChronicleKind::Birth,
+        ChronicleKind::Wedding,
+        ChronicleKind::Flood,
+        ChronicleKind::Storm,
     ];
 
     /// The key in the template file.
@@ -68,8 +89,11 @@ impl ChronicleKind {
             ChronicleKind::DeathHypothermia => "death_hypothermia",
             ChronicleKind::DeathHeatstroke => "death_heatstroke",
             ChronicleKind::DeathWounds => "death_wounds",
+            ChronicleKind::DeathDisease => "death_disease",
             ChronicleKind::DeathUnknown => "death_unknown",
+            ChronicleKind::DeathOldAge => "death_old_age",
             ChronicleKind::Left => "left",
+            ChronicleKind::LeftGoals => "left_goals",
             ChronicleKind::WinterBegins => "winter_begins",
             ChronicleKind::WinterSurvived => "winter_survived",
             ChronicleKind::ColonyLost => "colony_lost",
@@ -77,6 +101,10 @@ impl ChronicleKind {
             ChronicleKind::CropsKilled => "crops_killed",
             ChronicleKind::FirstHarvest => "first_harvest",
             ChronicleKind::FoodRotted => "food_rotted",
+            ChronicleKind::Birth => "birth",
+            ChronicleKind::Wedding => "wedding",
+            ChronicleKind::Flood => "flood",
+            ChronicleKind::Storm => "storm",
         }
     }
 
@@ -87,7 +115,9 @@ impl ChronicleKind {
             DeathCause::Hypothermia => ChronicleKind::DeathHypothermia,
             DeathCause::Heatstroke => ChronicleKind::DeathHeatstroke,
             DeathCause::Wounds => ChronicleKind::DeathWounds,
+            DeathCause::Disease => ChronicleKind::DeathDisease,
             DeathCause::Unknown => ChronicleKind::DeathUnknown,
+            DeathCause::OldAge => ChronicleKind::DeathOldAge,
         }
     }
 }
@@ -205,6 +235,19 @@ pub fn load_chronicle_rules(file: &str, text: &str) -> Result<ChronicleRules, Co
     })
 }
 
+/// The legacy score (R-050).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Legacy {
+    /// Full years that the colony lived.
+    pub years_survived: u32,
+    /// The most colonists at the same time.
+    pub peak_population: u32,
+    /// Winters, droughts, and raids that the colony lived through.
+    pub crises_survived: u32,
+    /// Lore fragments unlocked.
+    pub knowledge_unlocked: u32,
+}
+
 /// The state of the run (R-050).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RunState {
@@ -231,6 +274,10 @@ pub struct RunInfo {
     pub peak_population: u32,
     /// Colonists who left the colony (they count as lost, R-050).
     pub left: u32,
+    /// Crises that the colony lived through: winters, droughts, and raids (R-050).
+    pub crises_survived: u32,
+    /// Lore fragments that the colony unlocked (R-042). A later sprint counts them.
+    pub knowledge_unlocked: u32,
 }
 
 impl Default for RunInfo {
@@ -239,6 +286,8 @@ impl Default for RunInfo {
             state: RunState::Running,
             peak_population: 0,
             left: 0,
+            crises_survived: 0,
+            knowledge_unlocked: 0,
         }
     }
 }
@@ -314,6 +363,35 @@ impl Sim {
     /// The state of the run (R-050).
     pub fn run_state(&self) -> RunState {
         self.run.state
+    }
+
+    /// The legacy score of the run (R-050): years survived, peak population, crises survived, and
+    /// knowledge unlocked. While the run lasts, the years count to now.
+    pub fn legacy(&self) -> Legacy {
+        let info = self.run_info();
+        let end = match self.run.state {
+            RunState::Running => self.tick,
+            RunState::Lost { tick } | RunState::Abandoned { tick } => tick,
+        };
+        Legacy {
+            years_survived: u32::try_from(end / crate::time::TICKS_PER_YEAR).unwrap_or(u32::MAX),
+            peak_population: info.peak_population,
+            crises_survived: info.crises_survived,
+            knowledge_unlocked: info.knowledge_unlocked,
+        }
+    }
+
+    /// True at the first tick of a game day (00:00) while the run lasts. The interface writes the
+    /// ironman save then (R-050, D-032).
+    pub fn ironman_save_due(&self) -> bool {
+        self.run.state == RunState::Running
+            && self.tick > 0
+            && self.tick.is_multiple_of(TICKS_PER_DAY)
+    }
+
+    /// Count a crisis that the colony survived.
+    pub(crate) fn crisis_survived(&mut self) {
+        self.run.crises_survived = self.run.crises_survived.saturating_add(1);
     }
 
     /// The run state with the numbers for the end screen.
@@ -401,6 +479,7 @@ impl Sim {
                 ],
             );
         } else if self.tick == TICKS_PER_YEAR {
+            self.crisis_survived();
             let died = self
                 .graveyard
                 .iter()

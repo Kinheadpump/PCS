@@ -105,6 +105,12 @@ fn comfort_cause_name(sim: &Sim, cause: ComfortCause) -> String {
         ComfortCause::Base => "Base".to_owned(),
         ComfortCause::Clothes { material } => material_name(sim, material),
         ComfortCause::Trait { index } => trait_name(sim, index),
+        ComfortCause::Race { index } => sim
+            .rules()
+            .races
+            .races
+            .get(usize::from(index))
+            .map_or_else(|| "Race".to_owned(), |r| r.name.clone()),
     }
 }
 
@@ -995,7 +1001,7 @@ mod tests {
         let recipes = workshop_recipes(&sim, 1, 0);
         assert_eq!(
             recipes.len(),
-            4,
+            6,
             "locked recipes and unavailable blocks are hidden"
         );
         assert_eq!(recipes[0].label, "Make planks");

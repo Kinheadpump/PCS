@@ -244,6 +244,42 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 ### 7.5 Health
 
+**R-033 Personality:** A colonist can have a social trait: introvert or extrovert. A colonist can have 1 life goal. A scenario map colonist has neither. (D-083)
+
+**R-034 Wants:** Each game hour, a want gives a timed mood modifier (R-014) that has a name. An extrovert with company is glad, and an extrovert that is alone for 24 hours in a row is lonely. An introvert that is alone is glad, and an introvert in a crowd for 12 hours in a row is crowded. A met life goal adds a modifier. A life goal that is not met adds a negative modifier after a patience time of 20 days. (D-083)
+
+**R-035 Opinion:** Two colonists that are near each other have an opinion of each other. The opinion is the sum of named parts: time together, shared sleep, quarrels, temperament, and chemistry. The opinion gives a standing: acquaintance, friend, rival, or enemy. (D-084)
+
+**R-036 Bonds:** A friend, a rival, or an enemy that is near a colonist adds a named mood modifier. When a friend dies, the friend gets a stronger modifier than other colonists. Two free adults with a high opinion become partners, and the death of a partner gives the strongest modifier. (D-084)
+
+**R-037 Ages:** A colonist ages 1 age year after a set number of game days (`family.ron`). A colonist below the adult age is a child: it eats and sleeps but does not work and cannot be drafted. From the elder age, a colonist can die of old age. The chance rises with each age year. (D-085)
+
+**R-038 Children:** A partner pair with a woman and a man can have a child if the woman is fertile, the pair is in good mood, the colony has food and a free bed, and the woman has no pregnancy or recent birth. The pregnancy lasts a set number of game days. A birth gives both parents a good mood modifier. When a parent or a child dies, the family gets a large bad mood modifier. (D-085)
+
+**R-039 Homes:** Each colonist has an assigned bed. A pair and its children live in the same room if it has enough beds. A single colonist prefers a room with few beds. A tired colonist sleeps in the assigned bed when it is free. (D-085)
+
+**R-040 Colony growth:** The chance of migrants (R-017) is the sum of the base chance, the wealth, the average mood of the colonists, and the number of friend and partner pairs. Each part is named. A colonist whose life goal fails for a long time and whose mood is low leaves the colony. A child never leaves for this reason, and the last colonists stay. (D-086)
+
+**R-045 People of other colonies:** Each rival colony has a few people. A colonist meets a person of a calm rival colony (hostility 50 or less) with a daily chance. Contacts make a tie. The opinion of a tie is the sum of three named parts: contact days, chemistry, and the grudge of the colonist against that colony. The standing of a tie is friend, rival, or enemy by the opinion, as in R-035. (D-087)
+
+**R-046 Marriage across colonies:** A free adult colonist whose opinion of a person is 60 or more weds that person if the hostility of the rival colony is 60 or less. The person joins the colony as a new colonist and the partner of the colonist. A person weds one time. Each wedding takes 10 from the hostility of that colony. (D-087)
+
+**R-047 Grudges and the hostility of rivals:** When a colonist dies of wounds in a raid, the partner, the friends, and the parents and children of the dead hold a grudge against the raiding colony. A grudge lowers the opinion of the people of that colony, gives a mood memory, and fades by 1 point in 4 game days. The hostility of a rival colony has a Ties part: grudges add, friends and weddings take away. (D-087)
+
+**R-048 Races:** There are 4 races: folk, stonekin, reedfolk, and ashborn. A race is a set of content values: the speed of ageing, the age of an elder, the lower limit of the comfort band (a named part of the band), and the weight among migrants and among the people of rival colonies. The start colonists are folk. Races have no spells. (D-088)
+
+**R-049 Race pairs:** Each pair of different races has one rule: the opinion that the pair adds to a relation (a named part), if the two can become partners, if they can have children, and the race of the child (mother, father, either, or a fixed race). Two people of the same race can be partners and have children, and the child has the race of the mother. A person of a rival colony weds a colonist only if the rule of the two races allows partners. (D-088)
+
+**R-051 Realms:** The world is a plane of realms. A realm is one finite world of 256 by 256 cells with its own sub-seed. The edge of each realm is ocean, so a strait lies between two realms. Realm (0, 0) is the world of the seed itself. A colony is in one realm. The distance between two realms is the number of realm steps, and a step can go diagonal. (D-089)
+
+**R-052 Realm cache and saves:** The game keeps a few realms in a cache and makes at most one missing realm between two frames. A save keeps the realm of the colony and the version of the world generator. The game refuses a save that has another generator version. (D-089)
+
+**R-053 Snow:** On a game day with rain and a day mean at or below the snow limit, snow falls and adds depth, to a limit. On a day with a mean above 0, a part of the snow melts. The melt grows with the temperature. Snow slows walking on open tiles: a tile with a roof has no snow. The loss is the same for each 10 depth, to a limit. The walking speed is a sum of named parts: base, snow, flood.
+
+**R-054 Floods:** The river level is a number. Each game day it keeps a part of its value, and it grows with the melted snow and with rain above 0 degrees. When the level reaches the flood level, the river floods the land near water tiles, and the flood lasts until the level falls below the end level. The flood reaches farther when the level is higher. A wall line or a solid building stops the water (a dike). Crops on flooded tiles die, and walking on a flooded tile is slow. The forecast shows the river level of the next 3 days. No flood starts in the first days of a run.
+
+**R-055 Storms:** On a game day that is not in winter, a storm can come. The storm has a strength from 1 to 3. The forecast shows the storm of the next 3 days. A storm can tear roofs off, and a stronger storm tears more. A stone roof has a smaller chance than a wood roof. A colonist gets a bad memory only when a roof was lost. No storm comes in the first days of a run.
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.
@@ -387,7 +423,7 @@ Item durability and value come from the material and the item template.
 
 ### 8.8 Fire
 
-**R-023 Fire start:** Fire starts only from a burning hearth. Each game hour, each flammable item or structure within 1 tile of a burning hearth has a 1% chance to start burning.
+**R-023 Fire start:** Fire starts only from a burning hearth. Each game hour, each flammable item or object (bed, door, workshop) within 1 tile of a burning hearth has a 1% chance to start burning. Floors and roofs burn only when a fire spreads to them. The first 10 days of a run have no hearth fire.
 
 **R-024 Fire spread:** A burning tile has fire intensity from 1 to 10. Each 10 ticks, it has a chance to spread to each adjacent flammable tile. The chance is `flammability × intensity / 10` percent. A burning tile uses its fuel. When the fuel is 0, the fire stops. Stone and soil do not burn. Rain stops all outdoor fire. A colonist with an extinguish job decreases intensity by 2 each game hour.
 
@@ -478,12 +514,12 @@ Each crisis must have a cause in the simulation, a warning sign that the player 
 **R-031 Notice effects:**
 
 - Each game day, a beast enters the map with a chance of Notice / 4 percent, to a maximum of 50%.
-- Beasts in lairs on the map become active when Notice is 30 or more.
+- Beasts in lairs on the map become active when Notice is 30 or more. No beast arrives and no lair wakes in the first 8 game days of the run.
 - An awake dormant threat gets 1 strength level for each 25 Notice.
 
 ### 10.3 Creatures
 
-- Game animals walk around the map. Colonists with a hunt designation hunt them. They give meat and leather.
+- Game animals walk around the map. The player orders a colonist to hunt one (an attack order). A dead animal leaves meat and hide. A workshop makes leather from hide, and clothes from leather.
 - Beasts attack colonists. They come from the map edge or from lairs.
 - Rival colonies send raids (§10.5).
 - Dormant threats wake up when colonists open a sealed site.

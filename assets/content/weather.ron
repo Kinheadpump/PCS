@@ -1,0 +1,44 @@
+// Snow, floods, and storms (S27, R-053, R-054, R-055). Integers only (D-014).
+// grace_days: no flood and no storm in these first days of a run, so the start camp is safe.
+// Snow (R-053):
+// snow_temp_max: snow falls on a day with rain when the day mean is at or below this (tenths of
+//   a degree). snow_per_day: depth that one snow day adds. snow_max: the depth limit.
+// melt_base, melt_per_deg: depth that melts on a day with a mean above 0. The melt is
+//   melt_base plus the mean in tenths times melt_per_deg divided by 10.
+// snow_slow_per_10, snow_slow_max: walking outdoors loses this many percent points for each 10
+//   depth, to the limit.
+// River and flood (R-054):
+// level_max: the river level limit. level_decay_pct: the part of the level that stays after a day.
+// melt_to_level: level that 1 depth of melted snow adds. rain_to_level: level that a rain day
+//   above 0 degrees adds.
+// flood_start, flood_end: the flood starts at this level or more and ends below the other level.
+// flood_reach_min, flood_reach_per_10, flood_reach_max: tiles from the water that the flood
+//   reaches: the minimum plus this many for each 10 level above flood_start, to the limit.
+// flood_slow_pct: walking on a flooded tile loses this many percent points.
+// Storms (R-055):
+// storm_permille: chance in 1000 of a storm on a day that is not in winter.
+// storm_roof_permille: chance in 1000 that a storm of strength 1, 2, or 3 tears off one roof.
+// stone_roof_pct: a stone roof has this percent of that chance.
+(
+    grace_days: 20,
+    snow_temp_max: 0,
+    snow_per_day: 10,
+    snow_max: 80,
+    melt_base: 5,
+    melt_per_deg: 1,
+    snow_slow_per_10: 4,
+    snow_slow_max: 30,
+    level_max: 200,
+    level_decay_pct: 80,
+    melt_to_level: 2,
+    rain_to_level: 6,
+    flood_start: 50,
+    flood_end: 25,
+    flood_reach_min: 2,
+    flood_reach_per_10: 1,
+    flood_reach_max: 5,
+    flood_slow_pct: 40,
+    storm_permille: 50,
+    storm_roof_permille: (100, 250, 500),
+    stone_roof_pct: 0,
+)

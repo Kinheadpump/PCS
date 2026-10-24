@@ -11,10 +11,10 @@
     (id: "meal_sorghum", name: "Cook sorghum meal", workshop: "kitchen", inputs: [("sorghum", 2)], outputs: [("meal", 1)], work_ticks: 150),
     (id: "meal_roots", name: "Cook root meal", workshop: "kitchen", inputs: [("wild_roots", 3)], outputs: [("meal", 1)], work_ticks: 150),
     // Tools and building blocks (Sprint 12). A stone tool needs a block and a log.
-    (id: "stone_block", name: "Cut stone blocks", workshop: "workshop", inputs: [("granite", 2)], outputs: [("stone_block", 1)], work_ticks: 200),
-    (id: "block_limestone", name: "Cut limestone blocks", workshop: "workshop", inputs: [("limestone", 2)], outputs: [("stone_block", 1)], work_ticks: 150),
-    (id: "block_sandstone", name: "Cut sandstone blocks", workshop: "workshop", inputs: [("sandstone", 2)], outputs: [("stone_block", 1)], work_ticks: 150),
-    (id: "block_slate", name: "Cut slate blocks", workshop: "workshop", inputs: [("slate", 2)], outputs: [("stone_block", 1)], work_ticks: 180),
+    (id: "stone_block", name: "Cut stone blocks", workshop: "kiln", inputs: [("granite", 2)], outputs: [("stone_block", 1)], work_ticks: 200),
+    (id: "block_limestone", name: "Cut limestone blocks", workshop: "kiln", inputs: [("limestone", 2)], outputs: [("stone_block", 1)], work_ticks: 150),
+    (id: "block_sandstone", name: "Cut sandstone blocks", workshop: "kiln", inputs: [("sandstone", 2)], outputs: [("stone_block", 1)], work_ticks: 150),
+    (id: "block_slate", name: "Cut slate blocks", workshop: "kiln", inputs: [("slate", 2)], outputs: [("stone_block", 1)], work_ticks: 180),
     (id: "stone_axe", name: "Make stone axe", workshop: "forge", inputs: [("stone_block", 1), ("log", 1)], outputs: [("stone_axe", 1)], work_ticks: 250),
     (id: "stone_pick", name: "Make stone pick", workshop: "forge", inputs: [("stone_block", 1), ("log", 1)], outputs: [("stone_pick", 1)], work_ticks: 250),
     (id: "clothes", name: "Sew simple clothes", workshop: "workshop", inputs: [("fiber", 3)], outputs: [("simple_clothes", 1)], work_ticks: 250),
@@ -28,4 +28,10 @@
     (id: "iron_bar", name: "Smelt iron", workshop: "smelter", inputs: [("iron_ore", 2), ("charcoal", 1)], outputs: [("iron", 1)], work_ticks: 400, requires: Some("smelting")),
     (id: "iron_axe", name: "Forge iron axe", workshop: "forge", inputs: [("iron", 2), ("plank", 1)], outputs: [("iron_axe", 1)], work_ticks: 400, requires: Some("iron_tools")),
     (id: "iron_pick", name: "Forge iron pick", workshop: "forge", inputs: [("iron", 2), ("plank", 1)], outputs: [("iron_pick", 1)], work_ticks: 400, requires: Some("iron_tools")),
+    // Medicine (Sprint 17). A doctor uses one unit for one treatment (R-064).
+    (id: "herbal_medicine", name: "Make herbal medicine", workshop: "workshop", inputs: [("herbs", 2)], outputs: [("herbal_medicine", 1)], work_ticks: 200),
+    // Creatures (Sprint 13). Hunting gives meat and hide.
+    (id: "meal_meat", name: "Cook meat meal", workshop: "kitchen", inputs: [("meat", 2)], outputs: [("meal", 1)], work_ticks: 150),
+    (id: "tan_hide", name: "Tan hide", workshop: "workshop", inputs: [("hide", 2)], outputs: [("leather", 1)], work_ticks: 200),
+    (id: "leather_clothes", name: "Sew leather clothes", workshop: "workshop", inputs: [("leather", 2)], outputs: [("leather_clothes", 1)], work_ticks: 300),
 ]

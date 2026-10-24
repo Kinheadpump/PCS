@@ -11,7 +11,7 @@ use std::fmt;
 /// Magic bytes at the start of a save.
 pub const MAGIC: [u8; 8] = *b"COLSAVE1";
 /// Version of the payload layout. Before version 1.0 a different version is refused.
-pub const FORMAT_VERSION: u32 = 10;
+pub const FORMAT_VERSION: u32 = 20;
 /// Size of the header in bytes.
 pub const HEADER_LEN: usize = 8 + 4 + 8 + 8;
 
@@ -35,6 +35,13 @@ pub enum SaveError {
     HashMismatch,
     /// The content hash in the header differs from the one in the state.
     ContentMismatch,
+    /// The world of the save was made by another version of the world generator.
+    WorldMismatch {
+        /// Generator version in the save.
+        found: u32,
+        /// Generator version of this build.
+        expected: u32,
+    },
 }
 
 impl fmt::Display for SaveError {
@@ -49,6 +56,10 @@ impl fmt::Display for SaveError {
             SaveError::Corrupt => write!(f, "save data is damaged"),
             SaveError::HashMismatch => write!(f, "save data does not match its hash"),
             SaveError::ContentMismatch => write!(f, "save content hash is wrong"),
+            SaveError::WorldMismatch { found, expected } => write!(
+                f,
+                "save has world generator version {found}; this game makes version {expected}"
+            ),
         }
     }
 }
@@ -92,6 +103,12 @@ pub fn from_bytes(bytes: &[u8]) -> Result<Sim, SaveError> {
     let sim = Sim::decode_state(payload).ok_or(SaveError::Corrupt)?;
     if sim.content_hash() != content_hash {
         return Err(SaveError::ContentMismatch);
+    }
+    if sim.world_gen_version() != worldgen::WORLD_GEN_VERSION {
+        return Err(SaveError::WorldMismatch {
+            found: sim.world_gen_version(),
+            expected: worldgen::WORLD_GEN_VERSION,
+        });
     }
     Ok(sim)
 }

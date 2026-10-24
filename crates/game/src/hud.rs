@@ -59,6 +59,8 @@ pub struct UiState {
     pub fertility: bool,
     /// The crop of the farm tool (index in `farm.ron`).
     pub crop: u16,
+    /// The page of recipes that the workshop panel shows.
+    pub workshop_page: usize,
     /// True if the pause menu shows.
     pub menu: bool,
     /// True if the menu paused the clock (so closing it resumes).
@@ -423,16 +425,21 @@ impl FarmPanel {
     }
 }
 
+/// Recipes on one page of the workshop panel.
+const RECIPES_PER_PAGE: usize = 4;
+
 /// Text of the workshop panel.
 struct WorkshopPanel {
     tile: (u16, u16),
+    page: usize,
+    pages: usize,
     title: String,
     lines: Vec<String>,
     recipes: Vec<RecipeInfo>,
 }
 
 impl WorkshopPanel {
-    fn new(sim: &Sim, tile: (u16, u16)) -> Option<Self> {
+    fn new(sim: &Sim, tile: (u16, u16), page: usize) -> Option<Self> {
         inspector::workshop_at(sim, tile.0, tile.1)?;
         let mut lines = inspector::workshop_lines(sim, tile.0, tile.1);
         let title = if lines.is_empty() {
@@ -444,12 +451,21 @@ impl WorkshopPanel {
             *line = shorten(line, CLIP_CHARS + 6);
         }
         let mut recipes = inspector::workshop_recipes(sim, tile.0, tile.1);
+        let pages = recipes.len().div_ceil(RECIPES_PER_PAGE).max(1);
+        let page = page % pages;
+        recipes = recipes
+            .into_iter()
+            .skip(page * RECIPES_PER_PAGE)
+            .take(RECIPES_PER_PAGE)
+            .collect();
         for r in &mut recipes {
             r.label = shorten(&r.label, CLIP_CHARS + 6);
             r.detail = shorten(&r.detail, CLIP_CHARS + 6);
         }
         Some(Self {
             tile,
+            page,
+            pages,
             title,
             lines,
             recipes,
@@ -462,7 +478,7 @@ impl WorkshopPanel {
             .iter()
             .map(|r| (r.label.clone(), r.detail.clone()))
             .collect();
-        ui::workshop_layout(origin, &self.title, &self.lines, &labels)
+        ui::workshop_layout(origin, &self.title, &self.lines, &labels, self.pages > 1)
     }
 }
 
@@ -548,7 +564,7 @@ impl Content {
             None => (None, Vec::new()),
         };
         let side = h.selected_tile.and_then(|tile| {
-            if let Some(panel) = WorkshopPanel::new(h.sim, tile) {
+            if let Some(panel) = WorkshopPanel::new(h.sim, tile, h.state.workshop_page) {
                 return Some(Side::Workshop(panel));
             }
             let id = inspector::zone_at(h.sim, tile.0, tile.1)?;
@@ -961,6 +977,11 @@ fn draw_workshop(ui: &mut Ui, origin: (f32, f32), panel: &WorkshopPanel) -> Vec<
                 )));
             }
         }
+    }
+    if let Some(rect) = layout.pager
+        && ui.button(rect, &format!("{}/{}", panel.page + 1, panel.pages), false)
+    {
+        actions.push(UiAction::WorkshopPage((panel.page + 1) % panel.pages));
     }
     actions
 }

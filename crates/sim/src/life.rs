@@ -63,6 +63,8 @@ pub enum HealthCause {
     Heatstroke,
     /// A wound.
     Wounded,
+    /// A disease above severity 50 (R-060).
+    Disease,
     /// Healing in a bed, with no condition.
     HealingInBed,
     /// Healing elsewhere, with no condition.
@@ -77,6 +79,7 @@ impl HealthCause {
             HealthCause::Hypothermia => "Hypothermia",
             HealthCause::Heatstroke => "Heatstroke",
             HealthCause::Wounded => "Wound",
+            HealthCause::Disease => "Disease",
             HealthCause::HealingInBed => "Healing in a bed",
             HealthCause::Healing => "Healing",
         }
@@ -182,6 +185,10 @@ pub enum DeathCause {
     Heatstroke,
     /// A wound.
     Wounds,
+    /// A disease (R-060).
+    Disease,
+    /// Old age (R-037).
+    OldAge,
     /// No health part explains it (a debug command).
     Unknown,
 }
@@ -194,6 +201,8 @@ impl DeathCause {
             DeathCause::Hypothermia => "Hypothermia",
             DeathCause::Heatstroke => "Heatstroke",
             DeathCause::Wounds => "Wounds",
+            DeathCause::Disease => "Disease",
+            DeathCause::OldAge => "Old age",
             DeathCause::Unknown => "Unknown",
         }
     }
@@ -255,6 +264,11 @@ pub enum ComfortCause {
         /// Trait index.
         index: u8,
     },
+    /// The race of the colonist (R-048).
+    Race {
+        /// Race index.
+        index: u8,
+    },
 }
 
 /// One named contribution to the lower limit of the comfort band.
@@ -283,6 +297,14 @@ fn comfort_parts(rules: &SimRules, c: &Colonist) -> Vec<ComfortPart> {
         cause: ComfortCause::Base,
         tenths: i32::from(n.comfort_low),
     }];
+    if let Some(def) = rules.races.races.get(usize::from(c.race))
+        && def.comfort_low_delta != 0
+    {
+        parts.push(ComfortPart {
+            cause: ComfortCause::Race { index: c.race },
+            tenths: i32::from(def.comfort_low_delta),
+        });
+    }
     if let Some(material) = c.clothes
         && let Some(def) = n.clothes_def(material)
     {
@@ -462,6 +484,11 @@ pub enum SpeedModCause {
     LowMood,
     /// Rest 0 (R-012).
     Exhausted,
+    /// A disease (R-060). The number is the `DiseaseKind` index.
+    Disease {
+        /// `DiseaseKind` index.
+        kind: u8,
+    },
     /// A trait.
     Trait {
         /// Trait index.
@@ -520,7 +547,11 @@ impl Sim {
     pub fn health_report(&self, id: ColonistId) -> Option<HealthReport> {
         let c = self.colonists.get(id)?;
         let rules = &self.rules.needs;
-        let parts = health_parts(rules, c);
+        let mut parts = health_parts(rules, c);
+        if let Some(part) = self.disease_health_part(id) {
+            parts.retain(|p| !matches!(p.cause, HealthCause::Healing | HealthCause::HealingInBed));
+            parts.push(part);
+        }
         let per_hour = parts.iter().map(|p| p.per_hour).sum();
         Some(HealthReport {
             health: c.health,
@@ -555,6 +586,12 @@ impl Sim {
                 mods.push(SpeedMod {
                     cause: SpeedModCause::Exhausted,
                     pct: i32::from(n.exhausted_speed_pct),
+                });
+            }
+            for (kind, pct) in self.disease_speed_mods(id) {
+                mods.push(SpeedMod {
+                    cause: SpeedModCause::Disease { kind },
+                    pct,
                 });
             }
             for &index in &c.traits {
@@ -711,6 +748,7 @@ impl Sim {
                 .iter()
                 .filter_map(|&t| rules.traits.get(usize::from(t)))
                 .fold(100u64, |acc, t| acc * u64::from(t.hunger_rate_pct) / 100);
+            let dpart = self.disease_health_part(id);
             let Some(c) = self.colonists.get_mut(id) else {
                 continue;
             };
@@ -728,6 +766,13 @@ impl Sim {
                     asleep: true
                 })
             );
+            let bed_tile = match c.act {
+                Some(NeedAct::Sleep {
+                    bed: Some(b),
+                    asleep: true,
+                }) => Some(b),
+                _ => None,
+            };
             let rest_max = whole(n.rest_max) * MILLI;
             if asleep {
                 let gain = if in_bed {
@@ -760,7 +805,13 @@ impl Sim {
                 }
             }
             // R-016
-            let parts = health_parts(n, c);
+            let mut parts = health_parts(n, c);
+            if let Some(part) = dpart {
+                parts.retain(|p| {
+                    !matches!(p.cause, HealthCause::Healing | HealthCause::HealingInBed)
+                });
+                parts.push(part);
+            }
             let change: i32 = parts.iter().map(|p| p.per_hour).sum();
             c.health = (c.health + change).clamp(0, whole(n.health_max));
             c.memories.retain(|m| m.until > self.tick);
@@ -775,6 +826,10 @@ impl Sim {
                 continue;
             }
             if woke {
+                let beds = bed_tile.map_or(0, |(bx, by)| self.beds_in_room(bx, by));
+                if let Some(c) = self.colonists.get_mut(id) {
+                    c.sleep_room_beds = u8::try_from(beds).unwrap_or(u8::MAX);
+                }
                 let key = if was_in_bed {
                     "slept_bed"
                 } else {
@@ -823,6 +878,19 @@ impl Sim {
         for (id, cause) in dead {
             self.kill(id, cause);
         }
+        self.wants_tick();
+        self.relations_tick();
+        self.family_day();
+        self.neighbors_day();
+        self.assign_homes();
+    }
+
+    /// Give every colonist of a new colony a social trait and a life goal (R-033).
+    pub(crate) fn roll_all_wants(&mut self, seed: u64) {
+        let ids: Vec<ColonistId> = self.colonists.iter().map(|(id, _)| id).collect();
+        for (i, id) in ids.into_iter().enumerate() {
+            self.roll_wants(id, seed.wrapping_add((i as u64) << 32));
+        }
     }
 
     /// A colonist stops work for a breakdown or a walk-around (R-015). A walk-around also
@@ -861,6 +929,11 @@ impl Sim {
 
     /// A colonist leaves the colony (R-015).
     fn leave(&mut self, id: ColonistId) {
+        self.leave_with(id, crate::ChronicleKind::Left);
+    }
+
+    /// A colonist leaves the colony, with the chronicle kind of the reason.
+    pub(crate) fn leave_with(&mut self, id: ColonistId, kind: crate::ChronicleKind) {
         let Some(c) = self.colonists.get(id) else {
             return;
         };
@@ -868,8 +941,10 @@ impl Sim {
         let age = c.age;
         self.release_colonist(id);
         self.colonists.remove(id);
+        self.relations_forget(id);
+        self.neighbors_forget(id);
         self.life_events.push(LifeEvent::Left { x, y });
-        self.chronicle_gone(crate::ChronicleKind::Left, age);
+        self.chronicle_gone(kind, age);
     }
 
     /// A colonist dies (R-016). The others get the memory "colonist_died".
@@ -886,8 +961,10 @@ impl Sim {
             cause,
         };
         self.drop_tools(id);
+        let kin = self.family_kin(id);
         self.release_colonist(id);
         self.colonists.remove(id);
+        let mourners = self.relations_forget(id);
         self.graveyard.push(grave);
         let cap = self.rules.needs.graveyard_max as usize;
         if self.graveyard.len() > cap {
@@ -900,6 +977,10 @@ impl Sim {
             cause,
         });
         self.chronicle_gone(crate::ChronicleKind::of_death(cause), grave.age);
+        self.neighbors_forget(id);
+        self.relations_mourn(&mourners);
+        self.neighbors_grudge(&mourners, &kin, cause);
+        self.family_mourn(&kin);
         if let Some(index) = self.rules.needs.memory_index("colonist_died") {
             let others: Vec<ColonistId> = self.colonists.iter().map(|(i, _)| i).collect();
             for other in others {
@@ -959,6 +1040,7 @@ fn death_cause(parts: &[HealthPart]) -> DeathCause {
             HealthCause::Hypothermia => DeathCause::Hypothermia,
             HealthCause::Heatstroke => DeathCause::Heatstroke,
             HealthCause::Wounded => DeathCause::Wounds,
+            HealthCause::Disease => DeathCause::Disease,
             HealthCause::HealingInBed | HealthCause::Healing => continue,
         };
         if best.is_none_or(|(b, _)| p.per_hour < b.per_hour) {

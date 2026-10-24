@@ -6,11 +6,11 @@
 //! to the map edge 1 game day before the raiders. When the raiders arrive, the raid waits for the
 //! player: pay the tribute or fight (R-072).
 //!
-//! Combat and creatures come in Sprint 13. Until then a fight is abstract: the raiders carry
-//! away one stack every `loot_interval_ticks` and leave after `stay_ticks`. The hooks for S13 are
-//! `raid_entry`, `raid_fighters_down` (the melee reports raiders that are dead or down), and
-//! `raid_break_ticks` (time to break a door or a wall). The raid ends at once when half of the
-//! raiders are down.
+//! In a fight the raiders are creatures (S13, `creature.rs`): they walk in from the entry tile,
+//! attack colonists, break doors and walls, and carry away the best stacks. A raider that dies
+//! reports to `raid_fighters_down` and drops its loot. The raid ends at once when half of the
+//! raiders are down. The other hooks are `raid_entry` and `raid_break_ticks` (time to break a door
+//! or a wall).
 
 use crate::Sim;
 use crate::build::BuildLayer;
@@ -63,6 +63,9 @@ pub enum HostilityCause {
     Notice,
     /// Tributes and fights of earlier raids (R-072).
     Raids,
+    /// Friends, weddings, and grudges between the colonists and the people of the rival colony
+    /// (R-047).
+    Ties,
 }
 
 /// One contribution to the hostility.
@@ -79,7 +82,7 @@ pub struct HostilityPart {
 pub struct Hostility {
     /// The sum, limited to 0 to 100.
     pub total: u32,
-    /// The parts: history, wealth, Notice, then raids.
+    /// The parts: history, wealth, Notice, raids, then ties.
     pub parts: Vec<HostilityPart>,
 }
 
@@ -132,8 +135,8 @@ pub struct Raid {
     pub tribute_due: u64,
     /// Tick when the fight began.
     pub fight_tick: u64,
-    /// Tick of the next theft.
-    pub next_loot_tick: u64,
+    /// True after the raiders got the order to leave.
+    pub leaving: bool,
     /// Stacks carried away.
     pub stacks_taken: u32,
     /// Value carried away.
@@ -340,6 +343,10 @@ impl Sim {
                 cause: HostilityCause::Raids,
                 value: rival.adjust,
             },
+            HostilityPart {
+                cause: HostilityCause::Ties,
+                value: self.neighbor_ties_value(index),
+            },
         ];
         let sum = parts
             .iter()
@@ -472,7 +479,7 @@ impl Sim {
     }
 
     /// Value of all items on tiles or carried, and all buildings.
-    fn wealth_value(&self) -> u64 {
+    pub(crate) fn wealth_value(&self) -> u64 {
         let items: u64 = self
             .items
             .iter()
@@ -542,16 +549,15 @@ impl Sim {
 
     fn raid_begin_fight(&mut self, auto: bool) {
         let tick = self.tick;
-        let interval = u64::from(self.rules.raid.loot_interval_ticks);
         let Some(raid) = self.raid.active.as_mut() else {
             return;
         };
         raid.phase = RaidPhase::Fighting;
         raid.fight_tick = tick;
-        raid.next_loot_tick = tick + interval;
-        let id = raid.id;
+        let (id, fighters, entry) = (raid.id, raid.fighters, raid.entry);
         self.raid_events
             .push(RaidEvent::FightBegan { raid: id, auto });
+        self.spawn_raiders(id, fighters, entry);
     }
 
     /// Called every tick after the tick number increased.
@@ -616,7 +622,7 @@ impl Sim {
             deadline: 0,
             tribute_due,
             fight_tick: 0,
-            next_loot_tick: 0,
+            leaving: false,
             stacks_taken: 0,
             value_taken: 0,
         });
@@ -637,29 +643,59 @@ impl Sim {
 
     /// A passable edge tile in the region of the colonists. Start on the given edge at a random
     /// place and go on along the edge, then try the next edges.
-    fn raid_entry_tile(&mut self, edge: u8) -> Option<(u16, u16)> {
-        let (w, h) = (self.map.width() as i32, self.map.height() as i32);
-        let home = self.colonists.iter().next().map(|(_, c)| c.tile())?;
-        for k in 0..4u8 {
-            let e = usize::from((edge + k) % 4);
-            let len = if e == EXIT_N || e == EXIT_S { w } else { h };
-            let offset = self.raid.rng.below(len as u32) as i32;
-            for j in 0..len {
-                let t = (offset + j) % len;
-                let (x, y) = match e {
-                    EXIT_N => (t, 0),
-                    EXIT_W => (0, t),
-                    EXIT_E => (w - 1, t),
-                    EXIT_S => (t, h - 1),
-                    _ => continue,
+    pub(crate) fn raid_entry_tile(&mut self, edge: u8) -> Option<(u16, u16)> {
+        for home in self.home_tiles() {
+            for k in 0..4u8 {
+                let e = usize::from((edge + k) % 4);
+                let len = if e == EXIT_N || e == EXIT_S {
+                    self.map.width()
+                } else {
+                    self.map.height()
                 };
-                if self.map.passable(x, y)
-                    && self
-                        .regions
-                        .connected((x, y), (i32::from(home.0), i32::from(home.1)))
-                {
-                    return Some((x as u16, y as u16));
+                let offset = self.raid.rng.below(len) as i32;
+                if let Some(t) = self.edge_scan(e, offset, home) {
+                    return Some(t);
                 }
+            }
+        }
+        None
+    }
+
+    /// One colonist tile for each region that holds colonists, in slot order. A colonist who is
+    /// shut in a room is not the home of the colony: the entry tiles of creatures try the next
+    /// region if the first has no edge tile.
+    pub(crate) fn home_tiles(&self) -> Vec<(u16, u16)> {
+        let mut seen: Vec<u32> = Vec::new();
+        let mut homes = Vec::new();
+        for (_, c) in self.colonists.iter() {
+            let id = self.regions.id_at(i32::from(c.x), i32::from(c.y));
+            if !seen.contains(&id) {
+                seen.push(id);
+                homes.push(c.tile());
+            }
+        }
+        homes
+    }
+
+    /// The first passable tile along a map edge from `offset`, in the region of `home`.
+    pub(crate) fn edge_scan(&self, e: usize, offset: i32, home: (u16, u16)) -> Option<(u16, u16)> {
+        let (w, h) = (self.map.width() as i32, self.map.height() as i32);
+        let len = if e == EXIT_N || e == EXIT_S { w } else { h };
+        for j in 0..len {
+            let t = (offset + j) % len;
+            let (x, y) = match e {
+                EXIT_N => (t, 0),
+                EXIT_W => (0, t),
+                EXIT_E => (w - 1, t),
+                EXIT_S => (t, h - 1),
+                _ => return None,
+            };
+            if self.map.passable(x, y)
+                && self
+                    .regions
+                    .connected((x, y), (i32::from(home.0), i32::from(home.1)))
+            {
+                return Some((x as u16, y as u16));
             }
         }
         None
@@ -697,17 +733,20 @@ impl Sim {
         }
     }
 
-    /// One tick of the abstract fight (see the module note).
+    /// One tick of the fight (R-071). The raiders are creatures (`creature.rs`): the fight ends
+    /// when half of them are down, or when all of them are gone from the map. They get the order to
+    /// leave after `stay_ticks`, or when they carry away as many stacks as the rules allow.
     fn raid_fight_step(&mut self) {
         let r = self.rules.raid;
+        let leave_ticks = u64::from(self.rules.creature.leave_ticks);
         let Some(raid) = self.raid.active.as_ref() else {
             return;
         };
-        let alive = raid.fighters - raid.down;
-        let taken = raid.stacks_taken;
+        let (id, fighters, down, taken) = (raid.id, raid.fighters, raid.down, raid.stacks_taken);
         let stayed = self.tick >= raid.fight_tick + u64::from(r.stay_ticks);
-        let due = self.tick >= raid.next_loot_tick;
-        if raid.down * 2 >= raid.fighters {
+        let leaving = raid.leaving;
+        let overdue = self.tick >= raid.fight_tick + u64::from(r.stay_ticks) + leave_ticks;
+        if down * 2 >= fighters {
             self.raid_end(RaidOutcome::Repelled);
             return;
         }
@@ -716,52 +755,16 @@ impl Sim {
         } else {
             RaidOutcome::Left
         };
-        if stayed || taken >= r.loot_per_raider.saturating_mul(alive) {
-            self.raid_end(left_outcome);
-            return;
-        }
-        if due && !self.raid_loot_one() {
-            self.raid_end(left_outcome);
-        }
-    }
-
-    /// The raiders carry away the most valuable free stack on a tile. Return false if there is
-    /// none.
-    fn raid_loot_one(&mut self) -> bool {
-        let mut best: Option<(u64, ItemId)> = None;
-        for g in self.tribute_goods() {
-            let value = u64::from(g.count) * u64::from(g.unit_value);
-            if best.is_none_or(|(v, _)| value > v) {
-                best = Some((value, g.item));
+        let loaded = taken >= r.loot_per_raider.saturating_mul(fighters - down);
+        if !leaving && (stayed || loaded) {
+            if let Some(raid) = self.raid.active.as_mut() {
+                raid.leaving = true;
             }
+            self.recall_raiders(id);
         }
-        let Some((value, id)) = best else {
-            return false;
-        };
-        let Some(stack) = self.items.remove(id) else {
-            return false;
-        };
-        let ItemLoc::Tile(x, y) = stack.loc else {
-            return false;
-        };
-        let interval = u64::from(self.rules.raid.loot_interval_ticks);
-        let next = self.tick + interval;
-        let mut raid_id = 0;
-        if let Some(raid) = self.raid.active.as_mut() {
-            raid.stacks_taken += 1;
-            raid.value_taken += value;
-            raid.next_loot_tick = next;
-            raid_id = raid.id;
+        if self.raiders_on_map(id) == 0 || overdue {
+            self.raid_end(left_outcome);
         }
-        self.raid_events.push(RaidEvent::Looted {
-            raid: raid_id,
-            x,
-            y,
-            material: stack.material,
-            count: stack.count,
-            value,
-        });
-        true
     }
 
     /// End the raid: change the hostility (R-072), write the log, and tell the interface.
@@ -770,6 +773,10 @@ impl Sim {
         let Some(raid) = self.raid.active.take() else {
             return;
         };
+        if outcome != RaidOutcome::Repelled {
+            // The raiders that are left are gone. After a won fight they walk off the map.
+            self.remove_raiders(raid.id);
+        }
         let to_i32 = |v: u32| i32::try_from(v).unwrap_or(i32::MAX);
         let mut change = 0i32;
         match outcome {
@@ -784,6 +791,7 @@ impl Sim {
         if let Some(rival) = self.raid.rivals.get_mut(index) {
             rival.adjust = (rival.adjust + change).clamp(-ADJUST_LIMIT, ADJUST_LIMIT);
         }
+        self.crisis_survived();
         let hostility = self.rival_hostility(index).map_or(0, |h| h.total);
         self.raid.log.push(RaidRecord {
             id: raid.id,
