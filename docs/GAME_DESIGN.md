@@ -258,6 +258,8 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-039 Homes:** Each colonist has an assigned bed. A pair and its children live in the same room if it has enough beds. A single colonist prefers a room with few beds. A tired colonist sleeps in the assigned bed when it is free. (D-085)
 
+**R-040 Colony growth:** The chance of migrants (R-017) is the sum of the base chance, the wealth, the average mood of the colonists, and the number of friend and partner pairs. Each part is named. A colonist whose life goal fails for a long time and whose mood is low leaves the colony. A child never leaves for this reason, and the last colonists stay. (D-086)
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.

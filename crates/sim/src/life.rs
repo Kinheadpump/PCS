@@ -915,6 +915,11 @@ impl Sim {
 
     /// A colonist leaves the colony (R-015).
     fn leave(&mut self, id: ColonistId) {
+        self.leave_with(id, crate::ChronicleKind::Left);
+    }
+
+    /// A colonist leaves the colony, with the chronicle kind of the reason.
+    pub(crate) fn leave_with(&mut self, id: ColonistId, kind: crate::ChronicleKind) {
         let Some(c) = self.colonists.get(id) else {
             return;
         };
@@ -924,7 +929,7 @@ impl Sim {
         self.colonists.remove(id);
         self.relations_forget(id);
         self.life_events.push(LifeEvent::Left { x, y });
-        self.chronicle_gone(crate::ChronicleKind::Left, age);
+        self.chronicle_gone(kind, age);
     }
 
     /// A colonist dies (R-016). The others get the memory "colonist_died".

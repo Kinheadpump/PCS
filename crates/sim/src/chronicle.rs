@@ -31,6 +31,8 @@ pub enum ChronicleKind {
     DeathOldAge,
     /// A colonist left the colony. Number 0: age.
     Left,
+    /// A colonist left because the colony failed their life goal. Number 0: age.
+    LeftGoals,
     /// The first winter begins. Number 0: colonists. Number 1: days of food.
     WinterBegins,
     /// The first winter ends. Number 0: colonists alive. Number 1: deaths in the winter.
@@ -51,7 +53,7 @@ pub enum ChronicleKind {
 
 impl ChronicleKind {
     /// All kinds, in index order.
-    pub const ALL: [ChronicleKind; 16] = [
+    pub const ALL: [ChronicleKind; 17] = [
         ChronicleKind::DeathStarvation,
         ChronicleKind::DeathHypothermia,
         ChronicleKind::DeathHeatstroke,
@@ -60,6 +62,7 @@ impl ChronicleKind {
         ChronicleKind::DeathUnknown,
         ChronicleKind::DeathOldAge,
         ChronicleKind::Left,
+        ChronicleKind::LeftGoals,
         ChronicleKind::WinterBegins,
         ChronicleKind::WinterSurvived,
         ChronicleKind::ColonyLost,
@@ -81,6 +84,7 @@ impl ChronicleKind {
             ChronicleKind::DeathUnknown => "death_unknown",
             ChronicleKind::DeathOldAge => "death_old_age",
             ChronicleKind::Left => "left",
+            ChronicleKind::LeftGoals => "left_goals",
             ChronicleKind::WinterBegins => "winter_begins",
             ChronicleKind::WinterSurvived => "winter_survived",
             ChronicleKind::ColonyLost => "colony_lost",
