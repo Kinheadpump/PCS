@@ -80,6 +80,8 @@ Sprint 24 added `neighbors.rs` with `neighbors.ron`. The people of a rival colon
 
 Sprint 25 added `races.rs` with `races.ron`. `RaceRules` holds the races and one `RacePairRule` for each pair of different races. `Sim::race_pair`, `race_age_days`, and `race_elder_age` give the values. `relation()` adds the `OpinionCause::Race` part, `comfort_parts` adds `ComfortCause::Race`, `pick_partners` and `pregnancies` obey the pair rule, and `births` sets the race of the child. `MigrantProfile` has a race. The save format version is 17.
 
+Sprint 26 added `worldgen/src/realm.rs`. `realm_seed` gives the sub-seed of a realm, and realm (0, 0) has the seed. `RealmCache` holds a few realms and makes one missing realm for each `generate_next` call. `WORLD_GEN_VERSION` is the version of the world generator. `Sim` keeps `realm` and `world_gen_version`, and `save::from_bytes` refuses another generator version with `SaveError::WorldMismatch`. The save format version is 18.
+
 ### 3.2 Data ownership
 
 - `Sim` owns all colony state. Examples: `map: LocalMap`, `colonists: Arena<Colonist>`, `creatures: Arena<Creature>`, `items: Arena<Item>`, `jobs: JobBoard`, `rng: Rng`, `tick: u64`, `notice`, `chronicle`.
