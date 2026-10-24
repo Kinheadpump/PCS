@@ -28,5 +28,7 @@
         (kind: "food_rotted", text: "{0} units of food rotted."),
         (kind: "birth", text: "A child was born. The colony has {0} colonists."),
         (kind: "wedding", text: "A person of a rival colony wed a colonist and joined the colony. The colony has {0} colonists."),
+        (kind: "flood", text: "The river flooded the land near the water. The river level was {0}."),
+        (kind: "storm", text: "A storm of strength {0} tore off {1} roofs."),
     ],
 )

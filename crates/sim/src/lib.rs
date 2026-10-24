@@ -46,10 +46,12 @@ pub mod start;
 pub mod stockpile;
 pub mod time;
 pub mod wants;
+pub mod weather;
 
 mod loader;
 
 pub use alert::{Alert, AlertKind, AlertLevel};
+pub use base::content::MaterialCategory;
 pub use build::{Blueprint, BuildLayer, Building, Buildings, WorkOrder};
 pub use chronicle::{
     ChronicleKind, ChronicleRules, ChronicleSeason, ChronicleState, Entry, Legacy, RunInfo,
@@ -116,10 +118,11 @@ pub use start::StartRules;
 pub use stockpile::{ItemFilter, Stockpile, StockpileId};
 pub use time::{GameTime, Season, Speed};
 pub use wants::{GoalKind, GoalReport, Social, WantRules, Wants};
+pub use weather::{FloodDay, WalkCause, WalkPart, WalkSpeed, WeatherEvent, WeatherRules};
 
 use base::hash::fnv1a;
 use base::{Arena, Pcg32};
-use colonist::{START_COLONISTS, WALK_PROGRESS_PER_TICK, step_progress_needed};
+use colonist::{START_COLONISTS, step_progress_needed};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
@@ -192,6 +195,8 @@ pub struct Sim {
     threats: Vec<Threat>,
     /// Dry days, ditches, and fires (S16).
     drought: drought::DroughtState,
+    /// Snow, river level, and flood (S27).
+    weather: weather::WeatherState,
     /// Diseases, treatments, and sick rooms (S17).
     disease: disease::DiseaseState,
     /// Rival colonies and raids (S18).
@@ -225,6 +230,9 @@ pub struct Sim {
     /// Drought and fire events for the caller. Not part of the state.
     #[serde(skip)]
     drought_events: Vec<DroughtEvent>,
+    /// Weather events for the caller. Not part of the state.
+    #[serde(skip)]
+    weather_events: Vec<weather::WeatherEvent>,
     /// Disease events for the caller. Not part of the state.
     #[serde(skip)]
     disease_events: Vec<DiseaseEvent>,
@@ -329,6 +337,8 @@ impl Sim {
             notice: notice::NoticeState::default(),
             threats: Vec::new(),
             drought: drought::DroughtState::default(),
+            weather: weather::WeatherState::default(),
+            weather_events: Vec::new(),
             disease: disease::DiseaseState::new(seed),
             disease_events: Vec::new(),
             raid: raid::RaidState::new(seed),
@@ -411,6 +421,9 @@ impl Sim {
         self.colony_daily_tick();
         self.notice_tick();
         self.drought_tick();
+        if self.tick > 0 && self.tick.is_multiple_of(time::TICKS_PER_DAY) {
+            self.weather_day();
+        }
         self.disease_tick();
         self.raid_tick();
         self.migrant_tick();
@@ -541,6 +554,7 @@ impl Sim {
     fn move_colonists(&mut self) {
         let ids: Vec<ColonistId> = self.colonists.iter().map(|(id, _)| id).collect();
         for id in ids {
+            let step = self.walk_progress(id);
             let Some(c) = self.colonists.get_mut(id) else {
                 continue;
             };
@@ -557,7 +571,7 @@ impl Sim {
                 }
                 continue;
             }
-            c.progress = c.progress.saturating_add(WALK_PROGRESS_PER_TICK);
+            c.progress = c.progress.saturating_add(step);
             let need = step_progress_needed(c.tile(), next);
             if c.progress >= need {
                 c.progress -= need;
@@ -701,6 +715,7 @@ impl Sim {
         }
         if !sim.buildings_state_ok()
             || !sim.drought_state_ok()
+            || !sim.weather_state_ok()
             || !sim.disease_state_ok()
             || !sim.raid_state_ok()
             || !sim.neighbors_state_ok()

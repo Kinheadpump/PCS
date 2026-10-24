@@ -52,5 +52,5 @@ fn r052_a_save_of_another_generator_version_is_refused() {
 
 #[test]
 fn r052_the_save_format_is_18() {
-    assert_eq!(save::FORMAT_VERSION, 18);
+    assert_eq!(save::FORMAT_VERSION, 19);
 }
