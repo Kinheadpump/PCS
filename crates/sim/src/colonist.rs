@@ -149,6 +149,20 @@ pub struct Colonist {
     pub goal_unmet_hours: u32,
     /// Beds in the room where the colonist last slept in a bed. 0: on the ground or no room.
     pub sleep_room_beds: u8,
+    /// Game days since the last birthday (R-037, S22).
+    pub age_days: u16,
+    /// The pregnancy ends at this tick. 0: not pregnant.
+    pub pregnant_until: u64,
+    /// The father of the child that this colonist carries.
+    pub pregnancy_father: Option<ColonistId>,
+    /// The tick of the last birth. 0: none.
+    pub last_birth: u64,
+    /// The mother, if known.
+    pub mother: Option<ColonistId>,
+    /// The father, if known.
+    pub father: Option<ColonistId>,
+    /// The assigned bed (R-039).
+    pub bed: Option<(u16, u16)>,
 }
 
 impl Colonist {
@@ -192,6 +206,13 @@ impl Colonist {
             crowd_hours: 0,
             goal_unmet_hours: 0,
             sleep_room_beds: 0,
+            age_days: 0,
+            pregnant_until: 0,
+            pregnancy_father: None,
+            last_birth: 0,
+            mother: None,
+            father: None,
+            bed: None,
         }
     }
 

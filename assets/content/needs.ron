@@ -77,6 +77,10 @@
         (key: "friend_died", name: "A friend died", value: -6, hours: 72, danger: false),
         (key: "partner_died", name: "A partner died", value: -15, hours: 168, danger: false),
         (key: "new_partner", name: "Found a partner", value: 8, hours: 48, danger: false),
+        // Families (R-039).
+        (key: "child_born", name: "A child was born", value: 8, hours: 72, danger: false),
+        (key: "parent_died", name: "A parent died", value: -10, hours: 120, danger: false),
+        (key: "child_died", name: "A child died", value: -20, hours: 240, danger: false),
     ],
     // R-015 mood effects.
     mood_high_from: 70,

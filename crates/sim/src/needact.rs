@@ -446,7 +446,8 @@ impl Sim {
                 .is_some_and(|d| d.kind == BuildingKind::Bed)
         });
         let free: Vec<(u16, u16)> = beds.into_iter().filter(|t| !taken.contains(t)).collect();
-        self.sick_room_filter(id, free)
+        let reachable: Vec<(u16, u16)> = self
+            .sick_room_filter(id, free)
             .into_iter()
             .filter(|t| {
                 self.regions.connected(
@@ -454,6 +455,13 @@ impl Sim {
                     (i32::from(t.0), i32::from(t.1)),
                 )
             })
+            .collect();
+        // The assigned bed first (R-039).
+        if let Some(home) = c.bed.filter(|b| reachable.contains(b)) {
+            return Some(home);
+        }
+        reachable
+            .into_iter()
             .min_by_key(|&t| (octile(from, t), t.1, t.0))
     }
 }

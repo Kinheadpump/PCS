@@ -16,6 +16,7 @@ pub mod creature;
 pub mod disease;
 pub mod drought;
 pub mod event;
+pub mod family;
 pub mod farm;
 pub mod fire;
 pub mod hearth;
@@ -67,6 +68,7 @@ pub use disease::{
 };
 pub use drought::{DIG_ARG, DroughtEvent, Fire, Growth, GrowthCause, GrowthPart};
 pub use event::Event;
+pub use family::{FamilyEvent, FamilyReport, FamilyRules, LifeStage};
 pub use farm::{
     CropDef, FarmRules, FarmState, FertilityCause, FertilityPart, FertilityReport, Plant,
     PlantReport, WildDef, WildStatus,
@@ -194,6 +196,9 @@ pub struct Sim {
     /// Standing changes for the caller. Not part of the state.
     #[serde(skip)]
     relation_events: Vec<RelationEvent>,
+    /// Family events for the caller. Not part of the state.
+    #[serde(skip)]
+    family_events: Vec<FamilyEvent>,
     /// Life events for the caller. Not part of the state.
     #[serde(skip)]
     life_events: Vec<LifeEvent>,
@@ -314,6 +319,7 @@ impl Sim {
             creature: creature::CreatureState::new(seed),
             relation_state: relations::RelationState::new(seed),
             relation_events: Vec::new(),
+            family_events: Vec::new(),
             combat_events: Vec::new(),
             notice_events: Vec::new(),
             drought_events: Vec::new(),

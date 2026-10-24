@@ -94,6 +94,10 @@ impl Sim {
         if c.drafted == drafted {
             return;
         }
+        if drafted && c.age < self.rules.family.adult_age {
+            self.combat_reject(CombatReject::TooYoung);
+            return;
+        }
         if drafted {
             self.take_orders(id);
             if let Some(c) = self.colonists.get_mut(id) {

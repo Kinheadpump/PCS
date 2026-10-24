@@ -187,6 +187,8 @@ pub enum DeathCause {
     Wounds,
     /// A disease (R-060).
     Disease,
+    /// Old age (R-037).
+    OldAge,
     /// No health part explains it (a debug command).
     Unknown,
 }
@@ -200,6 +202,7 @@ impl DeathCause {
             DeathCause::Heatstroke => "Heatstroke",
             DeathCause::Wounds => "Wounds",
             DeathCause::Disease => "Disease",
+            DeathCause::OldAge => "Old age",
             DeathCause::Unknown => "Unknown",
         }
     }
@@ -864,6 +867,8 @@ impl Sim {
         }
         self.wants_tick();
         self.relations_tick();
+        self.family_day();
+        self.assign_homes();
     }
 
     /// Give every colonist of a new colony a social trait and a life goal (R-033).
@@ -935,6 +940,7 @@ impl Sim {
             sex: c.sex,
             cause,
         };
+        let kin = self.family_kin(id);
         self.release_colonist(id);
         self.colonists.remove(id);
         let mourners = self.relations_forget(id);
@@ -951,6 +957,7 @@ impl Sim {
         });
         self.chronicle_gone(crate::ChronicleKind::of_death(cause), grave.age);
         self.relations_mourn(&mourners);
+        self.family_mourn(&kin);
         if let Some(index) = self.rules.needs.memory_index("colonist_died") {
             let others: Vec<ColonistId> = self.colonists.iter().map(|(i, _)| i).collect();
             for other in others {

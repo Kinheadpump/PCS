@@ -1,0 +1,26 @@
+// Families, ages, and homes (R-037, R-038, R-039). Integers only (D-014).
+// Ages are in age years. A colonist ages one age year after `days_per_age_year` game days.
+(
+    days_per_age_year: 20,
+    // A colonist below this age is a child: it does not work and cannot be drafted.
+    adult_age: 16,
+    // From this age a colonist can die of old age. The daily chance in per mille is
+    // `(age - elder_age + 1) * elder_death_permille`.
+    elder_age: 60,
+    elder_death_permille: 3,
+    // Pregnancy: a female colonist in this age range with a male partner.
+    fertile_min_age: 18,
+    fertile_max_age: 45,
+    // Chance each game day, in percent, when all conditions are true.
+    pregnancy_chance_pct: 4,
+    pregnancy_days: 18,
+    // Days after a birth without a new pregnancy.
+    birth_cooldown_days: 40,
+    // A mother can have at most this many living children below the adult age.
+    children_max: 3,
+    // Conditions of a pregnancy: the colony food lasts this many days, both partners have
+    // this mood or more, and this many beds are free after all colonists have a bed.
+    min_food_days: 5,
+    min_mood: 40,
+    spare_beds: 1,
+)

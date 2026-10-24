@@ -16,6 +16,7 @@
         (kind: "death_wounds", text: "A colonist aged {0} died of wounds."),
         (kind: "death_disease", text: "A colonist aged {0} died of a disease."),
         (kind: "death_unknown", text: "A colonist aged {0} died."),
+        (kind: "death_old_age", text: "A colonist aged {0} died of old age."),
         (kind: "left", text: "A colonist aged {0} left the colony after a long breakdown."),
         (kind: "winter_begins", text: "The first winter begins. The colony has {0} colonists and food for {1} days."),
         (kind: "winter_survived", text: "The first winter ends. {0} colonists are alive. {1} died in the winter."),
@@ -24,5 +25,6 @@
         (kind: "crops_killed", text: "Frost killed {0} crop plants."),
         (kind: "first_harvest", text: "The first harvest: {0} units."),
         (kind: "food_rotted", text: "{0} units of food rotted."),
+        (kind: "birth", text: "A child was born. The colony has {0} colonists."),
     ],
 )

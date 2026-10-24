@@ -252,6 +252,12 @@ MVP modifier sources: needs, temperature, room beauty, food type, death of a col
 
 **R-036 Bonds:** A friend, a rival, or an enemy that is near a colonist adds a named mood modifier. When a friend dies, the friend gets a stronger modifier than other colonists. Two free adults with a high opinion become partners, and the death of a partner gives the strongest modifier. (D-084)
 
+**R-037 Ages:** A colonist ages 1 age year after a set number of game days (`family.ron`). A colonist below the adult age is a child: it eats and sleeps but does not work and cannot be drafted. From the elder age, a colonist can die of old age. The chance rises with each age year. (D-085)
+
+**R-038 Children:** A partner pair with a woman and a man can have a child if the woman is fertile, the pair is in good mood, the colony has food and a free bed, and the woman has no pregnancy or recent birth. The pregnancy lasts a set number of game days. A birth gives both parents a good mood modifier. When a parent or a child dies, the family gets a large bad mood modifier. (D-085)
+
+**R-039 Homes:** Each colonist has an assigned bed. A pair and its children live in the same room if it has enough beds. A single colonist prefers a room with few beds. A tired colonist sleeps in the assigned bed when it is free. (D-085)
+
 **R-016 Health:** Health is from 0 to 100. At 0, the colonist dies. Each game hour without a condition, health increases by 2 in a bed and by 1 in other places.
 
 MVP conditions: starving, hypothermia, heatstroke, exhausted, wounded, and the diseases in §7.7. A wounded colonist loses 1 health each game hour until the colonist sleeps in a bed for 8 game hours. Disease and medicine are not in the MVP.

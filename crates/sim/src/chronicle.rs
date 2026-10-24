@@ -27,6 +27,8 @@ pub enum ChronicleKind {
     DeathDisease,
     /// A colonist died of an unknown cause. Number 0: age.
     DeathUnknown,
+    /// A colonist died of old age. Number 0: age.
+    DeathOldAge,
     /// A colonist left the colony. Number 0: age.
     Left,
     /// The first winter begins. Number 0: colonists. Number 1: days of food.
@@ -43,17 +45,20 @@ pub enum ChronicleKind {
     FirstHarvest,
     /// Food rotted. Number 0: units.
     FoodRotted,
+    /// A child was born. Number 0: colonists after the birth.
+    Birth,
 }
 
 impl ChronicleKind {
     /// All kinds, in index order.
-    pub const ALL: [ChronicleKind; 14] = [
+    pub const ALL: [ChronicleKind; 16] = [
         ChronicleKind::DeathStarvation,
         ChronicleKind::DeathHypothermia,
         ChronicleKind::DeathHeatstroke,
         ChronicleKind::DeathWounds,
         ChronicleKind::DeathDisease,
         ChronicleKind::DeathUnknown,
+        ChronicleKind::DeathOldAge,
         ChronicleKind::Left,
         ChronicleKind::WinterBegins,
         ChronicleKind::WinterSurvived,
@@ -62,6 +67,7 @@ impl ChronicleKind {
         ChronicleKind::CropsKilled,
         ChronicleKind::FirstHarvest,
         ChronicleKind::FoodRotted,
+        ChronicleKind::Birth,
     ];
 
     /// The key in the template file.
@@ -73,6 +79,7 @@ impl ChronicleKind {
             ChronicleKind::DeathWounds => "death_wounds",
             ChronicleKind::DeathDisease => "death_disease",
             ChronicleKind::DeathUnknown => "death_unknown",
+            ChronicleKind::DeathOldAge => "death_old_age",
             ChronicleKind::Left => "left",
             ChronicleKind::WinterBegins => "winter_begins",
             ChronicleKind::WinterSurvived => "winter_survived",
@@ -81,6 +88,7 @@ impl ChronicleKind {
             ChronicleKind::CropsKilled => "crops_killed",
             ChronicleKind::FirstHarvest => "first_harvest",
             ChronicleKind::FoodRotted => "food_rotted",
+            ChronicleKind::Birth => "birth",
         }
     }
 
@@ -93,6 +101,7 @@ impl ChronicleKind {
             DeathCause::Wounds => ChronicleKind::DeathWounds,
             DeathCause::Disease => ChronicleKind::DeathDisease,
             DeathCause::Unknown => ChronicleKind::DeathUnknown,
+            DeathCause::OldAge => ChronicleKind::DeathOldAge,
         }
     }
 }

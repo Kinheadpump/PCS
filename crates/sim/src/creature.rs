@@ -436,6 +436,8 @@ pub enum CombatReject {
     NotDrafted,
     /// The goal tile cannot be reached.
     NoPath,
+    /// The colonist is a child (R-037).
+    TooYoung,
 }
 
 /// The numbers of a kind that the fight code needs, copied out of the content.
