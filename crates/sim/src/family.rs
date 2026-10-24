@@ -201,7 +201,7 @@ impl Sim {
         let f = &self.rules.family;
         let stage = if c.age < f.adult_age {
             LifeStage::Child
-        } else if c.age >= f.elder_age {
+        } else if c.age >= self.race_elder_age(c.race) {
             LifeStage::Elder
         } else {
             LifeStage::Adult
@@ -250,6 +250,9 @@ impl Sim {
         let rules = self.rules.clone();
         let f = &rules.family;
         let ids: Vec<ColonistId> = self.colonists.iter().map(|(i, _)| i).collect();
+        let age_days: Vec<u32> = (0..rules.races.races.len().max(1))
+            .map(|r| self.race_age_days(u8::try_from(r).unwrap_or(0)))
+            .collect();
         // Ages and growth.
         let mut grown: Vec<ColonistId> = Vec::new();
         for &id in &ids {
@@ -257,7 +260,11 @@ impl Sim {
                 continue;
             };
             c.age_days = c.age_days.saturating_add(1);
-            if u32::from(c.age_days) >= f.days_per_age_year {
+            let per = age_days
+                .get(usize::from(c.race))
+                .copied()
+                .unwrap_or(f.days_per_age_year);
+            if u32::from(c.age_days) >= per {
                 c.age_days = 0;
                 c.age = c.age.saturating_add(1);
                 if c.age == f.adult_age {
@@ -277,10 +284,11 @@ impl Sim {
             .copied()
             .filter(|&id| {
                 self.colonists.get(id).is_some_and(|c| {
-                    if c.age < f.elder_age {
+                    let elder = self.race_elder_age(c.race);
+                    if c.age < elder {
                         return false;
                     }
-                    let years = u32::from(c.age - f.elder_age) + 1;
+                    let years = u32::from(c.age - elder) + 1;
                     self.family_roll(1, id, 0) < years.saturating_mul(f.elder_death_permille)
                 })
             })
@@ -304,11 +312,12 @@ impl Sim {
             let Some(m) = self.colonists.get_mut(mother) else {
                 continue;
             };
-            let (x, y, race) = (m.x, m.y, m.race);
+            let (x, y, mother_race) = (m.x, m.y, m.race);
             let father = m
                 .pregnancy_father
                 .take()
                 .filter(|&f| self.colonists.get(f).is_some());
+            let father_race = father.and_then(|f| self.colonists.get(f)).map(|f| f.race);
             let Some(m) = self.colonists.get_mut(mother) else {
                 continue;
             };
@@ -317,10 +326,24 @@ impl Sim {
             let mut c = Colonist::new(x, y);
             self.rules.needs.init_colonist(&mut c);
             c.age = 0;
-            c.race = race;
             c.mother = Some(mother);
             c.father = father;
             let roll = self.family_roll(2, mother, father.map_or(0, |f| f.index()));
+            c.race = match father_race {
+                None => mother_race,
+                Some(fr) => match self.race_pair(mother_race, fr).child {
+                    crate::races::ChildRace::Mother => mother_race,
+                    crate::races::ChildRace::Father => fr,
+                    crate::races::ChildRace::Either => {
+                        if (roll / 7).is_multiple_of(2) {
+                            fr
+                        } else {
+                            mother_race
+                        }
+                    }
+                    crate::races::ChildRace::Race(i) => i,
+                },
+            };
             c.sex = if roll.is_multiple_of(2) {
                 Sex::Female
             } else {
@@ -397,6 +420,10 @@ impl Sim {
                 .filter(|&&k| self.colonists.get(k).is_some_and(|c| c.age < f.adult_age))
                 .count();
             let mood_ok = |id| self.mood(id).is_some_and(|x| x.total >= f.min_mood);
+            let father_race = self.colonists.get(father).map_or(m.race, |c| c.race);
+            if !self.race_pair(m.race, father_race).offspring {
+                continue;
+            }
             if m.pregnant_until > 0
                 || m.age < f.fertile_min_age
                 || m.age > f.fertile_max_age

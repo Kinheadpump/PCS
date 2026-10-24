@@ -276,7 +276,7 @@ fn r033_the_personality_survives_a_save_and_the_format_is_current() {
     assert!(sim.debug_set_goal(id, Some("own_room")));
     run_hours(&mut sim, 5);
     let bytes = save::to_bytes(&sim);
-    assert_eq!(save::FORMAT_VERSION, 16);
+    assert_eq!(save::FORMAT_VERSION, 17);
     let loaded = save::from_bytes(&bytes).unwrap();
     let w = loaded.wants(ids(&loaded)[0]).unwrap();
     assert_eq!(w.social, Social::Introvert);

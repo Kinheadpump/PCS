@@ -32,6 +32,7 @@ pub mod neighbors;
 pub mod notice;
 pub mod path;
 pub mod production;
+pub mod races;
 pub mod raid;
 pub mod region;
 pub mod relations;

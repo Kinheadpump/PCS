@@ -104,6 +104,12 @@ fn comfort_cause_name(sim: &Sim, cause: ComfortCause) -> String {
         ComfortCause::Base => "Base".to_owned(),
         ComfortCause::Clothes { material } => material_name(sim, material),
         ComfortCause::Trait { index } => trait_name(sim, index),
+        ComfortCause::Race { index } => sim
+            .rules()
+            .races
+            .races
+            .get(usize::from(index))
+            .map_or_else(|| "Race".to_owned(), |r| r.name.clone()),
     }
 }
 

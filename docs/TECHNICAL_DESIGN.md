@@ -78,6 +78,8 @@ Sprint 23 added no module. `Sim::migrant_chance()` returns the migrant chance as
 
 Sprint 24 added `neighbors.rs` with `neighbors.ron`. The people of a rival colony come from the seed. `NeighborState` holds the ties by colonist, rival, and person, the grudges, the contact counts, and the people that wed. `neighbors_day()` runs at the end of the hourly hook chain and acts on the day boundary. `rival_hostility` has a fifth part, `HostilityCause::Ties`. `kill` and `leave_with` call `neighbors_forget`, and `kill` calls `neighbors_grudge`. The save format version is 16.
 
+Sprint 25 added `races.rs` with `races.ron`. `RaceRules` holds the races and one `RacePairRule` for each pair of different races. `Sim::race_pair`, `race_age_days`, and `race_elder_age` give the values. `relation()` adds the `OpinionCause::Race` part, `comfort_parts` adds `ComfortCause::Race`, `pick_partners` and `pregnancies` obey the pair rule, and `births` sets the race of the child. `MigrantProfile` has a race. The save format version is 17.
+
 ### 3.2 Data ownership
 
 - `Sim` owns all colony state. Examples: `map: LocalMap`, `colonists: Arena<Colonist>`, `creatures: Arena<Creature>`, `items: Arena<Item>`, `jobs: JobBoard`, `rng: Rng`, `tick: u64`, `notice`, `chronicle`.
