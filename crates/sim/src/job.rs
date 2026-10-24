@@ -1401,6 +1401,9 @@ impl Sim {
                     ));
                 }
                 claimed_jobs.push(a.job);
+                if let Some(tool) = a.tool_item {
+                    reserved_items.push(tool);
+                }
                 if let Some(item) = a.item {
                     reserved_items.push(item);
                     if self

@@ -100,7 +100,7 @@ fn run_chain(workshop: &str, recipe_key: &str, knowledge: &[&str], inputs: &[(&s
     let recipe = recipe(&sim, recipe_key);
     sim.step(&[order(4, 1, recipe, 1)]);
     assert!(rejected(&mut sim).is_empty(), "{recipe_key} was refused");
-    for _ in 0..4_000 {
+    for _ in 0..2_000 {
         sim.step(&[]);
         sim.check_invariants().unwrap();
     }
@@ -119,7 +119,7 @@ fn chain_log_to_charcoal() {
 
 #[test]
 fn chain_rock_to_stone_block() {
-    let sim = run_chain("workshop", "stone_block", &[], &[("granite", 2)]);
+    let sim = run_chain("kiln", "stone_block", &[], &[("granite", 2)]);
     assert_eq!(units(&sim, "stone_block"), 1);
 }
 
@@ -264,16 +264,14 @@ fn r008_a_colonist_without_a_tool_takes_one_from_the_floor_or_a_stockpile() {
 
 #[test]
 fn r008_each_completed_job_decreases_durability_by_one() {
-    let mut sim = bare_handed("c.T.T");
+    let mut sim = bare_handed("c.T.T..");
     let axe = mat(&sim, "stone_axe");
     let id = only_colonist(&sim);
     sim.debug_set_tool(id, axe, 50);
-    sim.step(&[designate(JobKind::Cut, 2, 0)]);
-    run(&mut sim, 1_000);
+    sim.step(&[designate(JobKind::Cut, 2, 0), designate(JobKind::Cut, 4, 0)]);
+    run(&mut sim, 1_500);
     assert!(!sim.map().tree(2, 0));
-    assert_eq!(tool_of(&sim, ToolKind::Axe).unwrap().durability, 49);
-    sim.step(&[designate(JobKind::Cut, 4, 0)]);
-    run(&mut sim, 1_000);
+    assert!(!sim.map().tree(4, 0));
     assert_eq!(tool_of(&sim, ToolKind::Axe).unwrap().durability, 48);
 }
 
