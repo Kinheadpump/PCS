@@ -63,6 +63,13 @@
         (key: "slept_ground", name: "Slept on the ground", value: -4, hours: 12, danger: false),
         (key: "colonist_died", name: "A colonist died", value: -10, hours: 48, danger: false),
         (key: "saw_danger", name: "Saw danger", value: -8, hours: 12, danger: true),
+        // Wants and personality (R-034).
+        (key: "had_company", name: "Had company", value: 3, hours: 12, danger: false),
+        (key: "lonely", name: "Lonely", value: -4, hours: 6, danger: false),
+        (key: "time_alone", name: "Time alone", value: 3, hours: 12, danger: false),
+        (key: "crowded", name: "Crowded", value: -3, hours: 6, danger: false),
+        (key: "goal_met", name: "Life goal met", value: 4, hours: 24, danger: false),
+        (key: "goal_unmet", name: "Life goal not met", value: -4, hours: 24, danger: false),
     ],
     // R-015 mood effects.
     mood_high_from: 70,

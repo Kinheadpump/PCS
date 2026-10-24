@@ -297,7 +297,10 @@ impl Sim {
             if let Some(xp) = c.skill_xp.get_mut(usize::from(p.skill)) {
                 *xp = p.level * xp_per_level;
             }
-            self.colonists.insert(c);
+            let id = self.colonists.insert(c);
+            let salt =
+                self.tick ^ (u64::from(self.migrants.joined) << 40) ^ ((id.index() as u64) << 20);
+            self.roll_wants(id, salt);
         }
         let count = u32::try_from(offer.profiles.len()).unwrap_or(u32::MAX);
         self.migrants.joined += count;

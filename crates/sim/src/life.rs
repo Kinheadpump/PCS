@@ -750,6 +750,13 @@ impl Sim {
                     asleep: true
                 })
             );
+            let bed_tile = match c.act {
+                Some(NeedAct::Sleep {
+                    bed: Some(b),
+                    asleep: true,
+                }) => Some(b),
+                _ => None,
+            };
             let rest_max = whole(n.rest_max) * MILLI;
             if asleep {
                 let gain = if in_bed {
@@ -803,6 +810,10 @@ impl Sim {
                 continue;
             }
             if woke {
+                let beds = bed_tile.map_or(0, |(bx, by)| self.beds_in_room(bx, by));
+                if let Some(c) = self.colonists.get_mut(id) {
+                    c.sleep_room_beds = u8::try_from(beds).unwrap_or(u8::MAX);
+                }
                 let key = if was_in_bed {
                     "slept_bed"
                 } else {
@@ -850,6 +861,15 @@ impl Sim {
         }
         for (id, cause) in dead {
             self.kill(id, cause);
+        }
+        self.wants_tick();
+    }
+
+    /// Give every colonist of a new colony a social trait and a life goal (R-033).
+    pub(crate) fn roll_all_wants(&mut self, seed: u64) {
+        let ids: Vec<ColonistId> = self.colonists.iter().map(|(id, _)| id).collect();
+        for (i, id) in ids.into_iter().enumerate() {
+            self.roll_wants(id, seed.wrapping_add((i as u64) << 32));
         }
     }
 

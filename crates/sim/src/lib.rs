@@ -41,6 +41,7 @@ pub mod spoilage;
 pub mod start;
 pub mod stockpile;
 pub mod time;
+pub mod wants;
 
 mod loader;
 
@@ -100,6 +101,7 @@ pub use spoilage::{RotCause, RotPart, RotReport, SpoilRules};
 pub use start::StartRules;
 pub use stockpile::{ItemFilter, Stockpile, StockpileId};
 pub use time::{GameTime, Season, Speed};
+pub use wants::{GoalKind, GoalReport, Social, WantRules, Wants};
 
 use base::hash::fnv1a;
 use base::{Arena, Pcg32};
@@ -252,6 +254,7 @@ impl Sim {
         sim.raid = raid::RaidState::with_rivals(seed, &data.rivals);
         sim.roll_colonists(seed);
         sim.roll_start_skills(seed);
+        sim.roll_all_wants(seed);
         sim.place_start_stock();
         sim.creature_start();
         sim

@@ -1,0 +1,29 @@
+// Wants and personality (R-033, R-034). Integers only (D-014).
+// The mood values of the wants are the memories had_company, lonely, time_alone, crowded,
+// goal_met, and goal_unmet in `needs.ron`.
+(
+    // A colonist is "near" another colonist when the distance in tiles is this or less.
+    company_radius: 4,
+    // Share of colonists with each social trait in percent. The rest has no trait.
+    introvert_pct: 40,
+    extrovert_pct: 40,
+    // An extrovert that is alone for this many hours in a row gets the lonely memory.
+    lonely_after_hours: 24,
+    // An introvert with this many colonists near for this many hours in a row gets the
+    // crowded memory.
+    crowd_count: 4,
+    crowd_after_hours: 12,
+    // A life goal that is not met costs no mood before this many hours (20 days).
+    goal_patience_hours: 480,
+    // Life goals. Kinds:
+    //   PrivateRoom: the colonist slept in a room with exactly one bed.
+    //   Skill(name, level): a skill of this level.
+    //   Food(days): the colony food lasts this many days.
+    goals: [
+        (id: "own_room", name: "Sleep in a room of their own", kind: PrivateRoom),
+        (id: "green_thumb", name: "Reach farming level 3", kind: Skill("Farming", 3)),
+        (id: "master_builder", name: "Reach construction level 3", kind: Skill("Construction", 3)),
+        (id: "good_cook", name: "Reach cooking level 3", kind: Skill("Cooking", 3)),
+        (id: "full_larder", name: "See the colony eat well for 10 days", kind: Food(10)),
+    ],
+)

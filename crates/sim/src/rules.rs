@@ -14,6 +14,7 @@ use crate::migrant::{MigrantRules, load_migrant_rules};
 use crate::needs::{NeedRules, TraitDef, load_need_rules, load_traits};
 use crate::spoilage::{SpoilRules, load_spoil_rules};
 use crate::start::{StartRules, load_start_rules};
+use crate::wants::{WantRules, load_want_rules};
 use base::content::{
     BuildingDef, BuildingKind, ContentError, ContentIssue, DiseaseRules, DroughtRules, JobRules,
     MaterialDef, NoticeRules, RaidRules, RecipeDef, RoomRules, load_buildings, load_disease_rules,
@@ -43,6 +44,7 @@ const DROUGHT_TEXT: &str = include_str!("../../../assets/content/drought.ron");
 const MIGRANT_TEXT: &str = include_str!("../../../assets/content/migrants.ron");
 const RAID_TEXT: &str = include_str!("../../../assets/content/raid.ron");
 const CREATURE_TEXT: &str = include_str!("../../../assets/content/creatures.ron");
+const WANTS_TEXT: &str = include_str!("../../../assets/content/wants.ron");
 
 /// Material index used when a material key is not in the content. It never happens
 /// with valid content.
@@ -134,6 +136,8 @@ pub struct SimRules {
     pub migrant: MigrantRules,
     /// Creatures and melee numbers.
     pub creature: CreatureRules,
+    /// Wants and personality numbers.
+    pub wants: WantRules,
     /// Fuel materials of the hearth, in file order.
     pub fuel: Vec<FuelDef>,
     /// Food spoilage numbers (R-005).
@@ -181,6 +185,7 @@ impl Default for SimRules {
             raid: RaidRules::default(),
             migrant: MigrantRules::default(),
             creature: CreatureRules::default(),
+            wants: WantRules::default(),
             fuel: Vec::new(),
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
@@ -359,6 +364,7 @@ impl SimRules {
         let raid = load_raid_rules("raid.ron", RAID_TEXT)?;
         let migrant = load_migrant_rules("migrants.ron", MIGRANT_TEXT)?;
         let creature = load_creature_rules("creatures.ron", CREATURE_TEXT, &materials)?;
+        let wants = load_want_rules("wants.ron", WANTS_TEXT, &needs)?;
         let mut issues = Vec::new();
         let mut find = |key: &str| -> u16 {
             match materials.iter().position(|m| m.key == key) {
@@ -419,6 +425,7 @@ impl SimRules {
             raid,
             migrant,
             creature,
+            wants,
             fuel,
             spoil: SpoilRules::empty(),
             farm: FarmRules::empty(),
